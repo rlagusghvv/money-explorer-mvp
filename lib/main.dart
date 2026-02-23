@@ -1103,8 +1103,10 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   Widget build(BuildContext context) {
     final s = widget.scenario;
 
+    final mobileSafeBottom = MediaQuery.of(context).viewPadding.bottom;
+
     return ListView(
-      padding: const EdgeInsets.only(bottom: 120),
+      padding: EdgeInsets.only(bottom: mobileSafeBottom + 220),
       children: [
         _bubbleCard(_mascotSpeech),
         const SizedBox(height: 10),
