@@ -22,6 +22,9 @@ class Scenario {
     required this.industryOptions,
     required this.quizQuestion,
     required this.quizOptions,
+    this.reasoningQuestion,
+    this.reasoningChoices,
+    this.reasoningBestByDifficulty,
   });
 
   final int id;
@@ -32,8 +35,14 @@ class Scenario {
   final List<ScenarioOption> industryOptions;
   final String quizQuestion;
   final List<ScenarioOption> quizOptions;
+  final String? reasoningQuestion;
+  final List<String>? reasoningChoices;
+  final Map<String, int>? reasoningBestByDifficulty;
 
   factory Scenario.fromJson(Map<String, dynamic> json) {
+    final rawReasoningChoices = json['reasoningChoices'];
+    final rawReasoningBest = json['reasoningBestByDifficulty'];
+
     return Scenario(
       id: json['id'] as int,
       title: json['title'] as String,
@@ -47,6 +56,15 @@ class Scenario {
       quizOptions: (json['quizOptions'] as List<dynamic>)
           .map((e) => ScenarioOption.fromJson(e as Map<String, dynamic>))
           .toList(),
+      reasoningQuestion: json['reasoningQuestion'] as String?,
+      reasoningChoices: rawReasoningChoices is List<dynamic>
+          ? List<String>.from(rawReasoningChoices)
+          : null,
+      reasoningBestByDifficulty: rawReasoningBest is Map<String, dynamic>
+          ? rawReasoningBest.map(
+              (key, value) => MapEntry(key, (value as num).round()),
+            )
+          : null,
     );
   }
 }

@@ -762,8 +762,43 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   String? _resultText;
   String _mascotSpeech = '뉴스를 읽고 어떤 산업이 먼저 움직일지 찾아보자!';
 
+  static const String _fallbackReasoningQuestion = '어떤 분석 관점이 가장 중요할까?';
+  static const List<String> _fallbackReasoningChoices = [
+    '뉴스와 직접 연결된 산업 먼저 확인',
+    '영향이 몇 주/몇 달 갈지 기간 확인',
+    '수혜+피해를 함께 보고 분산 전략 세우기',
+  ];
+
+  String get _reasoningQuestion =>
+      widget.scenario.reasoningQuestion ?? _fallbackReasoningQuestion;
+
+  List<String> get _reasoningChoices {
+    final custom = widget.scenario.reasoningChoices;
+    if (custom != null && custom.length == 3) return custom;
+    return _fallbackReasoningChoices;
+  }
+
+  int? _customBestReasoningIndex() {
+    final map = widget.scenario.reasoningBestByDifficulty;
+    if (map == null) return null;
+    final best = map[widget.difficulty.name];
+    if (best == null || best < 0 || best > 2) return null;
+    return best;
+  }
+
   int _reasoningScore() {
     if (_reasoningAnswer == null) return 0;
+
+    final customBest = _customBestReasoningIndex();
+    if (customBest != null) {
+      if (_reasoningAnswer == customBest) return 100;
+      return switch (widget.difficulty) {
+        DifficultyLevel.easy => 75,
+        DifficultyLevel.normal => 70,
+        DifficultyLevel.hard => 65,
+      };
+    }
+
     const easy = [100, 75, 65];
     const normal = [80, 100, 70];
     const hard = [65, 80, 100];
@@ -773,12 +808,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       DifficultyLevel.hard => hard[_reasoningAnswer!],
     };
   }
-
-  List<String> get _reasoningChoices => const [
-    '뉴스와 직접 연결된 산업 먼저 확인',
-    '영향이 몇 주/몇 달 갈지 기간 확인',
-    '수혜+피해를 함께 보고 분산 전략 세우기',
-  ];
 
   int _riskScore() {
     final r = _riskRatio.round();
@@ -929,7 +958,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '2) 어떤 분석 관점이 가장 중요할까?',
+          title: '2) $_reasoningQuestion',
           child: Column(
             children: List.generate(
               _reasoningChoices.length,
