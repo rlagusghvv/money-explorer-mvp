@@ -12,6 +12,34 @@ void main() {
 
 enum DifficultyLevel { easy, normal, hard }
 
+enum LearnerAgeBand { younger, middle, older }
+
+extension LearnerAgeBandX on LearnerAgeBand {
+  String get label => switch (this) {
+    LearnerAgeBand.younger => '8-10세',
+    LearnerAgeBand.middle => '11-13세',
+    LearnerAgeBand.older => '14-16세',
+  };
+
+  String get learningStyle => switch (this) {
+    LearnerAgeBand.younger => '쉬운 문장 + 구체적 힌트',
+    LearnerAgeBand.middle => '적당한 추론 + 균형형 힌트',
+    LearnerAgeBand.older => '심화 용어 + 근거 중심 피드백',
+  };
+
+  DifficultyLevel get defaultDifficulty => switch (this) {
+    LearnerAgeBand.younger => DifficultyLevel.easy,
+    LearnerAgeBand.middle => DifficultyLevel.normal,
+    LearnerAgeBand.older => DifficultyLevel.hard,
+  };
+
+  String get introLine => switch (this) {
+    LearnerAgeBand.younger => '뉴스를 생활 장면과 연결해서 생각해요.',
+    LearnerAgeBand.middle => '뉴스의 원인-결과를 단계적으로 분석해요.',
+    LearnerAgeBand.older => '변수 간 상호작용과 리스크를 논리적으로 검토해요.',
+  };
+}
+
 extension DifficultyLabel on DifficultyLevel {
   String get label => switch (this) {
     DifficultyLevel.easy => '쉬움',
@@ -130,6 +158,7 @@ class AppState {
     required this.bestStreak,
     required this.onboarded,
     required this.selectedDifficulty,
+    required this.learnerAgeBand,
   });
 
   factory AppState.initial() => const AppState(
@@ -140,6 +169,7 @@ class AppState {
     bestStreak: 0,
     onboarded: false,
     selectedDifficulty: DifficultyLevel.easy,
+    learnerAgeBand: LearnerAgeBand.middle,
   );
 
   final String playerName;
@@ -149,6 +179,7 @@ class AppState {
   final int bestStreak;
   final bool onboarded;
   final DifficultyLevel selectedDifficulty;
+  final LearnerAgeBand learnerAgeBand;
 
   int get solvedCount => results.length;
   int get totalProfit => results.fold(0, (sum, e) => sum + e.profit);
@@ -178,6 +209,7 @@ class AppState {
     int? bestStreak,
     bool? onboarded,
     DifficultyLevel? selectedDifficulty,
+    LearnerAgeBand? learnerAgeBand,
   }) {
     return AppState(
       playerName: playerName ?? this.playerName,
@@ -187,6 +219,7 @@ class AppState {
       bestStreak: bestStreak ?? this.bestStreak,
       onboarded: onboarded ?? this.onboarded,
       selectedDifficulty: selectedDifficulty ?? this.selectedDifficulty,
+      learnerAgeBand: learnerAgeBand ?? this.learnerAgeBand,
     );
   }
 }
@@ -199,6 +232,7 @@ class AppStateStore {
   static const _kBestStreak = 'bestStreak';
   static const _kOnboarded = 'onboarded';
   static const _kDifficulty = 'difficulty';
+  static const _kLearnerAgeBand = 'learnerAgeBand';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -225,7 +259,9 @@ class AppStateStore {
                   : legacyReturn >= 0
                   ? 65
                   : 45,
-              emotionControlScore: (parts.length > 5 && parts[5] == '1') ? 55 : 75,
+              emotionControlScore: (parts.length > 5 && parts[5] == '1')
+                  ? 55
+                  : 75,
               hintUsed: parts.length > 5 ? parts[5] == '1' : false,
               difficulty: parts.length > 6
                   ? _difficultyFrom(parts[6])
@@ -255,6 +291,10 @@ class AppStateStore {
         .whereType<ScenarioResult>()
         .toList();
 
+    final ageBand = _ageBandFrom(
+      prefs.getString(_kLearnerAgeBand) ?? LearnerAgeBand.middle.name,
+    );
+
     return AppState(
       playerName: prefs.getString(_kPlayerName) ?? initial.playerName,
       cash: prefs.getInt(_kCash) ?? initial.cash,
@@ -264,8 +304,9 @@ class AppStateStore {
       bestStreak: prefs.getInt(_kBestStreak) ?? initial.bestStreak,
       onboarded: prefs.getBool(_kOnboarded) ?? initial.onboarded,
       selectedDifficulty: _difficultyFrom(
-        prefs.getString(_kDifficulty) ?? 'easy',
+        prefs.getString(_kDifficulty) ?? ageBand.defaultDifficulty.name,
       ),
+      learnerAgeBand: ageBand,
     );
   }
 
@@ -273,6 +314,13 @@ class AppStateStore {
     return DifficultyLevel.values.firstWhere(
       (e) => e.name == raw,
       orElse: () => DifficultyLevel.easy,
+    );
+  }
+
+  static LearnerAgeBand _ageBandFrom(String raw) {
+    return LearnerAgeBand.values.firstWhere(
+      (e) => e.name == raw,
+      orElse: () => LearnerAgeBand.middle,
     );
   }
 
@@ -284,6 +332,7 @@ class AppStateStore {
     await prefs.setInt(_kBestStreak, state.bestStreak);
     await prefs.setBool(_kOnboarded, state.onboarded);
     await prefs.setString(_kDifficulty, state.selectedDifficulty.name);
+    await prefs.setString(_kLearnerAgeBand, state.learnerAgeBand.name);
 
     final encoded = state.results
         .map(
@@ -333,27 +382,81 @@ class _GameHomePageState extends State<GameHomePage> {
   }
 
   Future<void> _showOnboarding() async {
+    var selectedBand = _state.learnerAgeBand;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('🧭 뉴스 포트폴리오 탐험대'),
-        content: const Text(
-          '탐험 지도를 따라 뉴스를 읽고, 근거를 세워 투자 결정을 내려봐요!\n\n'
-          '이제 정답/오답이 아닌 점수형 평가예요.\n'
-          '선택마다 부분 점수를 받아 성장 포인트를 확인할 수 있어요.\n\n'
-          '힌트는 오답 뒤 1회 열리며, 사용 시 보상 코인이 줄어요.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () {
-              setState(() => _state = _state.copyWith(onboarded: true));
-              _persist();
-              Navigator.pop(context);
-            },
-            child: const Text('탐험 시작!'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('🧭 탐험대 등록'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '플레이 시작 전 학습자 연령대를 선택해주세요.\n'
+                  '연령대에 따라 질문 문장, 힌트 깊이, 기본 난이도가 자동 조정돼요.',
+                ),
+                const SizedBox(height: 12),
+                ...LearnerAgeBand.values.map(
+                  (band) => InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => setDialogState(() => selectedBand = band),
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selectedBand == band
+                              ? const Color(0xFF6C63FF)
+                              : const Color(0xFFD8DCEE),
+                        ),
+                        color: selectedBand == band
+                            ? const Color(0xFFEDEBFF)
+                            : Colors.white,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${band.label} · ${band.learningStyle}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          Text('기본 난이도: ${band.defaultDifficulty.label}'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '이제 정답/오답이 아닌 점수형 평가예요.\n'
+                  '선택마다 부분 점수를 받고, 힌트는 오답 뒤 1회 열립니다.',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _state = _state.copyWith(
+                    onboarded: true,
+                    learnerAgeBand: selectedBand,
+                    selectedDifficulty: selectedBand.defaultDifficulty,
+                  );
+                });
+                _persist();
+                Navigator.pop(context);
+              },
+              child: const Text('탐험 시작!'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -365,7 +468,10 @@ class _GameHomePageState extends State<GameHomePage> {
     setState(() {
       _state = _state.copyWith(
         cash: max(0, _state.cash + result.profit),
-        currentScenario: min(widget.scenarios.length, _state.currentScenario + 1),
+        currentScenario: min(
+          widget.scenarios.length,
+          _state.currentScenario + 1,
+        ),
         results: nextResults,
       );
       _tabIndex = 0;
@@ -379,6 +485,7 @@ class _GameHomePageState extends State<GameHomePage> {
         playerName: _state.playerName,
         onboarded: true,
         selectedDifficulty: _state.selectedDifficulty,
+        learnerAgeBand: _state.learnerAgeBand,
       );
       _tabIndex = 0;
     });
@@ -398,7 +505,19 @@ class _GameHomePageState extends State<GameHomePage> {
         onDone: _applyScenarioResult,
       ),
       _WeeklyReportTab(state: _state),
-      _GuideTab(onReset: _resetProgress),
+      _GuideTab(
+        state: _state,
+        onReset: _resetProgress,
+        onAgeBandChanged: (band) {
+          setState(() {
+            _state = _state.copyWith(
+              learnerAgeBand: band,
+              selectedDifficulty: band.defaultDifficulty,
+            );
+          });
+          _persist();
+        },
+      ),
     ];
 
     return Scaffold(
@@ -474,14 +593,20 @@ class _PlayTab extends StatelessWidget {
             ] else ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   color: const Color(0xFFEFF6FF),
                 ),
                 child: Text(
                   '🧸 챕터 $chapter · $chapterObjective',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -490,6 +615,8 @@ class _PlayTab extends StatelessWidget {
               current: state.selectedDifficulty,
               onChanged: onDifficultyChanged,
             ),
+            const SizedBox(height: 8),
+            _LearnerProfileBanner(state: state),
             const SizedBox(height: 8),
             if (!isCompactMobile || done) ...[
               _AdventureMapCard(
@@ -501,14 +628,20 @@ class _PlayTab extends StatelessWidget {
             ] else ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: const Color(0xFFEAF4FF),
                 ),
                 child: Text(
                   '🗺️ 모바일은 문제 풀이 집중 모드예요. (현재 챕터: ${state.currentScenario + 1})',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -535,6 +668,7 @@ class _PlayTab extends StatelessWidget {
                   scenario: scenarios[state.currentScenario],
                   cash: state.cash,
                   difficulty: state.selectedDifficulty,
+                  learnerAgeBand: state.learnerAgeBand,
                   onDone: onDone,
                 ),
               ),
@@ -546,7 +680,10 @@ class _PlayTab extends StatelessWidget {
 }
 
 class _ChapterObjectiveBanner extends StatelessWidget {
-  const _ChapterObjectiveBanner({required this.chapter, required this.objective});
+  const _ChapterObjectiveBanner({
+    required this.chapter,
+    required this.objective,
+  });
 
   final int chapter;
   final String objective;
@@ -589,7 +726,9 @@ class _MascotMapHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chapter = state.currentScenario + 1 > total ? total : state.currentScenario + 1;
+    final chapter = state.currentScenario + 1 > total
+        ? total
+        : state.currentScenario + 1;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -671,7 +810,9 @@ class _DifficultySelector extends StatelessWidget {
                           d.questName,
                           style: TextStyle(
                             fontSize: 11,
-                            color: current == d ? Colors.white70 : Colors.black54,
+                            color: current == d
+                                ? Colors.white70
+                                : Colors.black54,
                           ),
                         ),
                       ],
@@ -681,6 +822,28 @@ class _DifficultySelector extends StatelessWidget {
               ),
             )
             .toList(),
+      ),
+    );
+  }
+}
+
+class _LearnerProfileBanner extends StatelessWidget {
+  const _LearnerProfileBanner({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F2FF),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        '👤 학습자 프로필: ${state.learnerAgeBand.label} · ${state.learnerAgeBand.learningStyle}',
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }
@@ -768,7 +931,11 @@ class _AdventureMapCard extends StatelessWidget {
 enum _NodeState { done, current, locked }
 
 class _MapNode extends StatelessWidget {
-  const _MapNode({required this.index, required this.state, required this.icon});
+  const _MapNode({
+    required this.index,
+    required this.state,
+    required this.icon,
+  });
 
   final int index;
   final _NodeState state;
@@ -837,12 +1004,14 @@ class ScenarioPlayCard extends StatefulWidget {
     required this.scenario,
     required this.cash,
     required this.difficulty,
+    required this.learnerAgeBand,
     required this.onDone,
   });
 
   final Scenario scenario;
   final int cash;
   final DifficultyLevel difficulty;
+  final LearnerAgeBand learnerAgeBand;
   final ValueChanged<ScenarioResult> onDone;
 
   @override
@@ -870,10 +1039,38 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     '영향이 몇 주/몇 달 갈지 기간 확인',
     '수혜+피해를 함께 보고 분산 전략 세우기',
   ];
-  static const List<String> _chapterObjectiveKeywords = ['기회비용', '분산투자', '리스크 관리'];
+  static const List<String> _chapterObjectiveKeywords = [
+    '기회비용',
+    '분산투자',
+    '리스크 관리',
+  ];
 
   String get _chapterObjective =>
-      _chapterObjectiveKeywords[(widget.scenario.id - 1) % _chapterObjectiveKeywords.length];
+      _chapterObjectiveKeywords[(widget.scenario.id - 1) %
+          _chapterObjectiveKeywords.length];
+
+  String _bandPrompt(String base) {
+    return switch (widget.learnerAgeBand) {
+      LearnerAgeBand.younger => '쉽게 풀어보자: $base',
+      LearnerAgeBand.middle => '생각해보자: $base',
+      LearnerAgeBand.older => '분석 포인트: $base',
+    };
+  }
+
+  String _hintText(Scenario s) {
+    return switch (widget.learnerAgeBand) {
+      LearnerAgeBand.younger =>
+        '힌트: 예를 들어 에어컨·전기처럼 바로 쓰임이 늘면 수혜가 될 수 있어요. '
+            '이번 뉴스에서는 "${s.goodIndustries.first}" 쪽이 유리하고, '
+            '"${s.badIndustries.first}" 쪽은 조심해요.',
+      LearnerAgeBand.middle =>
+        '힌트: 수혜(${s.goodIndustries.join(', ')})와 피해(${s.badIndustries.join(', ')})를 함께 놓고 '
+            '영향 기간(짧음/중간)을 비교해보세요.',
+      LearnerAgeBand.older =>
+        '힌트: 1차 수혜(${s.goodIndustries.join(', ')})뿐 아니라 2차 파급과 '
+            '역풍 요인(${s.badIndustries.join(', ')})을 같이 검토해 기대수익 대비 리스크를 계산해보세요.',
+    };
+  }
 
   @override
   void initState() {
@@ -888,8 +1085,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       ..shuffle(Random(widget.scenario.id * 991 + DateTime.now().microsecond));
   }
 
-  String get _reasoningQuestion =>
-      widget.scenario.reasoningQuestion ?? _fallbackReasoningQuestion;
+  String get _reasoningQuestion => _bandPrompt(
+    widget.scenario.reasoningQuestion ?? _fallbackReasoningQuestion,
+  );
 
   List<String> get _reasoningChoices {
     final custom = widget.scenario.reasoningChoices;
@@ -954,7 +1152,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int? get _allocation => _allocationPercent;
 
   bool get _canSelectAllocation =>
-      _selectedIndustry != null && _reasoningAnswer != null && _quizAnswer != null;
+      _selectedIndustry != null &&
+      _reasoningAnswer != null &&
+      _quizAnswer != null;
 
   int get _investedCoins {
     final a = _allocation;
@@ -962,7 +1162,14 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     return (widget.cash * (a / 100)).round().clamp(0, widget.cash);
   }
 
-  ({int returnPercent, int rawProfit, int adjustedProfit, int volatilityRisk, String formulaLine, String coachingLine})
+  ({
+    int returnPercent,
+    int rawProfit,
+    int adjustedProfit,
+    int volatilityRisk,
+    String formulaLine,
+    String coachingLine,
+  })
   _calculateInvestmentOutcome({
     required int invested,
     required int judgementScore,
@@ -986,7 +1193,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ? 6 + qualityEdge + stabilityAdj + volatilityEffect
         : -6 - qualityEdge.abs() - stabilityAdj.abs() + volatilityEffect;
 
-    if (widget.difficulty == DifficultyLevel.hard && !isGoodDecision && allocation >= 60) {
+    if (widget.difficulty == DifficultyLevel.hard &&
+        !isGoodDecision &&
+        allocation >= 60) {
       returnPercent -= ((allocation - 50) / 4).round();
     }
 
@@ -1014,18 +1223,22 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         : '아쉬운 판단 × 투자금 $invested코인 × 변동 수익률 $returnPercent% = ${rawProfit >= 0 ? '+' : ''}$rawProfit코인';
 
     final coachingLine = switch (widget.difficulty) {
-      DifficultyLevel.easy => adjustedProfit < 0
-          ? '좋아요! 쉬움 모드 손실 완충이 적용됐어요. 다음엔 비중을 40~60%로 맞춰보세요.'
-          : '좋아요! 다음에도 한 번에 올인하지 않고 비중을 나눠서 수익을 지켜봐요.',
-      DifficultyLevel.normal => adjustedProfit < 0
-          ? '다음 행동: 근거가 약하면 비중을 줄여 손실 폭을 먼저 관리해요.'
-          : '다음 행동: 근거가 강할 때만 비중을 조금씩 늘려보세요.',
-      DifficultyLevel.hard => adjustedProfit < 0
-          ? '하드 모드 경고: 높은 비중 실수는 손실이 커져요. 다음엔 20~50%부터 검증해요.'
-          : '하드 모드 팁: 승률이 높아도 비중 분할로 변동성 충격을 줄여요.',
+      DifficultyLevel.easy =>
+        adjustedProfit < 0
+            ? '좋아요! 쉬움 모드 손실 완충이 적용됐어요. 다음엔 비중을 40~60%로 맞춰보세요.'
+            : '좋아요! 다음에도 한 번에 올인하지 않고 비중을 나눠서 수익을 지켜봐요.',
+      DifficultyLevel.normal =>
+        adjustedProfit < 0
+            ? '다음 행동: 근거가 약하면 비중을 줄여 손실 폭을 먼저 관리해요.'
+            : '다음 행동: 근거가 강할 때만 비중을 조금씩 늘려보세요.',
+      DifficultyLevel.hard =>
+        adjustedProfit < 0
+            ? '하드 모드 경고: 높은 비중 실수는 손실이 커져요. 다음엔 20~50%부터 검증해요.'
+            : '하드 모드 팁: 승률이 높아도 비중 분할로 변동성 충격을 줄여요.',
     };
 
-    final volatilityRisk = (100 - riskManagementScore + baseVolatility * 2).clamp(0, 100);
+    final volatilityRisk = (100 - riskManagementScore + baseVolatility * 2)
+        .clamp(0, 100);
     return (
       returnPercent: returnPercent,
       rawProfit: rawProfit,
@@ -1049,13 +1262,35 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ? '근거 선택'
         : _reasoningChoices[_reasoningAnswer!];
 
-    final goodPoint = industryScore >= 70
-        ? '${explanation.short} 네가 고른 "$selectedIndustryLabel"은(는) 뉴스와 연결이 좋았어.'
-        : '좋은 점: "$selectedReasoningLabel"처럼 근거를 직접 고르며 생각한 태도가 아주 좋아.';
+    final goodPoint = switch (widget.learnerAgeBand) {
+      LearnerAgeBand.younger =>
+        industryScore >= 70
+            ? '${explanation.short} 네가 고른 "$selectedIndustryLabel"은 뉴스랑 잘 맞았어!'
+            : '좋은 점: "$selectedReasoningLabel"처럼 이유를 직접 골라 생각했어.',
+      LearnerAgeBand.middle =>
+        industryScore >= 70
+            ? '${explanation.short} "$selectedIndustryLabel" 선택의 근거 연결이 좋아요.'
+            : '좋은 점: "$selectedReasoningLabel"처럼 근거 기반 선택을 시도했어요.',
+      LearnerAgeBand.older =>
+        industryScore >= 70
+            ? '${explanation.short} "$selectedIndustryLabel" 선택은 뉴스-산업 인과 연결이 타당해요.'
+            : '좋은 점: "$selectedReasoningLabel"으로 가설을 세우고 판단한 접근이 좋아요.',
+    };
 
-    final weakPoint = reasoningScore >= 75
-        ? '${explanation.risk} 이번 비중 $allocationPercent%는 흔들릴 때 크게 출렁일 수 있어.'
-        : '${explanation.why} 지금 선택한 "$selectedReasoningLabel"에 데이터 확인 한 줄을 더해보자.';
+    final weakPoint = switch (widget.learnerAgeBand) {
+      LearnerAgeBand.younger =>
+        reasoningScore >= 75
+            ? '${explanation.risk} 비중 $allocationPercent%는 너무 크면 흔들릴 수 있어요.'
+            : '${explanation.why} 지금 선택에 "진짜 데이터 1개"를 더해봐요.',
+      LearnerAgeBand.middle =>
+        reasoningScore >= 75
+            ? '${explanation.risk} 비중 $allocationPercent%는 변동 구간에서 손익 폭이 커질 수 있어요.'
+            : '${explanation.why} "$selectedReasoningLabel"에 확인 데이터 한 줄을 추가해요.',
+      LearnerAgeBand.older =>
+        reasoningScore >= 75
+            ? '${explanation.risk} 현재 비중 $allocationPercent%는 변동성 대비 포지션 관리가 필요해요.'
+            : '${explanation.why} "$selectedReasoningLabel"에 선행지표/지속기간 근거를 보강해요.',
+    };
 
     final nextAction = allocationPercent >= 65
         ? '${explanation.takeaway} 다음 챕터는 40~55%로 시작해 비교해보자.'
@@ -1069,14 +1304,20 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   void _submit() {
-    if (_selectedIndustry == null || _quizAnswer == null || _reasoningAnswer == null || _allocation == null || _submitted) {
+    if (_selectedIndustry == null ||
+        _quizAnswer == null ||
+        _reasoningAnswer == null ||
+        _allocation == null ||
+        _submitted) {
       return;
     }
 
     final industryScore = _industryChoices[_selectedIndustry!].score;
     final quizScore = _quizChoices[_quizAnswer!].score;
     final reasonScore = _reasoningScore();
-    final judgementScore = ((industryScore * 0.45) + (quizScore * 0.35) + (reasonScore * 0.20)).round();
+    final judgementScore =
+        ((industryScore * 0.45) + (quizScore * 0.35) + (reasonScore * 0.20))
+            .round();
 
     if (judgementScore < 55 && _wrongAttempts == 0) {
       setState(() {
@@ -1090,7 +1331,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
     final riskManagementScore = _riskScore();
     final emotionControlScore = _emotionScore(judgementScore);
-    final learningScore = ((judgementScore + riskManagementScore + emotionControlScore) / 3).round();
+    final learningScore =
+        ((judgementScore + riskManagementScore + emotionControlScore) / 3)
+            .round();
     final scenarioFeedback = _buildScenarioFeedback(
       industryScore: industryScore,
       reasoningScore: reasonScore,
@@ -1171,11 +1414,16 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           children: [
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: selected ? const Color(0xFF6C63FF) : const Color(0xFF9DA6BC),
+              color: selected
+                  ? const Color(0xFF6C63FF)
+                  : const Color(0xFF9DA6BC),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                text,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),
@@ -1197,7 +1445,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         _newsCard(s),
         const SizedBox(height: 10),
         _gameSection(
-          title: '1) 어떤 산업 카드에 투자할까?',
+          title: '1) ${_bandPrompt('어떤 산업 카드에 투자할까?')}',
           child: Column(
             children: List.generate(
               _industryChoices.length,
@@ -1235,7 +1483,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '3) ${s.quizQuestion}',
+          title: '3) ${_bandPrompt(s.quizQuestion)}',
           child: Column(
             children: [
               ...List.generate(
@@ -1256,7 +1504,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 OutlinedButton.icon(
                   onPressed: () => setState(() => _hintUsed = true),
                   icon: const Icon(Icons.lightbulb),
-                  label: Text('힌트 보기 (1회, -${widget.difficulty.hintPenalty}코인)'),
+                  label: Text(
+                    '힌트 보기 (1회, -${widget.difficulty.hintPenalty}코인)',
+                  ),
                 ),
               if (_hintUsed)
                 Container(
@@ -1266,20 +1516,23 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                     color: Colors.amber.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    '힌트: "${s.goodIndustries.first}" 같은 직접 수혜와 "${s.badIndustries.first}" 같은 피해를 함께 보며 판단해보세요.',
-                  ),
+                  child: Text(_hintText(s)),
                 ),
               const SizedBox(height: 10),
               if (_canSelectAllocation)
                 _gameSection(
-                  title: '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
+                  title:
+                      '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         '이제 마지막 단계! 투자 비중을 선택해요. (높을수록 수익/손실 모두 커짐)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4E5B7A),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -1294,7 +1547,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                                 ? null
                                 : (_) => setState(() {
                                     _allocationPercent = v;
-                                    _mascotSpeech = '좋아, $v% 비중 확정! 이제 점수를 확인해보자!';
+                                    _mascotSpeech =
+                                        '좋아, $v% 비중 확정! 이제 점수를 확인해보자!';
                                   }),
                           );
                         }).toList(),
@@ -1365,7 +1619,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
               color: const Color(0xFFFFF3D5),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Center(child: Text('🧸', style: TextStyle(fontSize: 26))),
+            child: const Center(
+              child: Text('🧸', style: TextStyle(fontSize: 26)),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1375,7 +1631,10 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 color: const Color(0xFFF2F7FF),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Text(speech, style: const TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(
+                speech,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -1386,13 +1645,21 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   Widget _newsCard(Scenario s) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), color: Colors.white),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('🗺️ ${widget.difficulty.questName} · 챕터 ${s.id}'),
+          Text(
+            '🗺️ ${widget.difficulty.questName} · 챕터 ${s.id} · ${widget.learnerAgeBand.label}',
+          ),
           const SizedBox(height: 6),
-          Text(s.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+          Text(
+            s.title,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+          ),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1410,6 +1677,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             ),
           ),
           const SizedBox(height: 8),
+          Text(
+            '학습 모드: ${widget.learnerAgeBand.introLine}',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
           Text(s.news),
           const SizedBox(height: 10),
           if (widget.difficulty == DifficultyLevel.easy)
@@ -1432,7 +1704,10 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           else
             const Text(
               '💡 고급 모드: 수혜/피해와 기간을 스스로 추론해 점수를 높여보세요.',
-              style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF4E5B7A),
+              ),
             ),
         ],
       ),
@@ -1442,7 +1717,10 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   Widget _gameSection({required String title, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), color: Colors.white),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1457,8 +1735,14 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   Widget _tag(String text, Color bg, Color fg) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(text, style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12),
+      ),
     );
   }
 }
@@ -1551,7 +1835,10 @@ class _PerformanceResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('📈 ${snapshot.scenarioTitle} 결과', style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(
+            '📈 ${snapshot.scenarioTitle} 결과',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -1580,17 +1867,27 @@ class _PerformanceResultCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Text('🎯 맞춤 코칭', style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Text('1) 잘한 점: ${snapshot.goodPoint}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-          Text('2) 아쉬운 점: ${snapshot.weakPoint}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-          Text('3) 다음 행동: ${snapshot.nextAction}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(
+            '1) 잘한 점: ${snapshot.goodPoint}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            '2) 아쉬운 점: ${snapshot.weakPoint}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            '3) 다음 행동: ${snapshot.nextAction}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 4),
-          Text('• 보너스 팁: ${snapshot.coachingLine}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-          Text('• 총평: $_overallComment',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(
+            '• 보너스 팁: ${snapshot.coachingLine}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            '• 총평: $_overallComment',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     );
@@ -1644,16 +1941,37 @@ class _WeeklyReportTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('📊 성장 리포트 (핵심 KPI)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    '📊 성장 리포트 (핵심 KPI)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '학습자 프로필: ${state.learnerAgeBand.label} (${state.learnerAgeBand.learningStyle})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   _kpiTile('판단 정확도', state.avgJudgementScore, Icons.gps_fixed),
                   const SizedBox(height: 8),
-                  _kpiTile('리스크 관리 점수', state.avgRiskManagementScore, Icons.shield),
+                  _kpiTile(
+                    '리스크 관리 점수',
+                    state.avgRiskManagementScore,
+                    Icons.shield,
+                  ),
                   const SizedBox(height: 8),
-                  _kpiTile('감정 통제 점수', state.avgEmotionControlScore, Icons.self_improvement),
+                  _kpiTile(
+                    '감정 통제 점수',
+                    state.avgEmotionControlScore,
+                    Icons.self_improvement,
+                  ),
                   const Divider(height: 24),
                   Text('평균 수익률: ${state.avgReturn.toStringAsFixed(1)}%'),
-                  Text('누적 손익: ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인'),
+                  Text(
+                    '누적 손익: ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인',
+                  ),
                   Text('힌트 사용: ${state.hintUsedCount}회'),
                   Text('현재 자산: ${state.cash}코인'),
                 ],
@@ -1665,9 +1983,18 @@ class _WeeklyReportTab extends StatelessWidget {
             final week = entry.key + 1;
             final list = entry.value;
             final profit = list.fold<int>(0, (sum, e) => sum + e.profit);
-            final judge = (list.fold<int>(0, (sum, e) => sum + e.judgementScore) / list.length).round();
-            final risk = (list.fold<int>(0, (sum, e) => sum + e.riskManagementScore) / list.length).round();
-            final emotion = (list.fold<int>(0, (sum, e) => sum + e.emotionControlScore) / list.length).round();
+            final judge =
+                (list.fold<int>(0, (sum, e) => sum + e.judgementScore) /
+                        list.length)
+                    .round();
+            final risk =
+                (list.fold<int>(0, (sum, e) => sum + e.riskManagementScore) /
+                        list.length)
+                    .round();
+            final emotion =
+                (list.fold<int>(0, (sum, e) => sum + e.emotionControlScore) /
+                        list.length)
+                    .round();
 
             return Card(
               child: Padding(
@@ -1710,17 +2037,31 @@ class _WeeklyReportTab extends StatelessWidget {
       children: [
         Icon(icon, color: color),
         const SizedBox(width: 8),
-        Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700))),
-        Text('$score점', style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        Text(
+          '$score점',
+          style: TextStyle(color: color, fontWeight: FontWeight.w900),
+        ),
       ],
     );
   }
 }
 
 class _GuideTab extends StatelessWidget {
-  const _GuideTab({required this.onReset});
+  const _GuideTab({
+    required this.state,
+    required this.onReset,
+    required this.onAgeBandChanged,
+  });
 
+  final AppState state;
   final VoidCallback onReset;
+  final ValueChanged<LearnerAgeBand> onAgeBandChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1742,15 +2083,57 @@ class _GuideTab extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '부모 설정 · 학습자 연령대',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '현재: ${state.learnerAgeBand.label} (${state.learnerAgeBand.learningStyle})',
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: LearnerAgeBand.values.map((band) {
+                      return ChoiceChip(
+                        label: Text(band.label),
+                        selected: state.learnerAgeBand == band,
+                        onSelected: (_) => onAgeBandChanged(band),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    '연령대를 바꾸면 질문 표현/힌트 깊이/기본 난이도가 함께 조정됩니다.',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
             color: Colors.red.shade50,
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('진행 초기화', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    '진행 초기화',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
-                  FilledButton.tonal(onPressed: onReset, child: const Text('처음부터 다시 탐험하기')),
+                  FilledButton.tonal(
+                    onPressed: onReset,
+                    child: const Text('처음부터 다시 탐험하기'),
+                  ),
                 ],
               ),
             ),
