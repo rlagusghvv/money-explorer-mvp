@@ -259,7 +259,19 @@ class ScenarioResult {
           .round();
 }
 
-enum CosmeticType { character, home }
+enum CosmeticType { character, home, decoration }
+
+enum DecorationZone { wall, floor, desk }
+
+extension DecorationZoneX on DecorationZone {
+  String get key => name;
+
+  String get label => switch (this) {
+    DecorationZone.wall => '벽 꾸미기',
+    DecorationZone.floor => '바닥 꾸미기',
+    DecorationZone.desk => '소품 선반',
+  };
+}
 
 class ShopItem {
   const ShopItem({
@@ -269,6 +281,7 @@ class ShopItem {
     required this.price,
     required this.emoji,
     required this.description,
+    this.zone,
   });
 
   final String id;
@@ -277,6 +290,7 @@ class ShopItem {
   final int price;
   final String emoji;
   final String description;
+  final DecorationZone? zone;
 }
 
 const List<ShopItem> kShopItems = [
@@ -376,6 +390,60 @@ const List<ShopItem> kShopItems = [
     emoji: '🏰',
     description: '저축왕만 입장 가능한 꿈의 성!',
   ),
+  ShopItem(
+    id: 'deco_wall_chart',
+    name: '경제 차트 포스터',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.wall,
+    price: 90,
+    emoji: '📊',
+    description: '벽면에 붙이는 탐험 차트 포스터!',
+  ),
+  ShopItem(
+    id: 'deco_wall_star',
+    name: '반짝 별 스티커',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.wall,
+    price: 80,
+    emoji: '🌟',
+    description: '벽을 환하게 만드는 별빛 장식!',
+  ),
+  ShopItem(
+    id: 'deco_floor_rug',
+    name: '포근 러그',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.floor,
+    price: 95,
+    emoji: '🧶',
+    description: '바닥에 깔아 아늑함 업!',
+  ),
+  ShopItem(
+    id: 'deco_floor_coinbox',
+    name: '코인 저금 상자',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.floor,
+    price: 105,
+    emoji: '💰',
+    description: '저축 습관을 보여주는 미니 박스!',
+  ),
+  ShopItem(
+    id: 'deco_desk_globe',
+    name: '뉴스 지구본',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.desk,
+    price: 110,
+    emoji: '🌍',
+    description: '선반 위 글로벌 뉴스 탐험 소품!',
+  ),
+  ShopItem(
+    id: 'deco_desk_trophy',
+    name: '미니 트로피',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.desk,
+    price: 120,
+    emoji: '🏆',
+    description: '챕터 완주를 기념하는 반짝 트로피!',
+  ),
 ];
 
 class AppState {
@@ -392,6 +460,7 @@ class AppState {
     required this.ownedItemIds,
     required this.equippedCharacterId,
     required this.equippedHomeId,
+    required this.equippedDecorations,
     required this.totalPointsSpent,
   });
 
@@ -408,6 +477,11 @@ class AppState {
     ownedItemIds: {'char_default', 'home_base_default'},
     equippedCharacterId: 'char_default',
     equippedHomeId: 'home_base_default',
+    equippedDecorations: {
+      DecorationZone.wall: null,
+      DecorationZone.floor: null,
+      DecorationZone.desk: null,
+    },
     totalPointsSpent: 0,
   );
 
@@ -423,6 +497,7 @@ class AppState {
   final Set<String> ownedItemIds;
   final String equippedCharacterId;
   final String equippedHomeId;
+  final Map<DecorationZone, String?> equippedDecorations;
   final int totalPointsSpent;
 
   ShopItem get equippedCharacter => kShopItems.firstWhere(
@@ -464,6 +539,13 @@ class AppState {
           .whereType<String>()),
     };
 
+    final rawDecorations =
+        json['equippedDecorations'] as Map<String, dynamic>? ?? const {};
+    final equippedDecorations = {
+      for (final zone in DecorationZone.values)
+        zone: rawDecorations[zone.key] as String?,
+    };
+
     return AppState(
       playerName: json['playerName'] as String? ?? initial.playerName,
       cash: (json['cash'] as num?)?.round() ?? initial.cash,
@@ -491,6 +573,12 @@ class AppState {
           initial.equippedCharacterId,
       equippedHomeId:
           (json['equippedHomeId'] as String?) ?? initial.equippedHomeId,
+      equippedDecorations: {
+        for (final zone in DecorationZone.values)
+          zone: owned.contains(equippedDecorations[zone])
+              ? equippedDecorations[zone]
+              : null,
+      },
       totalPointsSpent:
           (json['totalPointsSpent'] as num?)?.round() ??
           initial.totalPointsSpent,
@@ -510,6 +598,10 @@ class AppState {
     'ownedItemIds': ownedItemIds.toList(),
     'equippedCharacterId': equippedCharacterId,
     'equippedHomeId': equippedHomeId,
+    'equippedDecorations': {
+      for (final entry in equippedDecorations.entries)
+        entry.key.key: entry.value,
+    },
     'totalPointsSpent': totalPointsSpent,
   };
 
@@ -526,6 +618,7 @@ class AppState {
     Set<String>? ownedItemIds,
     String? equippedCharacterId,
     String? equippedHomeId,
+    Map<DecorationZone, String?>? equippedDecorations,
     int? totalPointsSpent,
   }) {
     return AppState(
@@ -541,6 +634,7 @@ class AppState {
       ownedItemIds: ownedItemIds ?? this.ownedItemIds,
       equippedCharacterId: equippedCharacterId ?? this.equippedCharacterId,
       equippedHomeId: equippedHomeId ?? this.equippedHomeId,
+      equippedDecorations: equippedDecorations ?? this.equippedDecorations,
       totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
     );
   }
@@ -559,6 +653,7 @@ class AppStateStore {
   static const _kOwnedItemIds = 'ownedItemIds';
   static const _kEquippedCharacterId = 'equippedCharacterId';
   static const _kEquippedHomeId = 'equippedHomeId';
+  static const _kEquippedDecorations = 'equippedDecorations';
   static const _kTotalPointsSpent = 'totalPointsSpent';
   static const _kAuthSession = 'authSession';
 
@@ -635,6 +730,15 @@ class AppStateStore {
         prefs.getString(_kEquippedCharacterId) ?? initial.equippedCharacterId;
     final equippedHomeId =
         prefs.getString(_kEquippedHomeId) ?? initial.equippedHomeId;
+    Map<String, dynamic> decorationRaw = const {};
+    final decorationJson = prefs.getString(_kEquippedDecorations);
+    if (decorationJson != null && decorationJson.isNotEmpty) {
+      try {
+        decorationRaw = jsonDecode(decorationJson) as Map<String, dynamic>;
+      } catch (_) {
+        decorationRaw = const {};
+      }
+    }
 
     return AppState(
       playerName: prefs.getString(_kPlayerName) ?? initial.playerName,
@@ -656,6 +760,12 @@ class AppStateStore {
       equippedHomeId: owned.contains(equippedHomeId)
           ? equippedHomeId
           : initial.equippedHomeId,
+      equippedDecorations: {
+        for (final zone in DecorationZone.values)
+          zone: owned.contains(decorationRaw[zone.key])
+              ? decorationRaw[zone.key] as String?
+              : null,
+      },
       totalPointsSpent:
           prefs.getInt(_kTotalPointsSpent) ?? initial.totalPointsSpent,
     );
@@ -688,6 +798,13 @@ class AppStateStore {
     await prefs.setStringList(_kOwnedItemIds, state.ownedItemIds.toList());
     await prefs.setString(_kEquippedCharacterId, state.equippedCharacterId);
     await prefs.setString(_kEquippedHomeId, state.equippedHomeId);
+    await prefs.setString(
+      _kEquippedDecorations,
+      jsonEncode({
+        for (final entry in state.equippedDecorations.entries)
+          entry.key.key: entry.value,
+      }),
+    );
     await prefs.setInt(_kTotalPointsSpent, state.totalPointsSpent);
 
     final encoded = state.results
@@ -961,6 +1078,11 @@ class _GameHomePageState extends State<GameHomePage> {
     }
 
     final owned = {..._state.ownedItemIds, item.id};
+    final nextDecorations = {..._state.equippedDecorations};
+    if (item.type == CosmeticType.decoration && item.zone != null) {
+      nextDecorations[item.zone!] = item.id;
+    }
+
     setState(() {
       _state = _state.copyWith(
         rewardPoints: _state.rewardPoints - item.price,
@@ -972,6 +1094,7 @@ class _GameHomePageState extends State<GameHomePage> {
         equippedHomeId: item.type == CosmeticType.home
             ? item.id
             : _state.equippedHomeId,
+        equippedDecorations: nextDecorations,
       );
     });
     _persist();
@@ -982,6 +1105,11 @@ class _GameHomePageState extends State<GameHomePage> {
 
   void _equipItem(ShopItem item) {
     if (!_state.ownedItemIds.contains(item.id)) return;
+    final nextDecorations = {..._state.equippedDecorations};
+    if (item.type == CosmeticType.decoration && item.zone != null) {
+      nextDecorations[item.zone!] = item.id;
+    }
+
     setState(() {
       _state = _state.copyWith(
         equippedCharacterId: item.type == CosmeticType.character
@@ -990,12 +1118,22 @@ class _GameHomePageState extends State<GameHomePage> {
         equippedHomeId: item.type == CosmeticType.home
             ? item.id
             : _state.equippedHomeId,
+        equippedDecorations: nextDecorations,
       );
     });
     _persist();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${item.emoji} ${item.name} 장착 완료!')),
     );
+  }
+
+  void _placeDecoration(DecorationZone zone, String? itemId) {
+    if (itemId != null && !_state.ownedItemIds.contains(itemId)) return;
+    final next = {..._state.equippedDecorations, zone: itemId};
+    setState(() {
+      _state = _state.copyWith(equippedDecorations: next);
+    });
+    _persist();
   }
 
   void _resetProgress() {
@@ -1023,7 +1161,12 @@ class _GameHomePageState extends State<GameHomePage> {
         },
         onDone: _applyScenarioResult,
       ),
-      _MySpaceTab(state: _state, syncMessage: _syncMessage, session: _session),
+      _MyHomeTab(
+        state: _state,
+        syncMessage: _syncMessage,
+        session: _session,
+        onPlaceDecoration: _placeDecoration,
+      ),
       _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
       _WeeklyReportTab(state: _state),
       _GuideTab(
@@ -1053,7 +1196,7 @@ class _GameHomePageState extends State<GameHomePage> {
         onDestinationSelected: (v) => setState(() => _tabIndex = v),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.explore), label: '탐험 맵'),
-          NavigationDestination(icon: Icon(Icons.home_work), label: '내 공간'),
+          NavigationDestination(icon: Icon(Icons.cottage), label: '마이홈'),
           NavigationDestination(icon: Icon(Icons.storefront), label: '상점'),
           NavigationDestination(icon: Icon(Icons.insights), label: '리포트'),
           NavigationDestination(icon: Icon(Icons.menu_book), label: '가이드'),
@@ -2551,19 +2694,35 @@ class _PerformanceResultCard extends StatelessWidget {
   }
 }
 
-class _MySpaceTab extends StatelessWidget {
-  const _MySpaceTab({
+class _MyHomeTab extends StatelessWidget {
+  const _MyHomeTab({
     required this.state,
     required this.syncMessage,
     required this.session,
+    required this.onPlaceDecoration,
   });
 
   final AppState state;
   final String? syncMessage;
   final StoredSession? session;
+  final void Function(DecorationZone zone, String? itemId) onPlaceDecoration;
+
+  ShopItem? _itemById(String? id) {
+    if (id == null) return null;
+    for (final item in kShopItems) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final solved = state.solvedCount;
+    final level = 1 + (state.rewardPoints + state.totalPointsSpent) ~/ 250;
+    final chapterProgress = ((state.currentScenario / 10) * 100)
+        .clamp(0, 100)
+        .round();
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
@@ -2576,19 +2735,79 @@ class _MySpaceTab extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '🏠 내 공간',
+                    '🏠 사이월드 감성 마이홈',
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 8),
                   Text('계정: ${session?.email ?? '게스트'}'),
                   Text('동기화 상태: ${syncMessage ?? '로컬 저장 중'}'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _MyHomeRoomCard(state: state, itemById: _itemById),
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('🪄 슬롯 꾸미기', style: TextStyle(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
-                  Text(
-                    '현재 캐릭터: ${state.equippedCharacter.emoji} ${state.equippedCharacter.name}',
-                  ),
-                  Text(
-                    '현재 베이스: ${state.equippedHome.emoji} ${state.equippedHome.name}',
-                  ),
+                  ...DecorationZone.values.map((zone) {
+                    final ownedItems = kShopItems
+                        .where(
+                          (item) =>
+                              item.type == CosmeticType.decoration &&
+                              item.zone == zone &&
+                              state.ownedItemIds.contains(item.id),
+                        )
+                        .toList();
+                    final selected = state.equippedDecorations[zone];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F8FC),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(zone.label, style: const TextStyle(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ChoiceChip(
+                                label: const Text('비우기'),
+                                selected: selected == null,
+                                onSelected: (_) => onPlaceDecoration(zone, null),
+                              ),
+                              ...ownedItems.map(
+                                (item) => ChoiceChip(
+                                  label: Text('${item.emoji} ${item.name}'),
+                                  selected: selected == item.id,
+                                  onSelected: (_) => onPlaceDecoration(zone, item.id),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (ownedItems.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 6),
+                              child: Text(
+                                '아직 이 슬롯 아이템이 없어요. 상점에서 구매해보세요!',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -2600,25 +2819,144 @@ class _MySpaceTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '핵심 진행',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
+                  const Text('핵심 프로필 진행', style: TextStyle(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
-                  Text('챕터 진행: ${state.currentScenario} / 10'),
-                  Text('보유 자산: ${state.cash}코인 · 포인트 ${state.rewardPoints}P'),
-                  Text(
-                    '누적 손익: ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인',
-                  ),
-                  Text('보유 아이템: ${state.ownedItemIds.length}개'),
-                  Text(
-                    '평균 판단/리스크/감정: ${state.avgJudgementScore}/${state.avgRiskManagementScore}/${state.avgEmotionControlScore}',
-                  ),
+                  Text('레벨: Lv.$level'),
+                  Text('챕터 진행: ${state.currentScenario} / 10 ($chapterProgress%)'),
+                  Text('탐험 포인트: ${state.rewardPoints}P · 완료 시나리오: $solved개'),
+                  Text('연속 기록 최고: ${state.bestStreak}회'),
+                  Text('보유 자산: ${state.cash}코인 · 누적 손익 ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인'),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MyHomeRoomCard extends StatelessWidget {
+  const _MyHomeRoomCard({required this.state, required this.itemById});
+
+  final AppState state;
+  final ShopItem? Function(String? id) itemById;
+
+  Color _backgroundColor() {
+    return switch (state.equippedHomeId) {
+      'home_forest' => const Color(0xFFDFF7E6),
+      'home_city' => const Color(0xFFE8F0FF),
+      'home_ocean' => const Color(0xFFDFF5FF),
+      'home_space' => const Color(0xFFEDE7FF),
+      'home_castle' => const Color(0xFFFFF3DD),
+      _ => const Color(0xFFF4F8FF),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wallItem = itemById(state.equippedDecorations[DecorationZone.wall]);
+    final floorItem = itemById(state.equippedDecorations[DecorationZone.floor]);
+    final deskItem = itemById(state.equippedDecorations[DecorationZone.desk]);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('🎨 마이홈 룸', style: TextStyle(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 10),
+            Container(
+              height: 260,
+              decoration: BoxDecoration(
+                color: _backgroundColor(),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFD5DEF2)),
+              ),
+              child: Column(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                      ),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: _slotChip('벽', wallItem),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF7E7CC),
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: 14,
+                            bottom: 16,
+                            child: _slotChip('바닥', floorItem),
+                          ),
+                          Positioned(
+                            right: 14,
+                            top: 10,
+                            child: _slotChip('선반', deskItem),
+                          ),
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(state.equippedCharacter.emoji, style: const TextStyle(fontSize: 48)),
+                                  Text(
+                                    state.equippedCharacter.name,
+                                    style: const TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '현재 홈 테마: ${state.equippedHome.emoji} ${state.equippedHome.name}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _slotChip(String title, ShopItem? item) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        item == null ? '$title: 비어있음' : '$title: ${item.emoji} ${item.name}',
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -2637,6 +2975,9 @@ class _ShopTab extends StatelessWidget {
         .toList();
     final homes = kShopItems
         .where((item) => item.type == CosmeticType.home)
+        .toList();
+    final decorations = kShopItems
+        .where((item) => item.type == CosmeticType.decoration)
         .toList();
 
     return Padding(
@@ -2669,6 +3010,8 @@ class _ShopTab extends StatelessWidget {
           _shopSection('캐릭터 꾸미기', characters),
           const SizedBox(height: 8),
           _shopSection('베이스 꾸미기', homes),
+          const SizedBox(height: 8),
+          _shopSection('마이홈 소품', decorations),
         ],
       ),
     );
@@ -2685,9 +3028,13 @@ class _ShopTab extends StatelessWidget {
             const SizedBox(height: 8),
             ...items.map((item) {
               final owned = state.ownedItemIds.contains(item.id);
-              final equipped = item.type == CosmeticType.character
-                  ? state.equippedCharacterId == item.id
-                  : state.equippedHomeId == item.id;
+              final equipped = switch (item.type) {
+                CosmeticType.character => state.equippedCharacterId == item.id,
+                CosmeticType.home => state.equippedHomeId == item.id,
+                CosmeticType.decoration =>
+                  item.zone != null &&
+                      state.equippedDecorations[item.zone!] == item.id,
+              };
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -2707,7 +3054,7 @@ class _ShopTab extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${item.name} · ${item.price}P',
+                            '${item.name}${item.zone == null ? '' : ' (${item.zone!.label})'} · ${item.price}P',
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           Text(
