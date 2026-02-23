@@ -861,6 +861,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   bool _hintUsed = false;
   int _wrongAttempts = 0;
   _PerformanceSnapshot? _resultSnapshot;
+  ScenarioResult? _pendingResult;
   String _mascotSpeech = '뉴스를 읽고 어떤 산업이 먼저 움직일지 찾아보자!';
 
   static const String _fallbackReasoningQuestion = '어떤 분석 관점이 가장 중요할까?';
@@ -1069,6 +1070,19 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     final hintPenalty = _hintUsed ? widget.difficulty.hintPenalty : 0;
     final finalProfit = outcome.adjustedProfit - hintPenalty;
 
+    final result = ScenarioResult(
+      scenarioId: widget.scenario.id,
+      invested: invested,
+      profit: finalProfit,
+      returnPercent: outcome.returnPercent,
+      judgementScore: judgementScore,
+      riskManagementScore: riskManagementScore,
+      emotionControlScore: emotionControlScore,
+      hintUsed: _hintUsed,
+      difficulty: widget.difficulty,
+      timestamp: DateTime.now(),
+    );
+
     setState(() {
       _submitted = true;
       _mascotSpeech = learningScore >= 80
@@ -1090,22 +1104,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         formulaLine: outcome.formulaLine,
         coachingLine: outcome.coachingLine,
       );
+      _pendingResult = result;
     });
-
-    widget.onDone(
-      ScenarioResult(
-        scenarioId: widget.scenario.id,
-        invested: invested,
-        profit: finalProfit,
-        returnPercent: outcome.returnPercent,
-        judgementScore: judgementScore,
-        riskManagementScore: riskManagementScore,
-        emotionControlScore: emotionControlScore,
-        hintUsed: _hintUsed,
-        difficulty: widget.difficulty,
-        timestamp: DateTime.now(),
-      ),
-    );
   }
 
   Widget _choiceTile({
@@ -1283,6 +1283,22 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
               if (_resultSnapshot != null) ...[
                 const SizedBox(height: 10),
                 _PerformanceResultCard(snapshot: _resultSnapshot!),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: _pendingResult == null
+                      ? null
+                      : () {
+                          final next = _pendingResult;
+                          if (next != null) widget.onDone(next);
+                        },
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    backgroundColor: const Color(0xFF1F8D48),
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.arrow_forward),
+                  label: const Text('다음 챕터로 이동'),
+                ),
               ],
             ],
           ),
