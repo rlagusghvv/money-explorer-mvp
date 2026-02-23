@@ -810,7 +810,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int? _selectedIndustry;
   int? _reasoningAnswer;
   int? _quizAnswer;
-  double _allocationPercent = 50;
+  int? _allocationPercent;
   bool _submitted = false;
   bool _hintUnlocked = false;
   bool _hintUsed = false;
@@ -870,7 +870,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   int _riskScore() {
-    final r = _allocationPercent.round();
+    final r = _allocationPercent;
+    if (r == null) return 0;
     final (safeMin, safeMax) = switch (widget.difficulty) {
       DifficultyLevel.easy => (30, 60),
       DifficultyLevel.normal => (35, 65),
@@ -891,9 +892,13 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     return (calmBase - retryPenalty - hintPenalty - panicPenalty).clamp(0, 100);
   }
 
-  int get _allocation => _allocationPercent.round();
+  int? get _allocation => _allocationPercent;
 
-  int get _investedCoins => (widget.cash * (_allocation / 100)).round().clamp(0, widget.cash);
+  int get _investedCoins {
+    final a = _allocation;
+    if (a == null) return 0;
+    return (widget.cash * (a / 100)).round().clamp(0, widget.cash);
+  }
 
   ({int returnPercent, int rawProfit, int adjustedProfit, int volatilityRisk, String formulaLine, String coachingLine})
   _calculateInvestmentOutcome({
@@ -910,7 +915,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       DifficultyLevel.normal => 7,
       DifficultyLevel.hard => 10,
     };
-    final volatilitySeed = (widget.scenario.id * 7 + _allocation) % 6;
+    final allocation = _allocation ?? 0;
+    final volatilitySeed = (widget.scenario.id * 7 + allocation) % 6;
     final directionalVolatility = volatilitySeed - 2;
     final volatilityEffect = directionalVolatility * baseVolatility;
 
@@ -918,8 +924,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ? 6 + qualityEdge + stabilityAdj + volatilityEffect
         : -6 - qualityEdge.abs() - stabilityAdj.abs() + volatilityEffect;
 
-    if (widget.difficulty == DifficultyLevel.hard && !isGoodDecision && _allocation >= 60) {
-      returnPercent -= ((_allocation - 50) / 4).round();
+    if (widget.difficulty == DifficultyLevel.hard && !isGoodDecision && allocation >= 60) {
+      returnPercent -= ((allocation - 50) / 4).round();
     }
 
     returnPercent = returnPercent.clamp(-65, 55);
@@ -969,7 +975,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   void _submit() {
-    if (_selectedIndustry == null || _quizAnswer == null || _reasoningAnswer == null || _submitted) {
+    if (_selectedIndustry == null || _quizAnswer == null || _reasoningAnswer == null || _allocation == null || _submitted) {
       return;
     }
 
@@ -1012,7 +1018,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         riskManagementScore: riskManagementScore,
         emotionControlScore: emotionControlScore,
         learningScore: learningScore,
-        allocationPercent: _allocation,
+        allocationPercent: _allocation!,
         invested: invested,
         returnPercent: outcome.returnPercent,
         rawProfit: outcome.rawProfit,
@@ -1125,7 +1131,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '3) 투자 비중 선택 ${_allocation.round()}%',
+          title: '3) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1133,21 +1139,32 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 '포지션 사이징 연습: 확신이 낮을수록 비중을 줄이고, 근거가 탄탄할수록 조금씩 늘려요.',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
               ),
-              Slider.adaptive(
-                value: _allocationPercent,
-                min: 20,
-                max: 80,
-                divisions: 6,
-                label: '${_allocation.round()}%',
-                onChanged: _submitted
-                    ? null
-                    : (v) => setState(() {
-                        _allocationPercent = v;
-                      }),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [20, 30, 40, 50, 60, 70, 80].map((v) {
+                  final selected = _allocation == v;
+                  return ChoiceChip(
+                    label: Text('$v%'),
+                    selected: selected,
+                    onSelected: _submitted
+                        ? null
+                        : (_) => setState(() {
+                            _allocationPercent = v;
+                            _mascotSpeech = '좋아, $v% 비중으로 포지션을 잡았어. 이제 제출해보자!';
+                          }),
+                  );
+                }).toList(),
               ),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: Text('투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 ${_allocation.round()}%)'),
+                child: Text(
+                  _allocation == null
+                      ? '투자 비중을 먼저 선택해 주세요.'
+                      : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
+                ),
               ),
             ],
           ),
@@ -1190,7 +1207,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                   ),
                 ),
               FilledButton.icon(
-                onPressed: _submitted ? null : _submit,
+                onPressed: (_submitted || _allocation == null) ? null : _submit,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
                   backgroundColor: const Color(0xFF6C63FF),
