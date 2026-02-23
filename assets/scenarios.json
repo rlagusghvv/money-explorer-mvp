@@ -1,0 +1,184 @@
+{
+  "scenarios": [
+    {
+      "id": 1,
+      "title": "폭염 경보 확대",
+      "news": "한 달째 폭염이 이어지며 전력 사용량이 급증했어요.",
+      "goodIndustries": ["냉방가전", "전력설비"],
+      "badIndustries": ["야외레저", "농업"],
+      "industryOptions": [
+        {"label": "냉방가전/전력설비", "score": 100},
+        {"label": "야외레저/농업", "score": 25},
+        {"label": "둘 다 비슷", "score": 55}
+      ],
+      "quizQuestion": "폭염 때 단기 수요가 늘기 쉬운 산업은?",
+      "quizOptions": [
+        {"label": "냉방가전", "score": 100},
+        {"label": "스키장", "score": 20},
+        {"label": "우산 제조", "score": 45}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "온라인 수업 재확대",
+      "news": "감염병 확산으로 일부 학교가 온라인 수업으로 전환했어요.",
+      "goodIndustries": ["교육플랫폼", "태블릿"],
+      "badIndustries": ["학원 오프라인", "통학버스"],
+      "industryOptions": [
+        {"label": "교육플랫폼/태블릿", "score": 100},
+        {"label": "오프라인 학원/통학버스", "score": 30},
+        {"label": "모르겠어요", "score": 50}
+      ],
+      "quizQuestion": "온라인 수업 확대의 대표 수혜는?",
+      "quizOptions": [
+        {"label": "태블릿", "score": 100},
+        {"label": "통학버스", "score": 25},
+        {"label": "놀이공원", "score": 35}
+      ]
+    },
+    {
+      "id": 3,
+      "title": "친환경 포장 의무화",
+      "news": "정부가 일회용 플라스틱 규제를 강화했어요.",
+      "goodIndustries": ["친환경소재", "재활용"],
+      "badIndustries": ["저가 플라스틱", "일회용품"],
+      "industryOptions": [
+        {"label": "친환경소재/재활용", "score": 100},
+        {"label": "일회용품/플라스틱", "score": 20},
+        {"label": "변화 없음", "score": 45}
+      ],
+      "quizQuestion": "규제 강화 시 먼저 확인할 것은?",
+      "quizOptions": [
+        {"label": "규제로 불리한 산업", "score": 100},
+        {"label": "유행 밈", "score": 15},
+        {"label": "연예 뉴스", "score": 10}
+      ]
+    },
+    {
+      "id": 4,
+      "title": "게임 신작 대흥행",
+      "news": "국내 게임사가 글로벌 신작 흥행에 성공했어요.",
+      "goodIndustries": ["게임", "결제플랫폼"],
+      "badIndustries": ["경쟁 게임사", "오프라인 오락시설"],
+      "industryOptions": [
+        {"label": "게임/결제플랫폼", "score": 100},
+        {"label": "경쟁 게임사/오프라인 오락시설", "score": 30},
+        {"label": "둘 다 하락", "score": 55}
+      ],
+      "quizQuestion": "흥행 뉴스에서 장기적으로 꼭 볼 지표는?",
+      "quizOptions": [
+        {"label": "이용자 유지율", "score": 100},
+        {"label": "하루 검색량만", "score": 50},
+        {"label": "광고 문구", "score": 20}
+      ]
+    },
+    {
+      "id": 5,
+      "title": "국제 유가 급등",
+      "news": "원유 가격이 급등하면서 운송비 부담이 커졌어요.",
+      "goodIndustries": ["에너지 개발", "정유"],
+      "badIndustries": ["항공", "물류"],
+      "industryOptions": [
+        {"label": "에너지/정유", "score": 100},
+        {"label": "항공/물류", "score": 30},
+        {"label": "둘 다 수혜", "score": 35}
+      ],
+      "quizQuestion": "유가 상승이 부담이 되는 산업은?",
+      "quizOptions": [
+        {"label": "항공", "score": 100},
+        {"label": "정유", "score": 45},
+        {"label": "태양광", "score": 55}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "AI 학습도구 보급",
+      "news": "학교에서 AI 튜터 앱을 정식 도입하기 시작했어요.",
+      "goodIndustries": ["에듀테크", "클라우드"],
+      "badIndustries": ["종이교재 중심"],
+      "industryOptions": [
+        {"label": "에듀테크/클라우드", "score": 100},
+        {"label": "종이교재 중심", "score": 30},
+        {"label": "변화 없음", "score": 40}
+      ],
+      "quizQuestion": "기술 도입 뉴스에서 보는 핵심은?",
+      "quizOptions": [
+        {"label": "실제 사용자 증가", "score": 100},
+        {"label": "광고 색감", "score": 20},
+        {"label": "유명인 댓글", "score": 25}
+      ]
+    },
+    {
+      "id": 7,
+      "title": "태풍으로 물류 차질",
+      "news": "대형 태풍으로 항만 운영이 일시 중단됐어요.",
+      "goodIndustries": ["재난대응", "대체운송"],
+      "badIndustries": ["수출물류", "신선식품 유통"],
+      "industryOptions": [
+        {"label": "재난대응/대체운송", "score": 100},
+        {"label": "수출물류/신선식품", "score": 40},
+        {"label": "영향 미미", "score": 25}
+      ],
+      "quizQuestion": "재난 뉴스에서 투자 판단 전 해야 할 일은?",
+      "quizOptions": [
+        {"label": "영향 기간 확인", "score": 100},
+        {"label": "바로 몰빵", "score": 5},
+        {"label": "친구 따라하기", "score": 10}
+      ]
+    },
+    {
+      "id": 8,
+      "title": "금리 인하 발표",
+      "news": "중앙은행이 기준금리를 인하했어요.",
+      "goodIndustries": ["성장주", "부동산 관련"],
+      "badIndustries": ["고금리 수혜 예금형"],
+      "industryOptions": [
+        {"label": "성장주/부동산 관련", "score": 100},
+        {"label": "예금형", "score": 35},
+        {"label": "모두 하락", "score": 45}
+      ],
+      "quizQuestion": "금리 인하 시 일반적으로 기대되는 것은?",
+      "quizOptions": [
+        {"label": "대출 부담 완화", "score": 100},
+        {"label": "현금가치 급등", "score": 25},
+        {"label": "모든 소비 중단", "score": 10}
+      ]
+    },
+    {
+      "id": 9,
+      "title": "식량 가격 불안",
+      "news": "이상기후로 국제 곡물 가격이 크게 올랐어요.",
+      "goodIndustries": ["스마트농업", "대체식품"],
+      "badIndustries": ["원재료 의존 식품"],
+      "industryOptions": [
+        {"label": "스마트농업/대체식품", "score": 100},
+        {"label": "원재료 의존 식품", "score": 40},
+        {"label": "변화 없음", "score": 35}
+      ],
+      "quizQuestion": "원재료 가격 급등의 위험은?",
+      "quizOptions": [
+        {"label": "마진 축소", "score": 100},
+        {"label": "매출 자동 증가", "score": 15},
+        {"label": "비용 자동 감소", "score": 10}
+      ]
+    },
+    {
+      "id": 10,
+      "title": "전기차 충전 인프라 확대",
+      "news": "도시 전역에 초급속 충전소가 대거 설치되고 있어요.",
+      "goodIndustries": ["배터리", "충전인프라"],
+      "badIndustries": ["내연기관 부품"],
+      "industryOptions": [
+        {"label": "배터리/충전인프라", "score": 100},
+        {"label": "내연기관 부품", "score": 35},
+        {"label": "모두 비슷", "score": 50}
+      ],
+      "quizQuestion": "장기 트렌드를 판단할 때 중요한 것은?",
+      "quizOptions": [
+        {"label": "인프라 확산 속도", "score": 100},
+        {"label": "오늘 댓글 수", "score": 25},
+        {"label": "짧은 루머", "score": 15}
+      ]
+    }
+  ]
+}
