@@ -430,9 +430,24 @@ class _PlayTab extends StatelessWidget {
   final ValueChanged<ScenarioResult> onDone;
   final ValueChanged<DifficultyLevel> onDifficultyChanged;
 
+  static const List<String> _chapterObjectives = [
+    '기회비용: 여러 선택지 중 가장 좋은 선택을 찾아요.',
+    '분산투자: 수혜와 피해를 함께 보며 균형을 맞춰요.',
+    '리스크 관리: 투자 비율을 조절해 흔들림을 줄여요.',
+  ];
+
+  String _objectiveForChapter(int chapterNumber) {
+    if (chapterNumber <= 0) return _chapterObjectives.first;
+    return _chapterObjectives[(chapterNumber - 1) % _chapterObjectives.length];
+  }
+
   @override
   Widget build(BuildContext context) {
     final done = state.currentScenario >= scenarios.length;
+    final chapter = done
+        ? scenarios.length
+        : (state.currentScenario + 1).clamp(1, scenarios.length);
+    final chapterObjective = _objectiveForChapter(chapter);
 
     return Container(
       decoration: const BoxDecoration(
@@ -447,6 +462,11 @@ class _PlayTab extends StatelessWidget {
         child: Column(
           children: [
             _MascotMapHeader(state: state, total: scenarios.length),
+            const SizedBox(height: 8),
+            _ChapterObjectiveBanner(
+              chapter: chapter,
+              objective: chapterObjective,
+            ),
             const SizedBox(height: 12),
             _DifficultySelector(
               current: state.selectedDifficulty,
@@ -482,6 +502,42 @@ class _PlayTab extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ChapterObjectiveBanner extends StatelessWidget {
+  const _ChapterObjectiveBanner({required this.chapter, required this.objective});
+
+  final int chapter;
+  final String objective;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFFFF8E8),
+        border: Border.all(color: const Color(0xFFFFDFA5)),
+      ),
+      child: Row(
+        children: [
+          const Text('🎯', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '챕터 $chapter 학습 목표: $objective',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: Color(0xFF5F4A1F),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -759,7 +815,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   bool _hintUnlocked = false;
   bool _hintUsed = false;
   int _wrongAttempts = 0;
-  String? _resultText;
+  _PerformanceSnapshot? _resultSnapshot;
   String _mascotSpeech = '뉴스를 읽고 어떤 산업이 먼저 움직일지 찾아보자!';
 
   static const String _fallbackReasoningQuestion = '어떤 분석 관점이 가장 중요할까?';
@@ -768,6 +824,10 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     '영향이 몇 주/몇 달 갈지 기간 확인',
     '수혜+피해를 함께 보고 분산 전략 세우기',
   ];
+  static const List<String> _chapterObjectiveKeywords = ['기회비용', '분산투자', '리스크 관리'];
+
+  String get _chapterObjective =>
+      _chapterObjectiveKeywords[(widget.scenario.id - 1) % _chapterObjectiveKeywords.length];
 
   String get _reasoningQuestion =>
       widget.scenario.reasoningQuestion ?? _fallbackReasoningQuestion;
@@ -850,7 +910,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         _wrongAttempts = 1;
         _hintUnlocked = true;
         _mascotSpeech = '좋은 시도야! 정답 하나가 아니라 점수를 올리는 방식이야. 힌트를 열었어!';
-        _resultText = '현재 판단 정확도 $judgementScore점. 힌트로 근거를 다듬고 점수를 올려보자!';
+        _resultSnapshot = null;
       });
       return;
     }
@@ -864,17 +924,25 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     final rawProfit = (invested * returnPercent / 100).round();
     final hintPenalty = _hintUsed ? widget.difficulty.hintPenalty : 0;
     final finalProfit = rawProfit - hintPenalty;
+    final volatilityRisk = (100 - riskManagementScore).clamp(0, 100);
+    final resilience = emotionControlScore;
 
     setState(() {
       _submitted = true;
       _mascotSpeech = learningScore >= 80
           ? '멋져! 여러 선택지 중에서도 균형 있게 높은 점수를 만들었어!'
           : '좋아! 이번 기록을 바탕으로 다음 챕터에서 더 높은 점수를 노려보자.';
-      _resultText =
-          '판단 정확도 $judgementScore점 · 리스크 관리 $riskManagementScore점 · 감정 통제 $emotionControlScore점\n'
-          '학습 점수 평균 $learningScore점\n'
-          '투자금 $invested코인 · 수익률 $returnPercent%\n'
-          '최종 변화: ${finalProfit >= 0 ? '+' : ''}$finalProfit코인';
+      _resultSnapshot = _PerformanceSnapshot(
+        judgementScore: judgementScore,
+        riskManagementScore: riskManagementScore,
+        emotionControlScore: emotionControlScore,
+        learningScore: learningScore,
+        invested: invested,
+        returnPercent: returnPercent,
+        finalProfit: finalProfit,
+        volatilityRisk: volatilityRisk,
+        resilience: resilience,
+      );
     });
 
     widget.onDone(
@@ -1046,17 +1114,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 icon: const Icon(Icons.check_circle),
                 label: Text(_wrongAttempts == 0 ? '점수 확인' : '재도전 완료'),
               ),
-              if (_resultText != null) ...[
+              if (_resultSnapshot != null) ...[
                 const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    color: const Color(0xFFF5F8FF),
-                  ),
-                  child: Text(_resultText!, style: const TextStyle(fontWeight: FontWeight.w700)),
-                ),
+                _PerformanceResultCard(snapshot: _resultSnapshot!),
               ],
             ],
           ),
@@ -1110,6 +1170,22 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           Text('🗺️ ${widget.difficulty.questName} · 챕터 ${s.id}'),
           const SizedBox(height: 6),
           Text(s.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF3FF),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '이번 챕터 핵심: $_chapterObjective',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF3D4E91),
+                fontSize: 12,
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           Text(s.news),
           const SizedBox(height: 10),
@@ -1160,6 +1236,121 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
       child: Text(text, style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12)),
+    );
+  }
+}
+
+class _PerformanceSnapshot {
+  const _PerformanceSnapshot({
+    required this.judgementScore,
+    required this.riskManagementScore,
+    required this.emotionControlScore,
+    required this.learningScore,
+    required this.invested,
+    required this.returnPercent,
+    required this.finalProfit,
+    required this.volatilityRisk,
+    required this.resilience,
+  });
+
+  final int judgementScore;
+  final int riskManagementScore;
+  final int emotionControlScore;
+  final int learningScore;
+  final int invested;
+  final int returnPercent;
+  final int finalProfit;
+  final int volatilityRisk;
+  final int resilience;
+}
+
+class _PerformanceResultCard extends StatelessWidget {
+  const _PerformanceResultCard({required this.snapshot});
+
+  final _PerformanceSnapshot snapshot;
+
+  String get _overallComment {
+    if (snapshot.learningScore >= 80) {
+      return '아주 좋아! 수익과 안정성을 함께 챙긴 멋진 운영이야.';
+    }
+    if (snapshot.learningScore >= 60) {
+      return '좋아! 다음엔 리스크를 조금만 더 다듬으면 더 탄탄해져.';
+    }
+    return '괜찮아, 탐험은 연습이야! 투자 비율을 조절하면 더 안정적으로 갈 수 있어.';
+  }
+
+  String get _riskComment {
+    if (snapshot.volatilityRisk <= 20) return '흔들림이 작아 안정적이야.';
+    if (snapshot.volatilityRisk <= 40) return '적당한 흔들림, 관리 가능한 수준!';
+    return '변동성이 큰 편이야. 분산과 비율 조절을 시도해보자!';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFF5F8FF),
+        border: Border.all(color: const Color(0xFFDCE5FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('📈 이번 탐험 성과', style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _metricChip('수익률', '${snapshot.returnPercent}%'),
+              _metricChip('변동성/리스크', '${snapshot.volatilityRisk}'),
+              _metricChip('회복력(안정성)', '${snapshot.resilience}점'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '• 해석: $_riskComment',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '• 총평: $_overallComment',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '투자금 ${snapshot.invested}코인 · 최종 변화 ${snapshot.finalProfit >= 0 ? '+' : ''}${snapshot.finalProfit}코인',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricChip(String title, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Color(0xFF2F3A56)),
+          children: [
+            TextSpan(
+              text: '$title\n',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
