@@ -909,6 +909,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
   int? get _allocation => _allocationPercent;
 
+  bool get _canSelectAllocation =>
+      _selectedIndustry != null && _reasoningAnswer != null && _quizAnswer != null;
+
   int get _investedCoins {
     final a = _allocation;
     if (a == null) return 0;
@@ -1146,13 +1149,15 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '3) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
+          title: '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '포지션 사이징 연습: 확신이 낮을수록 비중을 줄이고, 근거가 탄탄할수록 조금씩 늘려요.',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
+              Text(
+                _canSelectAllocation
+                    ? '이제 마지막 단계! 투자 비중을 선택해요. (높을수록 수익/손실 모두 커짐)'
+                    : '먼저 1~3번 문제를 모두 선택하면 투자 비중을 고를 수 있어요.',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -1163,11 +1168,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                   return ChoiceChip(
                     label: Text('$v%'),
                     selected: selected,
-                    onSelected: _submitted
+                    onSelected: (_submitted || !_canSelectAllocation)
                         ? null
                         : (_) => setState(() {
                             _allocationPercent = v;
-                            _mascotSpeech = '좋아, $v% 비중으로 포지션을 잡았어. 이제 제출해보자!';
+                            _mascotSpeech = '좋아, $v% 비중 확정! 이제 점수를 확인해보자!';
                           }),
                   );
                 }).toList(),
@@ -1176,9 +1181,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  _allocation == null
-                      ? '투자 비중을 먼저 선택해 주세요.'
-                      : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
+                  !_canSelectAllocation
+                      ? '1~3번 문제를 먼저 선택해 주세요.'
+                      : _allocation == null
+                          ? '투자 비중을 선택해 주세요.'
+                          : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
                 ),
               ),
             ],
@@ -1186,7 +1193,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '4) 퀴즈: ${s.quizQuestion}',
+          title: '3) ${s.quizQuestion}',
           child: Column(
             children: [
               ...List.generate(
