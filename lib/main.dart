@@ -1193,8 +1193,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           ),
         ),
         const SizedBox(height: 10),
-        _gameSection(
-          title: '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
+        if (_canSelectAllocation)
+          _gameSection(
+            title: '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1226,11 +1227,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  !_canSelectAllocation
-                      ? '1~3번 문제를 먼저 선택해 주세요.'
-                      : _allocation == null
-                          ? '투자 비중을 선택해 주세요.'
-                          : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
+                  _allocation == null
+                      ? '투자 비중을 선택해 주세요.'
+                      : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
                 ),
               ),
             ],
