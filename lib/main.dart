@@ -465,6 +465,7 @@ class _PlayTab extends StatelessWidget {
             else
               Expanded(
                 child: ScenarioPlayCard(
+                  key: ValueKey('scenario-${state.currentScenario}-${state.selectedDifficulty.index}'),
                   scenario: scenarios[state.currentScenario],
                   cash: state.cash,
                   difficulty: state.selectedDifficulty,
@@ -780,7 +781,7 @@ class ScenarioPlayCard extends StatefulWidget {
 }
 
 class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
-  late int _selectedIndustry;
+  int? _selectedIndustry;
   int? _reasoningAnswer;
   int? _quizAnswer;
   double _riskRatio = 55;
@@ -794,7 +795,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   @override
   void initState() {
     super.initState();
-    _selectedIndustry = 0;
+    _selectedIndustry = null;
   }
 
   int get _expectedReasoning => switch (widget.difficulty) {
@@ -809,11 +810,27 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     '수혜+피해를 함께 보고 분산 전략 세우기',
   ];
 
-  String get _reasoningQuestion => switch (widget.difficulty) {
-    DifficultyLevel.easy => '2) 가장 먼저 볼 근거는?',
-    DifficultyLevel.normal => '2) 보통 난이도: 한 단계 깊게 볼 근거는?',
-    DifficultyLevel.hard => '2) 어려움 난이도: 2차 영향까지 보는 근거는?',
-  };
+  String get _reasoningQuestion {
+    const easyQs = [
+      '2) 가장 먼저 확인할 근거는?',
+      '2) 이 뉴스에서 우선 체크할 포인트는?',
+    ];
+    const normalQs = [
+      '2) 보통 난이도: 한 단계 깊게 볼 근거는?',
+      '2) 보통 난이도: 기간/지속성 관점에서 볼 근거는?',
+    ];
+    const hardQs = [
+      '2) 어려움 난이도: 2차 영향까지 보는 근거는?',
+      '2) 어려움 난이도: 연쇄효과(파급)까지 보는 근거는?',
+    ];
+
+    final idx = widget.scenario.id % 2;
+    return switch (widget.difficulty) {
+      DifficultyLevel.easy => easyQs[idx],
+      DifficultyLevel.normal => normalQs[idx],
+      DifficultyLevel.hard => hardQs[idx],
+    };
+  }
 
   int _calcReturnPercent(bool coreCorrect) {
     final base = switch (widget.difficulty) {
@@ -831,7 +848,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   bool _coreReasoningCorrect() {
-    final industryOk = _selectedIndustry == widget.scenario.correctOption;
+    final industryOk = _selectedIndustry != null && _selectedIndustry == widget.scenario.correctOption;
     final quizOk = _quizAnswer == widget.scenario.quizAnswer;
     final reasoningOk = _reasoningAnswer == _expectedReasoning;
 
@@ -895,7 +912,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   void _submit() {
-    if (_quizAnswer == null || _reasoningAnswer == null || _submitted) return;
+    if (_selectedIndustry == null || _quizAnswer == null || _reasoningAnswer == null || _submitted) return;
 
     final coreCorrect = _coreReasoningCorrect();
 
