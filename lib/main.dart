@@ -1193,49 +1193,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           ),
         ),
         const SizedBox(height: 10),
-        if (_canSelectAllocation)
-          _gameSection(
-            title: '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _canSelectAllocation
-                    ? '이제 마지막 단계! 투자 비중을 선택해요. (높을수록 수익/손실 모두 커짐)'
-                    : '먼저 1~3번 문제를 모두 선택하면 투자 비중을 고를 수 있어요.',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [20, 30, 40, 50, 60, 70, 80].map((v) {
-                  final selected = _allocation == v;
-                  return ChoiceChip(
-                    label: Text('$v%'),
-                    selected: selected,
-                    onSelected: (_submitted || !_canSelectAllocation)
-                        ? null
-                        : (_) => setState(() {
-                            _allocationPercent = v;
-                            _mascotSpeech = '좋아, $v% 비중 확정! 이제 점수를 확인해보자!';
-                          }),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  _allocation == null
-                      ? '투자 비중을 선택해 주세요.'
-                      : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
         _gameSection(
           title: '3) ${s.quizQuestion}',
           child: Column(
@@ -1270,6 +1227,47 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                   ),
                   child: Text(
                     '힌트: "${s.goodIndustries.first}" 같은 직접 수혜와 "${s.badIndustries.first}" 같은 피해를 함께 보며 판단해보세요.',
+                  ),
+                ),
+              const SizedBox(height: 10),
+              if (_canSelectAllocation)
+                _gameSection(
+                  title: '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '이제 마지막 단계! 투자 비중을 선택해요. (높을수록 수익/손실 모두 커짐)',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [20, 30, 40, 50, 60, 70, 80].map((v) {
+                          final selected = _allocation == v;
+                          return ChoiceChip(
+                            label: Text('$v%'),
+                            selected: selected,
+                            onSelected: _submitted
+                                ? null
+                                : (_) => setState(() {
+                                    _allocationPercent = v;
+                                    _mascotSpeech = '좋아, $v% 비중 확정! 이제 점수를 확인해보자!';
+                                  }),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _allocation == null
+                              ? '투자 비중을 선택해 주세요.'
+                              : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               FilledButton.icon(
