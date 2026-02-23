@@ -1,92 +1,56 @@
-# 뉴스 포트폴리오 탐험대 (Kid Econ MVP)
+# 머니탐험대 (Money Explorer) — MVP
 
-초등 고학년~중학생 대상, **뉴스/사회 이슈 기반 경제 의사결정 게임**입니다.
+초등학생 대상 경제 기초 교육 게임형 앱 MVP입니다.
 
-핵심 루프:
-1. 사회 이슈/뉴스 확인
-2. 수혜/피해 산업 추리
-3. 가상 포트폴리오(리스크 비율 포함) 결정
-4. 시나리오 퀴즈 풀이 + 결과 반영
-5. 주간 리포트에서 학습 습관 확인
-
----
-
-## MVP 범위 (완료)
-- ✅ 한국어 UI + 게임 톤
-- ✅ 시나리오 10개
-- ✅ 시나리오별 퀴즈
-- ✅ 간단 포트폴리오 시뮬레이션
-- ✅ 감정조절(몰빵 패널티 / 안정 비율 보너스)
-- ✅ 주간 리포트(5개 단위 요약 + 전체 성과)
-- ✅ 로컬 저장(SharedPreferences)
-- ✅ Flutter 구조 유지(iOS 확장 가능)
-
----
-
-## 학습 목표
-- 이슈 해석력
-- 산업 지도 이해(수혜/피해 연결)
-- 리스크/분산 개념
-- 단기 vs 장기 관점
-- 감정 조절(급한 의사결정 피하기)
-
----
+## MVP 포함 기능
+- 온보딩(게임 목표 설명)
+- 핵심 루프: `벌기(earn) / 쓰기(spend) / 저축(save)` 미션 카드
+- 난이도(쉬움/보통/어려움)
+- 부모 설정(일일 플레이 시간 제한, 난이도, 효과음 토글)
+- 로컬 저장(SharedPreferences)
+- 레벨업(저축 코인 기준)
 
 ## 기술 스택
 - Flutter (Material 3)
-- shared_preferences
+- shared_preferences (로컬 상태 저장)
 
----
-
-## Web 우선 실행 방법 (로컬 데모)
+## 실행
 ```bash
 cd kid_econ_mvp
 flutter pub get
-flutter run -d chrome
+flutter run
 ```
 
-> Chrome 디바이스가 안 뜨면:
+## iOS TestFlight 업로드 준비
+
+### 1) 기본 점검
 ```bash
-flutter config --enable-web
 flutter doctor
-flutter devices
 ```
 
----
-
-## 정적 웹 빌드 확인
+### 2) iOS 빌드
 ```bash
 cd kid_econ_mvp
-flutter build web
-```
-
-빌드 산출물: `build/web/`
-
----
-
-## iOS 이식성 유지 포인트
-- Flutter 단일 코드베이스 유지 (`lib/main.dart`)
-- 플랫폼 전용 코드 없음
-- SharedPreferences 기반 로컬 상태 저장
-
-iOS 빌드:
-```bash
-cd kid_econ_mvp
-flutter build ios
-# 또는 배포용
 flutter build ipa --release
 ```
 
----
+### 3) App Store Connect 업로드
+- Xcode Organizer 또는 Transporter로 `.ipa` 업로드
+- App Store Connect에서 빌드 처리 후 TestFlight 배포
 
-## 파일 구조
-- `lib/main.dart`: MVP 전체 플레이 로직/상태/UI
-- `README.md`: 실행/검증/개요
+## 앱스토어 제출 전 체크리스트 (MVP)
+- [ ] 앱 이름/아이콘/스플래시 교체
+- [ ] 개인정보 처리방침 링크 준비
+- [ ] 부모 설정 PIN 고정값(현재 1234) 제거
+- [ ] 효과음/이미지 에셋 정식 반영
+- [ ] 연령 등급/키즈 카테고리 정책 검토
 
----
+## 구조
+- `lib/main.dart`: MVP 전체 로직(단일 파일)
 
-## 다음 확장 아이디어
-- 기업 단위 카드(산업 → 대표 기업 매핑 강화)
-- 난이도별 리스크 모델 차등
-- 부모/교사용 리포트 내보내기
-- 서버 백업 + 계정 연동
+## Post-MVP TODO
+- 경제 개념 스테이지 분리(예산/기회비용/지연보상)
+- 학습 리포트(부모용 주간 리포트)
+- 서버 연동(학습 기록 백업)
+- 보상 시스템(뱃지/퀘스트)
+- 콘텐츠/아트 리소스 교체
