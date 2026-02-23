@@ -811,6 +811,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int? _reasoningAnswer;
   int? _quizAnswer;
   int? _allocationPercent;
+  late List<ScenarioOption> _industryChoices;
+  late List<ScenarioOption> _quizChoices;
   bool _submitted = false;
   bool _hintUnlocked = false;
   bool _hintUsed = false;
@@ -828,6 +830,19 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
   String get _chapterObjective =>
       _chapterObjectiveKeywords[(widget.scenario.id - 1) % _chapterObjectiveKeywords.length];
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareShuffledChoices();
+  }
+
+  void _prepareShuffledChoices() {
+    _industryChoices = [...widget.scenario.industryOptions]
+      ..shuffle(Random(widget.scenario.id * 997 + DateTime.now().millisecond));
+    _quizChoices = [...widget.scenario.quizOptions]
+      ..shuffle(Random(widget.scenario.id * 991 + DateTime.now().microsecond));
+  }
 
   String get _reasoningQuestion =>
       widget.scenario.reasoningQuestion ?? _fallbackReasoningQuestion;
@@ -979,8 +994,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       return;
     }
 
-    final industryScore = widget.scenario.industryOptions[_selectedIndustry!].score;
-    final quizScore = widget.scenario.quizOptions[_quizAnswer!].score;
+    final industryScore = _industryChoices[_selectedIndustry!].score;
+    final quizScore = _quizChoices[_quizAnswer!].score;
     final reasonScore = _reasoningScore();
     final judgementScore = ((industryScore * 0.45) + (quizScore * 0.35) + (reasonScore * 0.20)).round();
 
@@ -1096,9 +1111,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           title: '1) 어떤 산업 카드에 투자할까?',
           child: Column(
             children: List.generate(
-              s.industryOptions.length,
+              _industryChoices.length,
               (i) => _choiceTile(
-                text: s.industryOptions[i].label,
+                text: _industryChoices[i].label,
                 selected: _selectedIndustry == i,
                 onTap: _submitted
                     ? null
@@ -1175,9 +1190,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           child: Column(
             children: [
               ...List.generate(
-                s.quizOptions.length,
+                _quizChoices.length,
                 (i) => _choiceTile(
-                  text: s.quizOptions[i].label,
+                  text: _quizChoices[i].label,
                   selected: _quizAnswer == i,
                   onTap: _submitted
                       ? null
