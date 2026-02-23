@@ -14,6 +14,43 @@ enum DifficultyLevel { easy, normal, hard }
 
 enum LearnerAgeBand { younger, middle, older }
 
+enum MarketMood { calm, balanced, wobbly }
+
+extension MarketMoodX on MarketMood {
+  String get label => switch (this) {
+    MarketMood.calm => '맑음',
+    MarketMood.balanced => '보통',
+    MarketMood.wobbly => '흔들림',
+  };
+
+  String icon(LearnerAgeBand band) => switch (this) {
+    MarketMood.calm => '☀️',
+    MarketMood.balanced => '⛅',
+    MarketMood.wobbly => band == LearnerAgeBand.younger ? '🌧️' : '🌪️',
+  };
+}
+
+class ChapterCondition {
+  const ChapterCondition({
+    required this.marketMood,
+    required this.volatilityShift,
+    required this.riskContext,
+  });
+
+  final MarketMood marketMood;
+  final int volatilityShift;
+  final String riskContext;
+
+  String summary(LearnerAgeBand band) {
+    final volatilityWord = volatilityShift > 0
+        ? '변동성 +$volatilityShift'
+        : volatilityShift < 0
+        ? '변동성 $volatilityShift'
+        : '변동성 0';
+    return '${marketMood.icon(band)} 시장기분 ${marketMood.label} · $volatilityWord\n$riskContext';
+  }
+}
+
 extension LearnerAgeBandX on LearnerAgeBand {
   String get label => switch (this) {
     LearnerAgeBand.younger => '8-10세',
@@ -131,6 +168,7 @@ class ScenarioResult {
     required this.hintUsed,
     required this.difficulty,
     required this.timestamp,
+    required this.allocationPercent,
   });
 
   final int scenarioId;
@@ -143,6 +181,7 @@ class ScenarioResult {
   final bool hintUsed;
   final DifficultyLevel difficulty;
   final DateTime timestamp;
+  final int allocationPercent;
 
   int get totalLearningScore =>
       ((judgementScore + riskManagementScore + emotionControlScore) / 3)
@@ -244,8 +283,8 @@ class AppStateStore {
           final parts = line.split('|');
           if (parts.length < 8) return null;
 
-          final isLegacy = parts.length < 11;
-          if (isLegacy) {
+          final isVeryLegacy = parts.length < 10;
+          if (isVeryLegacy) {
             final legacyQuizCorrect = parts[4] == '1';
             final legacyReturn = int.tryParse(parts[3]) ?? 0;
             return ScenarioResult(
@@ -270,6 +309,7 @@ class AppStateStore {
                 int.tryParse(parts.length > 7 ? parts[7] : '') ??
                     DateTime.now().millisecondsSinceEpoch,
               ),
+              allocationPercent: 50,
             );
           }
 
@@ -286,6 +326,9 @@ class AppStateStore {
             timestamp: DateTime.fromMillisecondsSinceEpoch(
               int.tryParse(parts[9]) ?? DateTime.now().millisecondsSinceEpoch,
             ),
+            allocationPercent: parts.length > 10
+                ? int.tryParse(parts[10]) ?? 50
+                : 50,
           );
         })
         .whereType<ScenarioResult>()
@@ -347,6 +390,7 @@ class AppStateStore {
             e.hintUsed ? 1 : 0,
             e.difficulty.name,
             e.timestamp.millisecondsSinceEpoch,
+            e.allocationPercent,
           ].join('|'),
         )
         .toList();
@@ -560,6 +604,45 @@ class _PlayTab extends StatelessWidget {
     return _chapterObjectives[(chapterNumber - 1) % _chapterObjectives.length];
   }
 
+  ChapterCondition _conditionForNextChapter() {
+    if (state.results.isEmpty) {
+      return const ChapterCondition(
+        marketMood: MarketMood.balanced,
+        volatilityShift: 0,
+        riskContext: '첫 챕터라 기본 시장 컨디션이에요. 차분하게 시작해요!',
+      );
+    }
+
+    final last = state.results.last;
+    final quality =
+        ((last.judgementScore +
+                    last.riskManagementScore +
+                    last.emotionControlScore) /
+                3)
+            .round();
+    final aggressive = last.allocationPercent >= 70;
+
+    if (quality >= 82 && last.returnPercent >= 0 && !aggressive) {
+      return const ChapterCondition(
+        marketMood: MarketMood.calm,
+        volatilityShift: -2,
+        riskContext: '지난 챕터에서 균형 잡힌 결정을 했어요. 다음 장은 비교적 차분해요.',
+      );
+    }
+    if (quality < 62 || last.returnPercent < 0 || aggressive) {
+      return const ChapterCondition(
+        marketMood: MarketMood.wobbly,
+        volatilityShift: 4,
+        riskContext: '지난 선택 영향으로 시장이 조금 흔들려요. 이번엔 비중을 나눠 안전하게 가요.',
+      );
+    }
+    return const ChapterCondition(
+      marketMood: MarketMood.balanced,
+      volatilityShift: 1,
+      riskContext: '시장 분위기는 보통이에요. 근거 1개를 더 확인하면 점수가 더 좋아져요.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -669,6 +752,7 @@ class _PlayTab extends StatelessWidget {
                   cash: state.cash,
                   difficulty: state.selectedDifficulty,
                   learnerAgeBand: state.learnerAgeBand,
+                  chapterCondition: _conditionForNextChapter(),
                   onDone: onDone,
                 ),
               ),
@@ -1005,6 +1089,7 @@ class ScenarioPlayCard extends StatefulWidget {
     required this.cash,
     required this.difficulty,
     required this.learnerAgeBand,
+    required this.chapterCondition,
     required this.onDone,
   });
 
@@ -1012,6 +1097,7 @@ class ScenarioPlayCard extends StatefulWidget {
   final int cash;
   final DifficultyLevel difficulty;
   final LearnerAgeBand learnerAgeBand;
+  final ChapterCondition chapterCondition;
   final ValueChanged<ScenarioResult> onDone;
 
   @override
@@ -1184,10 +1270,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       DifficultyLevel.normal => 7,
       DifficultyLevel.hard => 10,
     };
+    final moodVolatility = widget.chapterCondition.volatilityShift;
     final allocation = _allocation ?? 0;
     final volatilitySeed = (widget.scenario.id * 7 + allocation) % 6;
     final directionalVolatility = volatilitySeed - 2;
-    final volatilityEffect = directionalVolatility * baseVolatility;
+    final volatilityEffect =
+        directionalVolatility * (baseVolatility + moodVolatility);
 
     var returnPercent = isGoodDecision
         ? 6 + qualityEdge + stabilityAdj + volatilityEffect
@@ -1237,8 +1325,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             : '하드 모드 팁: 승률이 높아도 비중 분할로 변동성 충격을 줄여요.',
     };
 
-    final volatilityRisk = (100 - riskManagementScore + baseVolatility * 2)
-        .clamp(0, 100);
+    final volatilityRisk =
+        (100 - riskManagementScore + (baseVolatility + moodVolatility) * 2)
+            .clamp(0, 100);
     return (
       returnPercent: returnPercent,
       rawProfit: rawProfit,
@@ -1361,6 +1450,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       hintUsed: _hintUsed,
       difficulty: widget.difficulty,
       timestamp: DateTime.now(),
+      allocationPercent: _allocation!,
     );
 
     setState(() {
@@ -1384,6 +1474,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         resilience: emotionControlScore,
         formulaLine: outcome.formulaLine,
         coachingLine: outcome.coachingLine,
+        chapterConditionLine: widget.chapterCondition.summary(
+          widget.learnerAgeBand,
+        ),
         goodPoint: scenarioFeedback.goodPoint,
         weakPoint: scenarioFeedback.weakPoint,
         nextAction: scenarioFeedback.nextAction,
@@ -1682,6 +1775,19 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
           ),
           const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F7FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '🔀 분기 컨디션\n${widget.chapterCondition.summary(widget.learnerAgeBand)}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(s.news),
           const SizedBox(height: 10),
           if (widget.difficulty == DifficultyLevel.easy)
@@ -1776,6 +1882,7 @@ class _PerformanceSnapshot {
     required this.resilience,
     required this.formulaLine,
     required this.coachingLine,
+    required this.chapterConditionLine,
     required this.goodPoint,
     required this.weakPoint,
     required this.nextAction,
@@ -1796,6 +1903,7 @@ class _PerformanceSnapshot {
   final int resilience;
   final String formulaLine;
   final String coachingLine;
+  final String chapterConditionLine;
   final String goodPoint;
   final String weakPoint;
   final String nextAction;
@@ -1850,6 +1958,11 @@ class _PerformanceResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          Text(
+            '• 다음 챕터 컨디션: ${snapshot.chapterConditionLine}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
           Text('• 투자 비중: ${snapshot.allocationPercent}%'),
           Text('• 투자금: ${snapshot.invested}코인'),
           Text('• 수익/손실 계산: ${snapshot.formulaLine}'),
@@ -1924,6 +2037,42 @@ class _WeeklyReportTab extends StatelessWidget {
 
   final AppState state;
 
+  String _decisionInterpretation({
+    required int judgement,
+    required int risk,
+    required int emotion,
+  }) {
+    final quality = ((judgement + risk + emotion) / 3).round();
+    if (quality >= 82) {
+      return '의사결정 품질이 매우 좋아요. 근거 확인 → 비중 조절 → 감정 통제가 안정적으로 이어졌어요.';
+    }
+    if (quality >= 65) {
+      return '의사결정 품질이 성장 구간이에요. 방향은 맞고, 비중 조절 일관성만 더해지면 점프할 수 있어요.';
+    }
+    return '의사결정 품질이 기초 다지기 단계예요. 뉴스 근거를 1개 더 확인하고 작은 비중부터 시작하면 좋아요.';
+  }
+
+  List<String> _nextWeekActions({
+    required int judgement,
+    required int risk,
+    required int emotion,
+  }) {
+    final actions = <String>[];
+    if (judgement < 70) {
+      actions.add('매 챕터 시작 전 "수혜 1개·피해 1개"를 먼저 말해보기');
+    }
+    if (risk < 72) {
+      actions.add('다음 주는 첫 진입 비중을 40~55%로 제한하고 결과 비교하기');
+    }
+    if (emotion < 70) {
+      actions.add('틀려도 10초 멈춤 후 근거 1줄 다시 읽고 선택하기');
+    }
+    if (actions.isEmpty) {
+      actions.add('좋은 습관 유지: 근거를 확인한 뒤 비중을 5%씩만 조절해보기');
+    }
+    return actions.take(2).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final chunks = <List<ScenarioResult>>[];
@@ -1974,6 +2123,34 @@ class _WeeklyReportTab extends StatelessWidget {
                   ),
                   Text('힌트 사용: ${state.hintUsedCount}회'),
                   Text('현재 자산: ${state.cash}코인'),
+                  const SizedBox(height: 10),
+                  const Text(
+                    '👨‍👩‍👧 부모 해석',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _decisionInterpretation(
+                      judgement: state.avgJudgementScore,
+                      risk: state.avgRiskManagementScore,
+                      emotion: state.avgEmotionControlScore,
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  ..._nextWeekActions(
+                    judgement: state.avgJudgementScore,
+                    risk: state.avgRiskManagementScore,
+                    emotion: state.avgEmotionControlScore,
+                  ).map(
+                    (action) => Text(
+                      '• 다음 주 액션: $action',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2009,6 +2186,28 @@ class _WeeklyReportTab extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text('주간 손익: ${profit >= 0 ? '+' : ''}$profit코인'),
                     Text('판단 정확도: $judge점 · 리스크 관리: $risk점 · 감정 통제: $emotion점'),
+                    const SizedBox(height: 6),
+                    Text(
+                      '의사결정 해석: ${_decisionInterpretation(judgement: judge, risk: risk, emotion: emotion)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    ..._nextWeekActions(
+                      judgement: judge,
+                      risk: risk,
+                      emotion: emotion,
+                    ).map(
+                      (action) => Text(
+                        '• 다음 주 액션: $action',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
