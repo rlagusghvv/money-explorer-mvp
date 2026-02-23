@@ -347,7 +347,9 @@ class _GameHomePageState extends State<GameHomePage> {
         results: nextResults,
         bestStreak: max(_state.bestStreak, streak),
       );
-      _tabIndex = 1;
+      // UX: 탐험 후 자동으로 리포트 탭으로 넘기지 않는다.
+      // 사용자가 원할 때만 리포트 탭으로 이동.
+      _tabIndex = 0;
     });
     _persist();
   }
