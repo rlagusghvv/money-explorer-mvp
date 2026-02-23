@@ -443,6 +443,8 @@ class _PlayTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final isCompactMobile = media.size.width <= 430 || media.size.height <= 820;
     final done = state.currentScenario >= scenarios.length;
     final chapter = done
         ? scenarios.length
@@ -458,23 +460,43 @@ class _PlayTab extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, isCompactMobile ? 10 : 16, 16, 16),
         child: Column(
           children: [
-            _MascotMapHeader(state: state, total: scenarios.length),
-            const SizedBox(height: 8),
-            _ChapterObjectiveBanner(
-              chapter: chapter,
-              objective: chapterObjective,
-            ),
-            const SizedBox(height: 12),
+            if (!isCompactMobile) ...[
+              _MascotMapHeader(state: state, total: scenarios.length),
+              const SizedBox(height: 8),
+              _ChapterObjectiveBanner(
+                chapter: chapter,
+                objective: chapterObjective,
+              ),
+              const SizedBox(height: 10),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: const Color(0xFFEFF6FF),
+                ),
+                child: Text(
+                  '🧸 챕터 $chapter · $chapterObjective',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             _DifficultySelector(
               current: state.selectedDifficulty,
               onChanged: onDifficultyChanged,
             ),
-            const SizedBox(height: 12),
-            _AdventureMapCard(state: state, totalScenarios: scenarios.length),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            _AdventureMapCard(
+              state: state,
+              totalScenarios: scenarios.length,
+              compact: isCompactMobile,
+            ),
+            const SizedBox(height: 10),
             if (done)
               Container(
                 width: double.infinity,
@@ -649,10 +671,15 @@ class _DifficultySelector extends StatelessWidget {
 }
 
 class _AdventureMapCard extends StatelessWidget {
-  const _AdventureMapCard({required this.state, required this.totalScenarios});
+  const _AdventureMapCard({
+    required this.state,
+    required this.totalScenarios,
+    this.compact = false,
+  });
 
   final AppState state;
   final int totalScenarios;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -663,7 +690,7 @@ class _AdventureMapCard extends StatelessWidget {
     });
 
     return Container(
-      height: 170,
+      height: compact ? 120 : 170,
       width: double.infinity,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -672,7 +699,7 @@ class _AdventureMapCard extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compact ? 10 : 16),
         child: LayoutBuilder(
           builder: (context, c) {
             return Stack(
