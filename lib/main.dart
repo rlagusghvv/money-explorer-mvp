@@ -2705,7 +2705,63 @@ class _PerformanceResultCard extends StatelessWidget {
   }
 }
 
-class _MyHomeTab extends StatelessWidget {
+class _HomeThemePreset {
+  const _HomeThemePreset({
+    required this.wallGradient,
+    required this.floorGradient,
+    required this.accent,
+    required this.atmosphere,
+    required this.name,
+  });
+
+  final List<Color> wallGradient;
+  final List<Color> floorGradient;
+  final Color accent;
+  final String atmosphere;
+  final String name;
+
+  static _HomeThemePreset fromHomeId(String homeId) {
+    return switch (homeId) {
+      'home_forest' => const _HomeThemePreset(
+        wallGradient: [Color(0xFFDEF5D9), Color(0xFFBDE6AE)],
+        floorGradient: [Color(0xFF8A5F3B), Color(0xFF6D472C)],
+        accent: Color(0xFF2F8B57),
+        atmosphere: '🌲',
+        name: 'Forest',
+      ),
+      'home_city' => const _HomeThemePreset(
+        wallGradient: [Color(0xFFDDE8FF), Color(0xFFB6C8F2)],
+        floorGradient: [Color(0xFF737C97), Color(0xFF4D556B)],
+        accent: Color(0xFF35436E),
+        atmosphere: '🏙️',
+        name: 'City',
+      ),
+      'home_space' => const _HomeThemePreset(
+        wallGradient: [Color(0xFF221642), Color(0xFF402E7A)],
+        floorGradient: [Color(0xFF3B3461), Color(0xFF241E45)],
+        accent: Color(0xFF8EA4FF),
+        atmosphere: '✨',
+        name: 'Space',
+      ),
+      'home_ocean' => const _HomeThemePreset(
+        wallGradient: [Color(0xFFD2F6FF), Color(0xFF9FE8FF)],
+        floorGradient: [Color(0xFF4BB8C5), Color(0xFF2D8E9A)],
+        accent: Color(0xFF0E6C8A),
+        atmosphere: '🌊',
+        name: 'Ocean',
+      ),
+      _ => const _HomeThemePreset(
+        wallGradient: [Color(0xFFF3F6FF), Color(0xFFDCE6FF)],
+        floorGradient: [Color(0xFFF4DDBA), Color(0xFFDAAF75)],
+        accent: Color(0xFF5A6DA5),
+        atmosphere: '🏕️',
+        name: 'Basic',
+      ),
+    };
+  }
+}
+
+class _MyHomeTab extends StatefulWidget {
   const _MyHomeTab({
     required this.state,
     required this.syncMessage,
@@ -2718,6 +2774,14 @@ class _MyHomeTab extends StatelessWidget {
   final StoredSession? session;
   final void Function(DecorationZone zone, String? itemId) onPlaceDecoration;
 
+  @override
+  State<_MyHomeTab> createState() => _MyHomeTabState();
+}
+
+class _MyHomeTabState extends State<_MyHomeTab> {
+  bool _showEquipFx = false;
+  String _equipFxLabel = '장착 완료!';
+
   ShopItem? _itemById(String? id) {
     if (id == null) return null;
     for (final item in kShopItems) {
@@ -2727,7 +2791,40 @@ class _MyHomeTab extends StatelessWidget {
   }
 
   @override
+  void didUpdateWidget(covariant _MyHomeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state.equippedHomeId != widget.state.equippedHomeId) {
+      _triggerEquipFx('테마 변경!');
+      return;
+    }
+    if (oldWidget.state.equippedCharacterId !=
+        widget.state.equippedCharacterId) {
+      _triggerEquipFx('캐릭터 장착!');
+      return;
+    }
+    for (final zone in DecorationZone.values) {
+      if (oldWidget.state.equippedDecorations[zone] !=
+          widget.state.equippedDecorations[zone]) {
+        _triggerEquipFx('${zone.label} 적용!');
+        return;
+      }
+    }
+  }
+
+  void _triggerEquipFx(String label) {
+    setState(() {
+      _equipFxLabel = label;
+      _showEquipFx = true;
+    });
+    Future<void>.delayed(const Duration(milliseconds: 650), () {
+      if (!mounted) return;
+      setState(() => _showEquipFx = false);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
     final solved = state.solvedCount;
     final level = 1 + (state.rewardPoints + state.totalPointsSpent) ~/ 250;
     final chapterProgress = ((state.currentScenario / 10) * 100)
@@ -2750,14 +2847,19 @@ class _MyHomeTab extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 8),
-                  Text('계정: ${session?.email ?? '게스트'}'),
-                  Text('동기화 상태: ${syncMessage ?? '로컬 저장 중'}'),
+                  Text('계정: ${widget.session?.email ?? '게스트'}'),
+                  Text('동기화 상태: ${widget.syncMessage ?? '로컬 저장 중'}'),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 10),
-          _MyHomeRoomCard(state: state, itemById: _itemById),
+          _MyHomeRoomCard(
+            state: state,
+            itemById: _itemById,
+            showEquipFx: _showEquipFx,
+            equipFxLabel: _equipFxLabel,
+          ),
           const SizedBox(height: 10),
           Card(
             child: Padding(
@@ -2765,7 +2867,10 @@ class _MyHomeTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🪄 슬롯 꾸미기', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const Text(
+                    '🪄 슬롯 꾸미기',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(height: 8),
                   ...DecorationZone.values.map((zone) {
                     final ownedItems = kShopItems
@@ -2787,22 +2892,31 @@ class _MyHomeTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(zone.label, style: const TextStyle(fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
+                          Text(
+                            zone.label,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              ChoiceChip(
-                                label: const Text('비우기'),
+                              _SlotPreviewChip(
+                                title: '비우기',
                                 selected: selected == null,
-                                onSelected: (_) => onPlaceDecoration(zone, null),
+                                onTap: () =>
+                                    widget.onPlaceDecoration(zone, null),
                               ),
                               ...ownedItems.map(
-                                (item) => ChoiceChip(
-                                  label: Text('${item.emoji} ${item.name}'),
+                                (item) => _SlotPreviewChip(
+                                  title: item.name,
                                   selected: selected == item.id,
-                                  onSelected: (_) => onPlaceDecoration(zone, item.id),
+                                  onTap: () =>
+                                      widget.onPlaceDecoration(zone, item.id),
+                                  child: _ItemThumbnail(
+                                    item: item,
+                                    compact: true,
+                                  ),
                                 ),
                               ),
                             ],
@@ -2812,7 +2926,10 @@ class _MyHomeTab extends StatelessWidget {
                               padding: EdgeInsets.only(top: 6),
                               child: Text(
                                 '아직 이 슬롯 아이템이 없어요. 상점에서 구매해보세요!',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                         ],
@@ -2830,13 +2947,20 @@ class _MyHomeTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('핵심 프로필 진행', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Text(
+                    '핵심 프로필 진행',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 8),
                   Text('레벨: Lv.$level'),
-                  Text('챕터 진행: ${state.currentScenario} / 10 ($chapterProgress%)'),
+                  Text(
+                    '챕터 진행: ${state.currentScenario} / 10 ($chapterProgress%)',
+                  ),
                   Text('탐험 포인트: ${state.rewardPoints}P · 완료 시나리오: $solved개'),
                   Text('연속 기록 최고: ${state.bestStreak}회'),
-                  Text('보유 자산: ${state.cash}코인 · 누적 손익 ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인'),
+                  Text(
+                    '보유 자산: ${state.cash}코인 · 누적 손익 ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인',
+                  ),
                 ],
               ),
             ),
@@ -2848,24 +2972,21 @@ class _MyHomeTab extends StatelessWidget {
 }
 
 class _MyHomeRoomCard extends StatelessWidget {
-  const _MyHomeRoomCard({required this.state, required this.itemById});
+  const _MyHomeRoomCard({
+    required this.state,
+    required this.itemById,
+    required this.showEquipFx,
+    required this.equipFxLabel,
+  });
 
   final AppState state;
   final ShopItem? Function(String? id) itemById;
-
-  Color _backgroundColor() {
-    return switch (state.equippedHomeId) {
-      'home_forest' => const Color(0xFFDFF7E6),
-      'home_city' => const Color(0xFFE8F0FF),
-      'home_ocean' => const Color(0xFFDFF5FF),
-      'home_space' => const Color(0xFFEDE7FF),
-      'home_castle' => const Color(0xFFFFF3DD),
-      _ => const Color(0xFFF4F8FF),
-    };
-  }
+  final bool showEquipFx;
+  final String equipFxLabel;
 
   @override
   Widget build(BuildContext context) {
+    final theme = _HomeThemePreset.fromHomeId(state.equippedHomeId);
     final wallItem = itemById(state.equippedDecorations[DecorationZone.wall]);
     final floorItem = itemById(state.equippedDecorations[DecorationZone.floor]);
     final deskItem = itemById(state.equippedDecorations[DecorationZone.desk]);
@@ -2876,75 +2997,152 @@ class _MyHomeRoomCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('🎨 마이홈 룸', style: TextStyle(fontWeight: FontWeight.w900)),
+            Text(
+              '🎨 마이홈 룸 · ${theme.atmosphere} ${theme.name} 프리셋',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 10),
-            Container(
-              height: 260,
-              decoration: BoxDecoration(
-                color: _backgroundColor(),
+            AspectRatio(
+              aspectRatio: 1.45,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFD5DEF2)),
-              ),
-              child: Column(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: const BoxDecoration(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                      ),
-                      child: Align(
-                        alignment: Alignment.topRight,
-                        child: _slotChip('벽', wallItem),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: theme.wallGradient,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    flex: 4,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFF7E7CC),
-                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                    Positioned.fill(child: _ThemeAtmosphereLayer(theme: theme)),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 92,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: theme.floorGradient,
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                        ),
                       ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: 14,
-                            bottom: 16,
-                            child: _slotChip('바닥', floorItem),
+                    ),
+                    if (wallItem != null)
+                      Positioned(
+                        left: 18,
+                        top: 16,
+                        right: 18,
+                        height: 68,
+                        child: _DecorationObject(item: wallItem),
+                      ),
+                    if (floorItem != null)
+                      Positioned(
+                        left: 14,
+                        bottom: 20,
+                        width: 112,
+                        height: 56,
+                        child: _DecorationObject(item: floorItem),
+                      ),
+                    Positioned(
+                      right: 12,
+                      bottom: 72,
+                      width: 92,
+                      height: 56,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.42),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    if (deskItem != null)
+                      Positioned(
+                        right: 16,
+                        bottom: 74,
+                        width: 86,
+                        height: 48,
+                        child: _DecorationObject(item: deskItem),
+                      ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 16,
+                      child: Center(
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 150),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
                           ),
-                          Positioned(
-                            right: 14,
-                            top: 10,
-                            child: _slotChip('선반', deskItem),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.94),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: theme.accent.withValues(alpha: 0.28),
+                            ),
                           ),
-                          Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.92),
-                                borderRadius: BorderRadius.circular(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                state.equippedCharacter.emoji,
+                                style: const TextStyle(fontSize: 40),
                               ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(state.equippedCharacter.emoji, style: const TextStyle(fontSize: 48)),
-                                  Text(
-                                    state.equippedCharacter.name,
-                                    style: const TextStyle(fontWeight: FontWeight.w800),
-                                  ),
-                                ],
+                              Text(
+                                state.equippedCharacter.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 220),
+                      opacity: showEquipFx ? 1 : 0,
+                      child: Center(
+                        child: AnimatedScale(
+                          duration: const Duration(milliseconds: 260),
+                          scale: showEquipFx ? 1 : 0.7,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFCE1),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: const Color(0xFFFFE083),
+                              ),
+                            ),
+                            child: Text(
+                              '✨ $equipFxLabel',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
                               ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -2957,17 +3155,244 @@ class _MyHomeRoomCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _slotChip(String title, ShopItem? item) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+class _ThemeAtmosphereLayer extends StatelessWidget {
+  const _ThemeAtmosphereLayer({required this.theme});
+
+  final _HomeThemePreset theme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (theme.name == 'Forest') {
+      return Stack(
+        children: const [
+          Positioned(
+            left: 10,
+            bottom: 84,
+            child: Text('🌲', style: TextStyle(fontSize: 26)),
+          ),
+          Positioned(
+            left: 44,
+            bottom: 88,
+            child: Text('🌿', style: TextStyle(fontSize: 20)),
+          ),
+          Positioned(
+            right: 18,
+            bottom: 86,
+            child: Text('🌲', style: TextStyle(fontSize: 24)),
+          ),
+        ],
+      );
+    }
+    if (theme.name == 'City') {
+      return Align(
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          height: 84,
+          margin: const EdgeInsets.only(bottom: 92),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.transparent, theme.accent.withValues(alpha: 0.2)],
+            ),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('🏢', style: TextStyle(fontSize: 18)),
+              Text('🏬', style: TextStyle(fontSize: 18)),
+              Text('🏙️', style: TextStyle(fontSize: 20)),
+              Text('🏢', style: TextStyle(fontSize: 18)),
+            ],
+          ),
+        ),
+      );
+    }
+    if (theme.name == 'Space') {
+      return Stack(
+        children: const [
+          Positioned(
+            left: 18,
+            top: 18,
+            child: Text('⭐', style: TextStyle(fontSize: 14)),
+          ),
+          Positioned(
+            right: 24,
+            top: 28,
+            child: Text('✨', style: TextStyle(fontSize: 16)),
+          ),
+          Positioned(
+            left: 70,
+            top: 40,
+            child: Text('🪐', style: TextStyle(fontSize: 20)),
+          ),
+          Positioned(
+            right: 62,
+            top: 60,
+            child: Text('🌌', style: TextStyle(fontSize: 16)),
+          ),
+        ],
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+class _DecorationObject extends StatelessWidget {
+  const _DecorationObject({required this.item});
+
+  final ShopItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Text(
-        item == null ? '$title: 비어있음' : '$title: ${item.emoji} ${item.name}',
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      child: Stack(
+        children: [
+          if (item.id == 'deco_wall_chart')
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 5,
+                      width: 50,
+                      color: const Color(0xFF9AB4FF),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 5,
+                      width: 70,
+                      color: const Color(0xFF76D39B),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 5,
+                      width: 34,
+                      color: const Color(0xFFFFB36B),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Center(
+              child: Text(item.emoji, style: const TextStyle(fontSize: 28)),
+            ),
+          Positioned(
+            bottom: 4,
+            right: 6,
+            child: Text(
+              item.name,
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemThumbnail extends StatelessWidget {
+  const _ItemThumbnail({required this.item, this.compact = false});
+
+  final ShopItem item;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 46.0 : 58.0;
+    final isHome = item.type == CosmeticType.home;
+    final isDeco = item.type == CosmeticType.decoration;
+    final bg = isHome
+        ? _HomeThemePreset.fromHomeId(item.id).wallGradient.first
+        : isDeco
+        ? const Color(0xFFF2F4FA)
+        : const Color(0xFFFFF3DD);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white),
+      ),
+      child: Center(
+        child: Text(item.emoji, style: TextStyle(fontSize: compact ? 22 : 30)),
+      ),
+    );
+  }
+}
+
+class _SlotPreviewChip extends StatelessWidget {
+  const _SlotPreviewChip({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+    this.child,
+  });
+
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 96,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAEFFF) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? const Color(0xFF6C63FF) : const Color(0xFFDCE0EA),
+          ),
+        ),
+        child: Column(
+          children: [
+            child ??
+                const SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: Center(child: Icon(Icons.clear, size: 18)),
+                ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3057,8 +3482,9 @@ class _ShopTab extends StatelessWidget {
                       : const Color(0xFFF7F8FC),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.emoji, style: const TextStyle(fontSize: 24)),
+                    _ItemThumbnail(item: item),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
