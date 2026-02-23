@@ -22,6 +22,12 @@ extension DifficultyLabel on DifficultyLevel {
     DifficultyLevel.hard => '화산 마스터 코스',
   };
 
+  String get icon => switch (this) {
+    DifficultyLevel.easy => '🌿',
+    DifficultyLevel.normal => '🪨',
+    DifficultyLevel.hard => '🌋',
+  };
+
   int get hintPenalty => switch (this) {
     DifficultyLevel.easy => 15,
     DifficultyLevel.normal => 25,
@@ -567,18 +573,25 @@ class _DifficultySelector extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        Text(
-                          d.label,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: current == d
-                                ? Colors.white
-                                : const Color(0xFF444B6E),
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(d.icon, style: const TextStyle(fontSize: 14)),
+                            const SizedBox(width: 4),
+                            Text(
+                              d.label,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: current == d
+                                    ? Colors.white
+                                    : const Color(0xFF444B6E),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          d.questName.split(' ').first,
+                          '${d.icon} ${d.questName.split(' ').first}',
                           style: TextStyle(
                             fontSize: 11,
                             color: current == d
@@ -647,10 +660,11 @@ class _AdventureMapCard extends StatelessWidget {
                       : i == state.currentScenario
                       ? _NodeState.current
                       : _NodeState.locked;
+                  const zoneIcons = ['🌿', '🏙️', '🚢', '🏭', '⚡', '🛰️', '🌧️', '💹', '🌾', '🌋'];
                   return Positioned(
                     left: p.dx * (c.maxWidth - 30),
                     top: p.dy * (c.maxHeight - 30),
-                    child: _MapNode(index: i + 1, state: status),
+                    child: _MapNode(index: i + 1, state: status, icon: zoneIcons[i % zoneIcons.length]),
                   );
                 }),
               ],
@@ -665,10 +679,11 @@ class _AdventureMapCard extends StatelessWidget {
 enum _NodeState { done, current, locked }
 
 class _MapNode extends StatelessWidget {
-  const _MapNode({required this.index, required this.state});
+  const _MapNode({required this.index, required this.state, required this.icon});
 
   final int index;
   final _NodeState state;
+  final String icon;
 
   @override
   Widget build(BuildContext context) {
@@ -698,12 +713,8 @@ class _MapNode extends StatelessWidget {
         child: state == _NodeState.done
             ? const Icon(Icons.check, color: Colors.white, size: 17)
             : Text(
-                '$index',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
+                icon,
+                style: const TextStyle(fontSize: 14),
               ),
       ),
     );
@@ -941,6 +952,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     final s = widget.scenario;
 
     return ListView(
+      padding: const EdgeInsets.only(bottom: 120),
       children: [
         Container(
           padding: const EdgeInsets.all(14),
