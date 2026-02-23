@@ -491,12 +491,28 @@ class _PlayTab extends StatelessWidget {
               onChanged: onDifficultyChanged,
             ),
             const SizedBox(height: 8),
-            _AdventureMapCard(
-              state: state,
-              totalScenarios: scenarios.length,
-              compact: isCompactMobile,
-            ),
-            const SizedBox(height: 10),
+            if (!isCompactMobile || done) ...[
+              _AdventureMapCard(
+                state: state,
+                totalScenarios: scenarios.length,
+                compact: isCompactMobile,
+              ),
+              const SizedBox(height: 10),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFFEAF4FF),
+                ),
+                child: Text(
+                  '🗺️ 모바일은 문제 풀이 집중 모드예요. (현재 챕터: ${state.currentScenario + 1})',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             if (done)
               Container(
                 width: double.infinity,
@@ -1234,7 +1250,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                       ? null
                       : () => setState(() {
                           _quizAnswer = i;
-                          _mascotSpeech = '준비됐어! 점수 기반 결과를 확인해보자!';
+                          _mascotSpeech = '좋아! 이제 마지막으로 투자 비중을 선택해보자.';
                         }),
                 ),
               ),
