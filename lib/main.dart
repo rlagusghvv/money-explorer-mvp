@@ -188,37 +188,181 @@ class ScenarioResult {
           .round();
 }
 
+enum CosmeticType { character, home }
+
+class ShopItem {
+  const ShopItem({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.price,
+    required this.emoji,
+    required this.description,
+  });
+
+  final String id;
+  final String name;
+  final CosmeticType type;
+  final int price;
+  final String emoji;
+  final String description;
+}
+
+const List<ShopItem> kShopItems = [
+  ShopItem(
+    id: 'char_default',
+    name: '기본 탐험곰',
+    type: CosmeticType.character,
+    price: 0,
+    emoji: '🧸',
+    description: '처음 함께하는 든든한 탐험대장!',
+  ),
+  ShopItem(
+    id: 'char_fox',
+    name: '번개여우',
+    type: CosmeticType.character,
+    price: 120,
+    emoji: '🦊',
+    description: '빠르게 뉴스 흐름을 읽는 여우!',
+  ),
+  ShopItem(
+    id: 'char_penguin',
+    name: '쿨펭',
+    type: CosmeticType.character,
+    price: 130,
+    emoji: '🐧',
+    description: '침착함으로 변동장을 버티는 친구!',
+  ),
+  ShopItem(
+    id: 'char_tiger',
+    name: '용감호랑',
+    type: CosmeticType.character,
+    price: 150,
+    emoji: '🐯',
+    description: '결단력 있는 투자 파트너!',
+  ),
+  ShopItem(
+    id: 'char_robot',
+    name: '데이터봇',
+    type: CosmeticType.character,
+    price: 180,
+    emoji: '🤖',
+    description: '근거 중심으로 차근차근 분석!',
+  ),
+  ShopItem(
+    id: 'char_unicorn',
+    name: '드림유니',
+    type: CosmeticType.character,
+    price: 210,
+    emoji: '🦄',
+    description: '꾸준한 저축 습관을 응원해요!',
+  ),
+  ShopItem(
+    id: 'home_base_default',
+    name: '기본 베이스',
+    type: CosmeticType.home,
+    price: 0,
+    emoji: '🏕️',
+    description: '기본 캠프 베이스예요.',
+  ),
+  ShopItem(
+    id: 'home_forest',
+    name: '숲속 캠프',
+    type: CosmeticType.home,
+    price: 110,
+    emoji: '🌲',
+    description: '초록 에너지로 안정감 업!',
+  ),
+  ShopItem(
+    id: 'home_city',
+    name: '시티 허브',
+    type: CosmeticType.home,
+    price: 140,
+    emoji: '🏙️',
+    description: '뉴스 정보가 모이는 분주한 본부!',
+  ),
+  ShopItem(
+    id: 'home_ocean',
+    name: '오션 독',
+    type: CosmeticType.home,
+    price: 150,
+    emoji: '🌊',
+    description: '파도처럼 유연한 리스크 관리!',
+  ),
+  ShopItem(
+    id: 'home_space',
+    name: '스페이스 랩',
+    type: CosmeticType.home,
+    price: 180,
+    emoji: '🚀',
+    description: '미래 산업 분석에 딱 맞는 기지!',
+  ),
+  ShopItem(
+    id: 'home_castle',
+    name: '코인 캐슬',
+    type: CosmeticType.home,
+    price: 220,
+    emoji: '🏰',
+    description: '저축왕만 입장 가능한 꿈의 성!',
+  ),
+];
+
 class AppState {
   const AppState({
     required this.playerName,
     required this.cash,
+    required this.rewardPoints,
     required this.currentScenario,
     required this.results,
     required this.bestStreak,
     required this.onboarded,
     required this.selectedDifficulty,
     required this.learnerAgeBand,
+    required this.ownedItemIds,
+    required this.equippedCharacterId,
+    required this.equippedHomeId,
+    required this.totalPointsSpent,
   });
 
   factory AppState.initial() => const AppState(
     playerName: '탐험대원',
     cash: 1000,
+    rewardPoints: 0,
     currentScenario: 0,
     results: [],
     bestStreak: 0,
     onboarded: false,
     selectedDifficulty: DifficultyLevel.easy,
     learnerAgeBand: LearnerAgeBand.middle,
+    ownedItemIds: {'char_default', 'home_base_default'},
+    equippedCharacterId: 'char_default',
+    equippedHomeId: 'home_base_default',
+    totalPointsSpent: 0,
   );
 
   final String playerName;
   final int cash;
+  final int rewardPoints;
   final int currentScenario;
   final List<ScenarioResult> results;
   final int bestStreak;
   final bool onboarded;
   final DifficultyLevel selectedDifficulty;
   final LearnerAgeBand learnerAgeBand;
+  final Set<String> ownedItemIds;
+  final String equippedCharacterId;
+  final String equippedHomeId;
+  final int totalPointsSpent;
+
+  ShopItem get equippedCharacter => kShopItems.firstWhere(
+    (item) => item.id == equippedCharacterId,
+    orElse: () => kShopItems.first,
+  );
+
+  ShopItem get equippedHome => kShopItems.firstWhere(
+    (item) => item.id == equippedHomeId,
+    orElse: () => kShopItems.firstWhere((item) => item.type == CosmeticType.home),
+  );
 
   int get solvedCount => results.length;
   int get totalProfit => results.fold(0, (sum, e) => sum + e.profit);
@@ -243,22 +387,32 @@ class AppState {
   AppState copyWith({
     String? playerName,
     int? cash,
+    int? rewardPoints,
     int? currentScenario,
     List<ScenarioResult>? results,
     int? bestStreak,
     bool? onboarded,
     DifficultyLevel? selectedDifficulty,
     LearnerAgeBand? learnerAgeBand,
+    Set<String>? ownedItemIds,
+    String? equippedCharacterId,
+    String? equippedHomeId,
+    int? totalPointsSpent,
   }) {
     return AppState(
       playerName: playerName ?? this.playerName,
       cash: cash ?? this.cash,
+      rewardPoints: rewardPoints ?? this.rewardPoints,
       currentScenario: currentScenario ?? this.currentScenario,
       results: results ?? this.results,
       bestStreak: bestStreak ?? this.bestStreak,
       onboarded: onboarded ?? this.onboarded,
       selectedDifficulty: selectedDifficulty ?? this.selectedDifficulty,
       learnerAgeBand: learnerAgeBand ?? this.learnerAgeBand,
+      ownedItemIds: ownedItemIds ?? this.ownedItemIds,
+      equippedCharacterId: equippedCharacterId ?? this.equippedCharacterId,
+      equippedHomeId: equippedHomeId ?? this.equippedHomeId,
+      totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
     );
   }
 }
@@ -272,6 +426,11 @@ class AppStateStore {
   static const _kOnboarded = 'onboarded';
   static const _kDifficulty = 'difficulty';
   static const _kLearnerAgeBand = 'learnerAgeBand';
+  static const _kRewardPoints = 'rewardPoints';
+  static const _kOwnedItemIds = 'ownedItemIds';
+  static const _kEquippedCharacterId = 'equippedCharacterId';
+  static const _kEquippedHomeId = 'equippedHomeId';
+  static const _kTotalPointsSpent = 'totalPointsSpent';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -338,9 +497,19 @@ class AppStateStore {
       prefs.getString(_kLearnerAgeBand) ?? LearnerAgeBand.middle.name,
     );
 
+    final owned = {
+      ...initial.ownedItemIds,
+      ...(prefs.getStringList(_kOwnedItemIds) ?? const []),
+    };
+    final equippedCharacterId = prefs.getString(_kEquippedCharacterId) ??
+        initial.equippedCharacterId;
+    final equippedHomeId =
+        prefs.getString(_kEquippedHomeId) ?? initial.equippedHomeId;
+
     return AppState(
       playerName: prefs.getString(_kPlayerName) ?? initial.playerName,
       cash: prefs.getInt(_kCash) ?? initial.cash,
+      rewardPoints: prefs.getInt(_kRewardPoints) ?? initial.rewardPoints,
       currentScenario:
           prefs.getInt(_kCurrentScenario) ?? initial.currentScenario,
       results: parsed,
@@ -350,6 +519,12 @@ class AppStateStore {
         prefs.getString(_kDifficulty) ?? ageBand.defaultDifficulty.name,
       ),
       learnerAgeBand: ageBand,
+      ownedItemIds: owned,
+      equippedCharacterId:
+          owned.contains(equippedCharacterId) ? equippedCharacterId : initial.equippedCharacterId,
+      equippedHomeId: owned.contains(equippedHomeId) ? equippedHomeId : initial.equippedHomeId,
+      totalPointsSpent:
+          prefs.getInt(_kTotalPointsSpent) ?? initial.totalPointsSpent,
     );
   }
 
@@ -371,11 +546,16 @@ class AppStateStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kPlayerName, state.playerName);
     await prefs.setInt(_kCash, state.cash);
+    await prefs.setInt(_kRewardPoints, state.rewardPoints);
     await prefs.setInt(_kCurrentScenario, state.currentScenario);
     await prefs.setInt(_kBestStreak, state.bestStreak);
     await prefs.setBool(_kOnboarded, state.onboarded);
     await prefs.setString(_kDifficulty, state.selectedDifficulty.name);
     await prefs.setString(_kLearnerAgeBand, state.learnerAgeBand.name);
+    await prefs.setStringList(_kOwnedItemIds, state.ownedItemIds.toList());
+    await prefs.setString(_kEquippedCharacterId, state.equippedCharacterId);
+    await prefs.setString(_kEquippedHomeId, state.equippedHomeId);
+    await prefs.setInt(_kTotalPointsSpent, state.totalPointsSpent);
 
     final encoded = state.results
         .map(
@@ -507,11 +687,20 @@ class _GameHomePageState extends State<GameHomePage> {
 
   Future<void> _persist() async => AppStateStore.save(_state);
 
+  int _earnedPointsFromResult(ScenarioResult result) {
+    final base = (result.totalLearningScore * 0.9).round();
+    final streakBonus = _state.results.isNotEmpty ? 8 : 0;
+    final noHintBonus = result.hintUsed ? 0 : 10;
+    return max(15, base + streakBonus + noHintBonus);
+  }
+
   void _applyScenarioResult(ScenarioResult result) {
     final nextResults = [..._state.results, result];
+    final earnedPoints = _earnedPointsFromResult(result);
     setState(() {
       _state = _state.copyWith(
         cash: max(0, _state.cash + result.profit),
+        rewardPoints: _state.rewardPoints + earnedPoints,
         currentScenario: min(
           widget.scenarios.length,
           _state.currentScenario + 1,
@@ -521,6 +710,59 @@ class _GameHomePageState extends State<GameHomePage> {
       _tabIndex = 0;
     });
     _persist();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('🎁 탐험 포인트 +$earnedPoints! 상점에서 꾸미기를 열어보세요.')),
+    );
+  }
+
+  void _buyAndEquipItem(ShopItem item) {
+    if (_state.ownedItemIds.contains(item.id)) {
+      _equipItem(item);
+      return;
+    }
+    if (_state.rewardPoints < item.price) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('포인트가 ${item.price - _state.rewardPoints}점 부족해요. 탐험으로 모아보자!')),
+      );
+      return;
+    }
+
+    final owned = {..._state.ownedItemIds, item.id};
+    setState(() {
+      _state = _state.copyWith(
+        rewardPoints: _state.rewardPoints - item.price,
+        ownedItemIds: owned,
+        totalPointsSpent: _state.totalPointsSpent + item.price,
+        equippedCharacterId: item.type == CosmeticType.character
+            ? item.id
+            : _state.equippedCharacterId,
+        equippedHomeId: item.type == CosmeticType.home
+            ? item.id
+            : _state.equippedHomeId,
+      );
+    });
+    _persist();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${item.emoji} ${item.name} 구매 완료! 바로 장착됐어요.')),
+    );
+  }
+
+  void _equipItem(ShopItem item) {
+    if (!_state.ownedItemIds.contains(item.id)) return;
+    setState(() {
+      _state = _state.copyWith(
+        equippedCharacterId: item.type == CosmeticType.character
+            ? item.id
+            : _state.equippedCharacterId,
+        equippedHomeId: item.type == CosmeticType.home
+            ? item.id
+            : _state.equippedHomeId,
+      );
+    });
+    _persist();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${item.emoji} ${item.name} 장착 완료!')),
+    );
   }
 
   void _resetProgress() {
@@ -548,6 +790,10 @@ class _GameHomePageState extends State<GameHomePage> {
         },
         onDone: _applyScenarioResult,
       ),
+      _ShopTab(
+        state: _state,
+        onBuyOrEquip: _buyAndEquipItem,
+      ),
       _WeeklyReportTab(state: _state),
       _GuideTab(
         state: _state,
@@ -572,6 +818,7 @@ class _GameHomePageState extends State<GameHomePage> {
         onDestinationSelected: (v) => setState(() => _tabIndex = v),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.explore), label: '탐험 맵'),
+          NavigationDestination(icon: Icon(Icons.storefront), label: '상점'),
           NavigationDestination(icon: Icon(Icons.insights), label: '리포트'),
           NavigationDestination(icon: Icon(Icons.menu_book), label: '가이드'),
         ],
@@ -666,7 +913,12 @@ class _PlayTab extends StatelessWidget {
         child: Column(
           children: [
             if (!isCompactMobile) ...[
-              _MascotMapHeader(state: state, total: scenarios.length),
+              _MascotMapHeader(
+                state: state,
+                total: scenarios.length,
+                mascotEmoji: state.equippedCharacter.emoji,
+                homeEmoji: state.equippedHome.emoji,
+              ),
               const SizedBox(height: 8),
               _ChapterObjectiveBanner(
                 chapter: chapter,
@@ -706,6 +958,7 @@ class _PlayTab extends StatelessWidget {
                 state: state,
                 totalScenarios: scenarios.length,
                 compact: isCompactMobile,
+                homeEmoji: state.equippedHome.emoji,
               ),
               const SizedBox(height: 10),
             ] else ...[
@@ -803,10 +1056,17 @@ class _ChapterObjectiveBanner extends StatelessWidget {
 }
 
 class _MascotMapHeader extends StatelessWidget {
-  const _MascotMapHeader({required this.state, required this.total});
+  const _MascotMapHeader({
+    required this.state,
+    required this.total,
+    required this.mascotEmoji,
+    required this.homeEmoji,
+  });
 
   final AppState state;
   final int total;
+  final String mascotEmoji;
+  final String homeEmoji;
 
   @override
   Widget build(BuildContext context) {
@@ -831,14 +1091,14 @@ class _MascotMapHeader extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Center(
-              child: Text('🧸', style: TextStyle(fontSize: 28)),
+            child: Center(
+              child: Text(mascotEmoji, style: const TextStyle(fontSize: 28)),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '챕터 $chapter 이동 중 · 자산 ${state.cash}코인',
+              '챕터 $chapter 이동 중 · 자산 ${state.cash}코인\n$homeEmoji 베이스 · 탐험 포인트 ${state.rewardPoints}P',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
@@ -937,11 +1197,13 @@ class _AdventureMapCard extends StatelessWidget {
   const _AdventureMapCard({
     required this.state,
     required this.totalScenarios,
+    required this.homeEmoji,
     this.compact = false,
   });
 
   final AppState state;
   final int totalScenarios;
+  final String homeEmoji;
   final bool compact;
 
   @override
@@ -967,6 +1229,21 @@ class _AdventureMapCard extends StatelessWidget {
           builder: (context, c) {
             return Stack(
               children: [
+                Positioned(
+                  right: 4,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text('베이스 $homeEmoji', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
+                  ),
+                ),
                 CustomPaint(
                   size: Size(c.maxWidth, c.maxHeight),
                   painter: _MapPathPainter(
@@ -2032,6 +2309,98 @@ class _PerformanceResultCard extends StatelessWidget {
   }
 }
 
+class _ShopTab extends StatelessWidget {
+  const _ShopTab({required this.state, required this.onBuyOrEquip});
+
+  final AppState state;
+  final ValueChanged<ShopItem> onBuyOrEquip;
+
+  @override
+  Widget build(BuildContext context) {
+    final characters = kShopItems
+        .where((item) => item.type == CosmeticType.character)
+        .toList();
+    final homes = kShopItems.where((item) => item.type == CosmeticType.home).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: ListView(
+        children: [
+          Card(
+            color: const Color(0xFFEFF6FF),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('🛍️ 포인트 상점', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text('현재 포인트: ${state.rewardPoints}P · 누적 사용: ${state.totalPointsSpent}P'),
+                  Text('장착 중: ${state.equippedCharacter.emoji} ${state.equippedCharacter.name} / ${state.equippedHome.emoji} ${state.equippedHome.name}'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _shopSection('캐릭터 꾸미기', characters),
+          const SizedBox(height: 8),
+          _shopSection('베이스 꾸미기', homes),
+        ],
+      ),
+    );
+  }
+
+  Widget _shopSection(String title, List<ShopItem> items) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            ...items.map((item) {
+              final owned = state.ownedItemIds.contains(item.id);
+              final equipped = item.type == CosmeticType.character
+                  ? state.equippedCharacterId == item.id
+                  : state.equippedHomeId == item.id;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: equipped ? const Color(0xFFE8F8EE) : const Color(0xFFF7F8FC),
+                ),
+                child: Row(
+                  children: [
+                    Text(item.emoji, style: const TextStyle(fontSize: 24)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${item.name} · ${item.price}P', style: const TextStyle(fontWeight: FontWeight.w800)),
+                          Text(item.description, style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: equipped ? null : () => onBuyOrEquip(item),
+                      child: Text(equipped ? '장착중' : owned ? '장착' : '구매'),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WeeklyReportTab extends StatelessWidget {
   const _WeeklyReportTab({required this.state});
 
@@ -2079,6 +2448,11 @@ class _WeeklyReportTab extends StatelessWidget {
     for (var i = 0; i < state.results.length; i += 5) {
       chunks.add(state.results.sublist(i, min(i + 5, state.results.length)));
     }
+    final totalEarnedPoints = state.rewardPoints + state.totalPointsSpent;
+    final spendingRatio = totalEarnedPoints == 0
+        ? 0.0
+        : (state.totalPointsSpent / totalEarnedPoints) * 100;
+    final savingRatio = 100 - spendingRatio;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -2123,6 +2497,10 @@ class _WeeklyReportTab extends StatelessWidget {
                   ),
                   Text('힌트 사용: ${state.hintUsedCount}회'),
                   Text('현재 자산: ${state.cash}코인'),
+                  Text('탐험 포인트: ${state.rewardPoints}P (누적 획득 ${totalEarnedPoints}P)'),
+                  Text(
+                    '포인트 소비/저축 비율: ${spendingRatio.toStringAsFixed(1)}% / ${savingRatio.toStringAsFixed(1)}%',
+                  ),
                   const SizedBox(height: 10),
                   const Text(
                     '👨‍👩‍👧 부모 해석',
