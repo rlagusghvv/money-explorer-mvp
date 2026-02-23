@@ -791,11 +791,24 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int _wrongAttempts = 0;
   String? _resultText;
   String _mascotSpeech = '뉴스를 읽고 어떤 산업이 먼저 움직일지 찾아보자!';
+  late List<String> _shuffledOptions;
+  late int _correctOptionIndex;
 
   @override
   void initState() {
     super.initState();
     _selectedIndustry = null;
+    _prepareOptionOrder();
+  }
+
+  void _prepareOptionOrder() {
+    final pairs = <MapEntry<int, String>>[];
+    for (var i = 0; i < widget.scenario.options.length; i++) {
+      pairs.add(MapEntry(i, widget.scenario.options[i]));
+    }
+    pairs.shuffle(Random(DateTime.now().microsecondsSinceEpoch));
+    _shuffledOptions = pairs.map((e) => e.value).toList();
+    _correctOptionIndex = pairs.indexWhere((e) => e.key == widget.scenario.correctOption);
   }
 
   int get _expectedReasoning => switch (widget.difficulty) {
@@ -848,7 +861,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   bool _coreReasoningCorrect() {
-    final industryOk = _selectedIndustry != null && _selectedIndustry == widget.scenario.correctOption;
+    final industryOk = _selectedIndustry != null && _selectedIndustry == _correctOptionIndex;
     final quizOk = _quizAnswer == widget.scenario.quizAnswer;
     final reasoningOk = _reasoningAnswer == _expectedReasoning;
 
@@ -1050,22 +1063,31 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
               const SizedBox(height: 8),
               Text(s.news),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _tag(
-                    '수혜 ${s.goodIndustries.join(', ')}',
-                    const Color(0xFFE6F8EA),
-                    const Color(0xFF1F8D48),
+              if (widget.difficulty == DifficultyLevel.easy)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _tag(
+                      '수혜 ${s.goodIndustries.join(', ')}',
+                      const Color(0xFFE6F8EA),
+                      const Color(0xFF1F8D48),
+                    ),
+                    _tag(
+                      '피해 ${s.badIndustries.join(', ')}',
+                      const Color(0xFFFFECEC),
+                      const Color(0xFFB93838),
+                    ),
+                  ],
+                )
+              else
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                    '💡 힌트 없음 모드: 기사 문맥으로 수혜/피해 산업을 스스로 추론해보세요.',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
                   ),
-                  _tag(
-                    '피해 ${s.badIndustries.join(', ')}',
-                    const Color(0xFFFFECEC),
-                    const Color(0xFFB93838),
-                  ),
-                ],
-              ),
+                ),
             ],
           ),
         ),
@@ -1074,9 +1096,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           title: '1) 어떤 산업 카드에 투자할까?',
           child: Column(
             children: List.generate(
-              s.options.length,
+              _shuffledOptions.length,
               (i) => _choiceTile(
-                text: s.options[i],
+                text: _shuffledOptions[i],
                 selected: _selectedIndustry == i,
                 onTap: _submitted
                     ? null
