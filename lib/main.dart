@@ -1036,6 +1036,38 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     );
   }
 
+  _ScenarioFeedback _buildScenarioFeedback({
+    required int industryScore,
+    required int reasoningScore,
+    required int allocationPercent,
+  }) {
+    final explanation = widget.scenario.explanation;
+    final selectedIndustryLabel = _selectedIndustry == null
+        ? '산업 카드'
+        : _industryChoices[_selectedIndustry!].label;
+    final selectedReasoningLabel = _reasoningAnswer == null
+        ? '근거 선택'
+        : _reasoningChoices[_reasoningAnswer!];
+
+    final goodPoint = industryScore >= 70
+        ? '${explanation.short} 네가 고른 "$selectedIndustryLabel"은(는) 뉴스와 연결이 좋았어.'
+        : '좋은 점: "$selectedReasoningLabel"처럼 근거를 직접 고르며 생각한 태도가 아주 좋아.';
+
+    final weakPoint = reasoningScore >= 75
+        ? '${explanation.risk} 이번 비중 $allocationPercent%는 흔들릴 때 크게 출렁일 수 있어.'
+        : '${explanation.why} 지금 선택한 "$selectedReasoningLabel"에 데이터 확인 한 줄을 더해보자.';
+
+    final nextAction = allocationPercent >= 65
+        ? '${explanation.takeaway} 다음 챕터는 40~55%로 시작해 비교해보자.'
+        : '${explanation.takeaway} 다음 챕터는 근거를 1줄 적고 ${allocationPercent + 5 > 60 ? 60 : allocationPercent + 5}% 이내에서 테스트해보자.';
+
+    return _ScenarioFeedback(
+      goodPoint: goodPoint,
+      weakPoint: weakPoint,
+      nextAction: nextAction,
+    );
+  }
+
   void _submit() {
     if (_selectedIndustry == null || _quizAnswer == null || _reasoningAnswer == null || _allocation == null || _submitted) {
       return;
@@ -1059,6 +1091,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     final riskManagementScore = _riskScore();
     final emotionControlScore = _emotionScore(judgementScore);
     final learningScore = ((judgementScore + riskManagementScore + emotionControlScore) / 3).round();
+    final scenarioFeedback = _buildScenarioFeedback(
+      industryScore: industryScore,
+      reasoningScore: reasonScore,
+      allocationPercent: _allocation!,
+    );
 
     final invested = _investedCoins;
     final outcome = _calculateInvestmentOutcome(
@@ -1089,6 +1126,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           ? '멋져! 투자 비중과 판단 근거를 함께 잘 맞췄어!'
           : '좋아! 이번 기록을 바탕으로 다음 챕터에서 비중 조절까지 연습해보자.';
       _resultSnapshot = _PerformanceSnapshot(
+        scenarioTitle: widget.scenario.title,
         judgementScore: judgementScore,
         riskManagementScore: riskManagementScore,
         emotionControlScore: emotionControlScore,
@@ -1103,6 +1141,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         resilience: emotionControlScore,
         formulaLine: outcome.formulaLine,
         coachingLine: outcome.coachingLine,
+        goodPoint: scenarioFeedback.goodPoint,
+        weakPoint: scenarioFeedback.weakPoint,
+        nextAction: scenarioFeedback.nextAction,
       );
       _pendingResult = result;
     });
@@ -1422,8 +1463,21 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 }
 
+class _ScenarioFeedback {
+  const _ScenarioFeedback({
+    required this.goodPoint,
+    required this.weakPoint,
+    required this.nextAction,
+  });
+
+  final String goodPoint;
+  final String weakPoint;
+  final String nextAction;
+}
+
 class _PerformanceSnapshot {
   const _PerformanceSnapshot({
+    required this.scenarioTitle,
     required this.judgementScore,
     required this.riskManagementScore,
     required this.emotionControlScore,
@@ -1438,8 +1492,12 @@ class _PerformanceSnapshot {
     required this.resilience,
     required this.formulaLine,
     required this.coachingLine,
+    required this.goodPoint,
+    required this.weakPoint,
+    required this.nextAction,
   });
 
+  final String scenarioTitle;
   final int judgementScore;
   final int riskManagementScore;
   final int emotionControlScore;
@@ -1454,6 +1512,9 @@ class _PerformanceSnapshot {
   final int resilience;
   final String formulaLine;
   final String coachingLine;
+  final String goodPoint;
+  final String weakPoint;
+  final String nextAction;
 }
 
 class _PerformanceResultCard extends StatelessWidget {
@@ -1490,7 +1551,7 @@ class _PerformanceResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('📈 이번 탐험 성과', style: TextStyle(fontWeight: FontWeight.w900)),
+          Text('📈 ${snapshot.scenarioTitle} 결과', style: const TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -1516,15 +1577,20 @@ class _PerformanceResultCard extends StatelessWidget {
             '• 리스크 해석: $_riskComment',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
-          Text(
-            '• 다음 행동 코칭: ${snapshot.coachingLine}',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '• 총평: $_overallComment',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
+          const SizedBox(height: 8),
+          const Text('🎯 맞춤 코칭', style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text('1) 잘한 점: ${snapshot.goodPoint}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          Text('2) 아쉬운 점: ${snapshot.weakPoint}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          Text('3) 다음 행동: ${snapshot.nextAction}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('• 보너스 팁: ${snapshot.coachingLine}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          Text('• 총평: $_overallComment',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
         ],
       ),
     );
