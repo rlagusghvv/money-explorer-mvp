@@ -810,7 +810,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int? _selectedIndustry;
   int? _reasoningAnswer;
   int? _quizAnswer;
-  double _riskRatio = 55;
+  double _allocationPercent = 50;
   bool _submitted = false;
   bool _hintUnlocked = false;
   bool _hintUsed = false;
@@ -870,10 +870,16 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   int _riskScore() {
-    final r = _riskRatio.round();
-    if (r >= 45 && r <= 65) return 100;
-    if (r >= 35 && r <= 75) return 85;
-    if (r >= 25 && r <= 85) return 65;
+    final r = _allocationPercent.round();
+    final (safeMin, safeMax) = switch (widget.difficulty) {
+      DifficultyLevel.easy => (30, 60),
+      DifficultyLevel.normal => (35, 65),
+      DifficultyLevel.hard => (25, 55),
+    };
+
+    if (r >= safeMin && r <= safeMax) return 100;
+    if (r >= safeMin - 10 && r <= safeMax + 10) return 82;
+    if (r >= 20 && r <= 80) return 62;
     return 40;
   }
 
@@ -885,14 +891,81 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     return (calmBase - retryPenalty - hintPenalty - panicPenalty).clamp(0, 100);
   }
 
-  int _toReturnPercent(int learningScore) {
-    final base = switch (widget.difficulty) {
-      DifficultyLevel.easy => -6,
-      DifficultyLevel.normal => -10,
-      DifficultyLevel.hard => -14,
+  int get _allocation => _allocationPercent.round();
+
+  int get _investedCoins => (widget.cash * (_allocation / 100)).round().clamp(0, widget.cash);
+
+  ({int returnPercent, int rawProfit, int adjustedProfit, int volatilityRisk, String formulaLine, String coachingLine})
+  _calculateInvestmentOutcome({
+    required int invested,
+    required int judgementScore,
+    required int riskManagementScore,
+  }) {
+    final isGoodDecision = judgementScore >= 70;
+    final qualityEdge = ((judgementScore - 60) / 2.0).round();
+    final stabilityAdj = ((riskManagementScore - 70) / 8.0).round();
+
+    final baseVolatility = switch (widget.difficulty) {
+      DifficultyLevel.easy => 4,
+      DifficultyLevel.normal => 7,
+      DifficultyLevel.hard => 10,
     };
-    final gain = (learningScore / 100 * 28).round();
-    return base + gain;
+    final volatilitySeed = (widget.scenario.id * 7 + _allocation) % 6;
+    final directionalVolatility = volatilitySeed - 2;
+    final volatilityEffect = directionalVolatility * baseVolatility;
+
+    var returnPercent = isGoodDecision
+        ? 6 + qualityEdge + stabilityAdj + volatilityEffect
+        : -6 - qualityEdge.abs() - stabilityAdj.abs() + volatilityEffect;
+
+    if (widget.difficulty == DifficultyLevel.hard && !isGoodDecision && _allocation >= 60) {
+      returnPercent -= ((_allocation - 50) / 4).round();
+    }
+
+    returnPercent = returnPercent.clamp(-65, 55);
+    final rawProfit = (invested * returnPercent / 100).round();
+
+    var adjustedProfit = rawProfit;
+    if (adjustedProfit < 0) {
+      switch (widget.difficulty) {
+        case DifficultyLevel.easy:
+          adjustedProfit = (adjustedProfit * 0.7).round();
+          final lossCap = (invested * 0.16).round();
+          adjustedProfit = max(adjustedProfit, -lossCap);
+          break;
+        case DifficultyLevel.normal:
+          break;
+        case DifficultyLevel.hard:
+          adjustedProfit = (adjustedProfit * 1.2).round();
+          break;
+      }
+    }
+
+    final formulaLine = isGoodDecision
+        ? '좋은 판단 × 투자금 $invested코인 × 수익률 $returnPercent% = ${rawProfit >= 0 ? '+' : ''}$rawProfit코인'
+        : '아쉬운 판단 × 투자금 $invested코인 × 변동 수익률 $returnPercent% = ${rawProfit >= 0 ? '+' : ''}$rawProfit코인';
+
+    final coachingLine = switch (widget.difficulty) {
+      DifficultyLevel.easy => adjustedProfit < 0
+          ? '좋아요! 쉬움 모드 손실 완충이 적용됐어요. 다음엔 비중을 40~60%로 맞춰보세요.'
+          : '좋아요! 다음에도 한 번에 올인하지 않고 비중을 나눠서 수익을 지켜봐요.',
+      DifficultyLevel.normal => adjustedProfit < 0
+          ? '다음 행동: 근거가 약하면 비중을 줄여 손실 폭을 먼저 관리해요.'
+          : '다음 행동: 근거가 강할 때만 비중을 조금씩 늘려보세요.',
+      DifficultyLevel.hard => adjustedProfit < 0
+          ? '하드 모드 경고: 높은 비중 실수는 손실이 커져요. 다음엔 20~50%부터 검증해요.'
+          : '하드 모드 팁: 승률이 높아도 비중 분할로 변동성 충격을 줄여요.',
+    };
+
+    final volatilityRisk = (100 - riskManagementScore + baseVolatility * 2).clamp(0, 100);
+    return (
+      returnPercent: returnPercent,
+      rawProfit: rawProfit,
+      adjustedProfit: adjustedProfit,
+      volatilityRisk: volatilityRisk,
+      formulaLine: formulaLine,
+      coachingLine: coachingLine,
+    );
   }
 
   void _submit() {
@@ -919,29 +992,36 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     final emotionControlScore = _emotionScore(judgementScore);
     final learningScore = ((judgementScore + riskManagementScore + emotionControlScore) / 3).round();
 
-    final invested = max(100, (widget.cash * (_riskRatio / 100)).round());
-    final returnPercent = _toReturnPercent(learningScore);
-    final rawProfit = (invested * returnPercent / 100).round();
+    final invested = _investedCoins;
+    final outcome = _calculateInvestmentOutcome(
+      invested: invested,
+      judgementScore: judgementScore,
+      riskManagementScore: riskManagementScore,
+    );
+
     final hintPenalty = _hintUsed ? widget.difficulty.hintPenalty : 0;
-    final finalProfit = rawProfit - hintPenalty;
-    final volatilityRisk = (100 - riskManagementScore).clamp(0, 100);
-    final resilience = emotionControlScore;
+    final finalProfit = outcome.adjustedProfit - hintPenalty;
 
     setState(() {
       _submitted = true;
       _mascotSpeech = learningScore >= 80
-          ? '멋져! 여러 선택지 중에서도 균형 있게 높은 점수를 만들었어!'
-          : '좋아! 이번 기록을 바탕으로 다음 챕터에서 더 높은 점수를 노려보자.';
+          ? '멋져! 투자 비중과 판단 근거를 함께 잘 맞췄어!'
+          : '좋아! 이번 기록을 바탕으로 다음 챕터에서 비중 조절까지 연습해보자.';
       _resultSnapshot = _PerformanceSnapshot(
         judgementScore: judgementScore,
         riskManagementScore: riskManagementScore,
         emotionControlScore: emotionControlScore,
         learningScore: learningScore,
+        allocationPercent: _allocation,
         invested: invested,
-        returnPercent: returnPercent,
+        returnPercent: outcome.returnPercent,
+        rawProfit: outcome.rawProfit,
         finalProfit: finalProfit,
-        volatilityRisk: volatilityRisk,
-        resilience: resilience,
+        hintPenalty: hintPenalty,
+        volatilityRisk: outcome.volatilityRisk,
+        resilience: emotionControlScore,
+        formulaLine: outcome.formulaLine,
+        coachingLine: outcome.coachingLine,
       );
     });
 
@@ -950,7 +1030,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         scenarioId: widget.scenario.id,
         invested: invested,
         profit: finalProfit,
-        returnPercent: returnPercent,
+        returnPercent: outcome.returnPercent,
         judgementScore: judgementScore,
         riskManagementScore: riskManagementScore,
         emotionControlScore: emotionControlScore,
@@ -1045,24 +1125,29 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '3) 리스크 게이지 ${_riskRatio.round()}%',
+          title: '3) 투자 비중 선택 ${_allocation.round()}%',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                '포지션 사이징 연습: 확신이 낮을수록 비중을 줄이고, 근거가 탄탄할수록 조금씩 늘려요.',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4E5B7A)),
+              ),
               Slider.adaptive(
-                value: _riskRatio,
+                value: _allocationPercent,
                 min: 20,
-                max: 100,
-                divisions: 8,
-                label: '${_riskRatio.round()}%',
+                max: 80,
+                divisions: 6,
+                label: '${_allocation.round()}%',
                 onChanged: _submitted
                     ? null
                     : (v) => setState(() {
-                        _riskRatio = v;
+                        _allocationPercent = v;
                       }),
               ),
               Align(
                 alignment: Alignment.centerRight,
-                child: Text('투자 예정금 ${max(100, (widget.cash * (_riskRatio / 100)).round())}코인'),
+                child: Text('투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 ${_allocation.round()}%)'),
               ),
             ],
           ),
@@ -1246,22 +1331,32 @@ class _PerformanceSnapshot {
     required this.riskManagementScore,
     required this.emotionControlScore,
     required this.learningScore,
+    required this.allocationPercent,
     required this.invested,
     required this.returnPercent,
+    required this.rawProfit,
     required this.finalProfit,
+    required this.hintPenalty,
     required this.volatilityRisk,
     required this.resilience,
+    required this.formulaLine,
+    required this.coachingLine,
   });
 
   final int judgementScore;
   final int riskManagementScore;
   final int emotionControlScore;
   final int learningScore;
+  final int allocationPercent;
   final int invested;
   final int returnPercent;
+  final int rawProfit;
   final int finalProfit;
+  final int hintPenalty;
   final int volatilityRisk;
   final int resilience;
+  final String formulaLine;
+  final String coachingLine;
 }
 
 class _PerformanceResultCard extends StatelessWidget {
@@ -1310,19 +1405,28 @@ class _PerformanceResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          Text('• 투자 비중: ${snapshot.allocationPercent}%'),
+          Text('• 투자금: ${snapshot.invested}코인'),
+          Text('• 수익/손실 계산: ${snapshot.formulaLine}'),
+          if (snapshot.hintPenalty > 0)
+            Text('• 힌트 사용 페널티: -${snapshot.hintPenalty}코인'),
           Text(
-            '• 해석: $_riskComment',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• 총평: $_overallComment',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            '• 최종 변화: ${snapshot.finalProfit >= 0 ? '+' : ''}${snapshot.finalProfit}코인',
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
           Text(
-            '투자금 ${snapshot.invested}코인 · 최종 변화 ${snapshot.finalProfit >= 0 ? '+' : ''}${snapshot.finalProfit}코인',
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            '• 리스크 해석: $_riskComment',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            '• 다음 행동 코칭: ${snapshot.coachingLine}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '• 총평: $_overallComment',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
         ],
       ),
