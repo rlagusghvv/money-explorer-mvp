@@ -20,10 +20,13 @@ class AuthSyncService {
   final http.Client _client;
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8787',
+    defaultValue: '',
   );
 
-  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+  Uri _uri(String path) {
+    if (_baseUrl.trim().isEmpty) return Uri.parse(path);
+    return Uri.parse('$_baseUrl$path');
+  }
 
   Future<AuthSession> signup({
     required String email,
