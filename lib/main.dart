@@ -395,7 +395,7 @@ const List<ShopItem> kShopItems = [
     name: '경제 차트 포스터',
     type: CosmeticType.decoration,
     zone: DecorationZone.wall,
-    price: 90,
+    price: 0,
     emoji: '📊',
     description: '벽면에 붙이는 탐험 차트 포스터!',
   ),
@@ -413,7 +413,7 @@ const List<ShopItem> kShopItems = [
     name: '포근 러그',
     type: CosmeticType.decoration,
     zone: DecorationZone.floor,
-    price: 95,
+    price: 0,
     emoji: '🧶',
     description: '바닥에 깔아 아늑함 업!',
   ),
@@ -431,7 +431,7 @@ const List<ShopItem> kShopItems = [
     name: '뉴스 지구본',
     type: CosmeticType.decoration,
     zone: DecorationZone.desk,
-    price: 110,
+    price: 0,
     emoji: '🌍',
     description: '선반 위 글로벌 뉴스 탐험 소품!',
   ),
@@ -474,13 +474,19 @@ class AppState {
     onboarded: false,
     selectedDifficulty: DifficultyLevel.easy,
     learnerAgeBand: LearnerAgeBand.middle,
-    ownedItemIds: {'char_default', 'home_base_default'},
+    ownedItemIds: {
+      'char_default',
+      'home_base_default',
+      'deco_wall_chart',
+      'deco_floor_rug',
+      'deco_desk_globe',
+    },
     equippedCharacterId: 'char_default',
     equippedHomeId: 'home_base_default',
     equippedDecorations: {
-      DecorationZone.wall: null,
-      DecorationZone.floor: null,
-      DecorationZone.desk: null,
+      DecorationZone.wall: 'deco_wall_chart',
+      DecorationZone.floor: 'deco_floor_rug',
+      DecorationZone.desk: 'deco_desk_globe',
     },
     totalPointsSpent: 0,
   );
@@ -1947,6 +1953,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         !isGoodDecision &&
         allocation >= 60) {
       returnPercent -= ((allocation - 50) / 4).round();
+    }
+
+    // 교육 UX: '좋은 선택'이면 최소 0% 이상은 보장해 혼란을 줄인다.
+    if (isGoodDecision && returnPercent < 0) {
+      returnPercent = 0;
     }
 
     returnPercent = returnPercent.clamp(-65, 55);
