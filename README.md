@@ -1,56 +1,59 @@
-# 머니탐험대 (Money Explorer) — MVP
+# 뉴스 포트폴리오 탐험대 (kid_econ_mvp)
 
-초등학생 대상 경제 기초 교육 게임형 앱 MVP입니다.
+초등/중학생 대상 경제 학습 게임 MVP입니다.
 
-## MVP 포함 기능
-- 온보딩(게임 목표 설명)
-- 핵심 루프: `벌기(earn) / 쓰기(spend) / 저축(save)` 미션 카드
-- 난이도(쉬움/보통/어려움)
-- 부모 설정(일일 플레이 시간 제한, 난이도, 효과음 토글)
-- 로컬 저장(SharedPreferences)
-- 레벨업(저축 코인 기준)
+## 이번 업데이트 (Task 12)
+- 회원가입/로그인 (이메일 + 비밀번호)
+- 백엔드 인증 + 계정별 클라우드 저장
+- 계정별 진행 데이터 동기화:
+  - points(탐험 포인트)
+  - owned/equipped cosmetics
+  - chapter progress
+  - report stats(플레이 결과 기반 지표)
+- `내 공간` 탭 추가 (현재 캐릭터/베이스 + 핵심 진행 요약)
+- 로컬 저장 유지 + 클라우드 실패 시 fallback(오프라인 진행 가능)
 
-## 기술 스택
-- Flutter (Material 3)
-- shared_preferences (로컬 상태 저장)
+---
 
-## 실행
+## 1) Backend 실행
+```bash
+cd kid_econ_mvp/backend
+npm install
+npm start
+```
+- 기본 포트: `8787`
+- 헬스체크: `GET http://localhost:8787/health`
+
+### 보안(MVP)
+- 비밀번호 평문 저장 금지
+- bcrypt 해시 저장
+- 기본 이메일/비밀번호 검증
+- JWT 기반 인증
+
+---
+
+## 2) Flutter Web 실행
+새 터미널에서:
 ```bash
 cd kid_econ_mvp
 flutter pub get
-flutter run
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8787
 ```
 
-## iOS TestFlight 업로드 준비
+> 모바일/시뮬레이터에서 백엔드 접근 시 `API_BASE_URL`을 환경에 맞게 변경하세요.
 
-### 1) 기본 점검
-```bash
-flutter doctor
-```
+---
 
-### 2) iOS 빌드
+## 테스트/체크
+### Flutter
 ```bash
 cd kid_econ_mvp
-flutter build ipa --release
+flutter analyze
+flutter test
 ```
 
-### 3) App Store Connect 업로드
-- Xcode Organizer 또는 Transporter로 `.ipa` 업로드
-- App Store Connect에서 빌드 처리 후 TestFlight 배포
-
-## 앱스토어 제출 전 체크리스트 (MVP)
-- [ ] 앱 이름/아이콘/스플래시 교체
-- [ ] 개인정보 처리방침 링크 준비
-- [ ] 부모 설정 PIN 고정값(현재 1234) 제거
-- [ ] 효과음/이미지 에셋 정식 반영
-- [ ] 연령 등급/키즈 카테고리 정책 검토
-
-## 구조
-- `lib/main.dart`: MVP 전체 로직(단일 파일)
-
-## Post-MVP TODO
-- 경제 개념 스테이지 분리(예산/기회비용/지연보상)
-- 학습 리포트(부모용 주간 리포트)
-- 서버 연동(학습 기록 백업)
-- 보상 시스템(뱃지/퀘스트)
-- 콘텐츠/아트 리소스 교체
+### Backend
+```bash
+cd kid_econ_mvp/backend
+npm test
+```

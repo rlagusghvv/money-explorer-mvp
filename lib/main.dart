@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
@@ -49,6 +51,32 @@ class ChapterCondition {
         : '변동성 0';
     return '${marketMood.icon(band)} 시장기분 ${marketMood.label} · $volatilityWord\n$riskContext';
   }
+}
+
+class StoredSession {
+  const StoredSession({
+    required this.userId,
+    required this.email,
+    required this.token,
+  });
+
+  final String userId;
+  final String email;
+  final String token;
+
+  factory StoredSession.fromJson(Map<String, dynamic> json) {
+    return StoredSession(
+      userId: json['userId'] as String,
+      email: json['email'] as String,
+      token: json['token'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'userId': userId,
+    'email': email,
+    'token': token,
+  };
 }
 
 extension LearnerAgeBandX on LearnerAgeBand {
@@ -134,6 +162,8 @@ class _BootstrapPageState extends State<BootstrapPage> {
   bool _loading = true;
   late AppState _state;
   late List<Scenario> _scenarios;
+  StoredSession? _session;
+  final _authService = AuthSyncService();
 
   @override
   void initState() {
@@ -144,6 +174,7 @@ class _BootstrapPageState extends State<BootstrapPage> {
   Future<void> _load() async {
     _state = await AppStateStore.load();
     _scenarios = await ScenarioRepository.loadScenarios();
+    _session = await AppStateStore.loadSession();
     if (mounted) setState(() => _loading = false);
   }
 
@@ -152,7 +183,12 @@ class _BootstrapPageState extends State<BootstrapPage> {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return GameHomePage(initialState: _state, scenarios: _scenarios);
+    return GameHomePage(
+      initialState: _state,
+      scenarios: _scenarios,
+      initialSession: _session,
+      authService: _authService,
+    );
   }
 }
 
@@ -182,6 +218,41 @@ class ScenarioResult {
   final DifficultyLevel difficulty;
   final DateTime timestamp;
   final int allocationPercent;
+
+  factory ScenarioResult.fromJson(Map<String, dynamic> json) {
+    return ScenarioResult(
+      scenarioId: (json['scenarioId'] as num?)?.round() ?? 0,
+      invested: (json['invested'] as num?)?.round() ?? 0,
+      profit: (json['profit'] as num?)?.round() ?? 0,
+      returnPercent: (json['returnPercent'] as num?)?.round() ?? 0,
+      judgementScore: (json['judgementScore'] as num?)?.round() ?? 0,
+      riskManagementScore: (json['riskManagementScore'] as num?)?.round() ?? 0,
+      emotionControlScore: (json['emotionControlScore'] as num?)?.round() ?? 0,
+      hintUsed: json['hintUsed'] == true,
+      difficulty: DifficultyLevel.values.firstWhere(
+        (d) => d.name == json['difficulty'],
+        orElse: () => DifficultyLevel.easy,
+      ),
+      timestamp:
+          DateTime.tryParse(json['timestamp'] as String? ?? '') ??
+          DateTime.now(),
+      allocationPercent: (json['allocationPercent'] as num?)?.round() ?? 50,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'scenarioId': scenarioId,
+    'invested': invested,
+    'profit': profit,
+    'returnPercent': returnPercent,
+    'judgementScore': judgementScore,
+    'riskManagementScore': riskManagementScore,
+    'emotionControlScore': emotionControlScore,
+    'hintUsed': hintUsed,
+    'difficulty': difficulty.name,
+    'timestamp': timestamp.toIso8601String(),
+    'allocationPercent': allocationPercent,
+  };
 
   int get totalLearningScore =>
       ((judgementScore + riskManagementScore + emotionControlScore) / 3)
@@ -361,7 +432,8 @@ class AppState {
 
   ShopItem get equippedHome => kShopItems.firstWhere(
     (item) => item.id == equippedHomeId,
-    orElse: () => kShopItems.firstWhere((item) => item.type == CosmeticType.home),
+    orElse: () =>
+        kShopItems.firstWhere((item) => item.type == CosmeticType.home),
   );
 
   int get solvedCount => results.length;
@@ -383,6 +455,63 @@ class AppState {
   int get avgJudgementScore => _avgBy((e) => e.judgementScore);
   int get avgRiskManagementScore => _avgBy((e) => e.riskManagementScore);
   int get avgEmotionControlScore => _avgBy((e) => e.emotionControlScore);
+
+  factory AppState.fromJson(Map<String, dynamic> json) {
+    final initial = AppState.initial();
+    final owned = {
+      ...initial.ownedItemIds,
+      ...((json['ownedItemIds'] as List<dynamic>? ?? const [])
+          .whereType<String>()),
+    };
+
+    return AppState(
+      playerName: json['playerName'] as String? ?? initial.playerName,
+      cash: (json['cash'] as num?)?.round() ?? initial.cash,
+      rewardPoints:
+          (json['rewardPoints'] as num?)?.round() ?? initial.rewardPoints,
+      currentScenario:
+          (json['currentScenario'] as num?)?.round() ?? initial.currentScenario,
+      results: (json['results'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ScenarioResult.fromJson)
+          .toList(),
+      bestStreak: (json['bestStreak'] as num?)?.round() ?? initial.bestStreak,
+      onboarded: json['onboarded'] == true,
+      selectedDifficulty: DifficultyLevel.values.firstWhere(
+        (d) => d.name == json['selectedDifficulty'],
+        orElse: () => initial.selectedDifficulty,
+      ),
+      learnerAgeBand: LearnerAgeBand.values.firstWhere(
+        (b) => b.name == json['learnerAgeBand'],
+        orElse: () => initial.learnerAgeBand,
+      ),
+      ownedItemIds: owned,
+      equippedCharacterId:
+          (json['equippedCharacterId'] as String?) ??
+          initial.equippedCharacterId,
+      equippedHomeId:
+          (json['equippedHomeId'] as String?) ?? initial.equippedHomeId,
+      totalPointsSpent:
+          (json['totalPointsSpent'] as num?)?.round() ??
+          initial.totalPointsSpent,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'playerName': playerName,
+    'cash': cash,
+    'rewardPoints': rewardPoints,
+    'currentScenario': currentScenario,
+    'results': results.map((e) => e.toJson()).toList(),
+    'bestStreak': bestStreak,
+    'onboarded': onboarded,
+    'selectedDifficulty': selectedDifficulty.name,
+    'learnerAgeBand': learnerAgeBand.name,
+    'ownedItemIds': ownedItemIds.toList(),
+    'equippedCharacterId': equippedCharacterId,
+    'equippedHomeId': equippedHomeId,
+    'totalPointsSpent': totalPointsSpent,
+  };
 
   AppState copyWith({
     String? playerName,
@@ -431,6 +560,7 @@ class AppStateStore {
   static const _kEquippedCharacterId = 'equippedCharacterId';
   static const _kEquippedHomeId = 'equippedHomeId';
   static const _kTotalPointsSpent = 'totalPointsSpent';
+  static const _kAuthSession = 'authSession';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -501,8 +631,8 @@ class AppStateStore {
       ...initial.ownedItemIds,
       ...(prefs.getStringList(_kOwnedItemIds) ?? const []),
     };
-    final equippedCharacterId = prefs.getString(_kEquippedCharacterId) ??
-        initial.equippedCharacterId;
+    final equippedCharacterId =
+        prefs.getString(_kEquippedCharacterId) ?? initial.equippedCharacterId;
     final equippedHomeId =
         prefs.getString(_kEquippedHomeId) ?? initial.equippedHomeId;
 
@@ -520,9 +650,12 @@ class AppStateStore {
       ),
       learnerAgeBand: ageBand,
       ownedItemIds: owned,
-      equippedCharacterId:
-          owned.contains(equippedCharacterId) ? equippedCharacterId : initial.equippedCharacterId,
-      equippedHomeId: owned.contains(equippedHomeId) ? equippedHomeId : initial.equippedHomeId,
+      equippedCharacterId: owned.contains(equippedCharacterId)
+          ? equippedCharacterId
+          : initial.equippedCharacterId,
+      equippedHomeId: owned.contains(equippedHomeId)
+          ? equippedHomeId
+          : initial.equippedHomeId,
       totalPointsSpent:
           prefs.getInt(_kTotalPointsSpent) ?? initial.totalPointsSpent,
     );
@@ -576,6 +709,27 @@ class AppStateStore {
         .toList();
     await prefs.setStringList(_kResults, encoded);
   }
+
+  static Future<StoredSession?> loadSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kAuthSession);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return StoredSession.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> saveSession(StoredSession? session) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (session == null) {
+      await prefs.remove(_kAuthSession);
+      return;
+    }
+    await prefs.setString(_kAuthSession, jsonEncode(session.toJson()));
+  }
 }
 
 class GameHomePage extends StatefulWidget {
@@ -583,10 +737,14 @@ class GameHomePage extends StatefulWidget {
     super.key,
     required this.initialState,
     required this.scenarios,
+    required this.authService,
+    this.initialSession,
   });
 
   final AppState initialState;
   final List<Scenario> scenarios;
+  final AuthSyncService authService;
+  final StoredSession? initialSession;
 
   @override
   State<GameHomePage> createState() => _GameHomePageState();
@@ -595,13 +753,24 @@ class GameHomePage extends StatefulWidget {
 class _GameHomePageState extends State<GameHomePage> {
   late AppState _state;
   int _tabIndex = 0;
+  StoredSession? _session;
+  bool _syncing = false;
+  String? _syncMessage;
+
+  bool get _isLoggedIn => _session != null;
 
   @override
   void initState() {
     super.initState();
     _state = widget.initialState;
+    _session = widget.initialSession;
     if (!_state.onboarded) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showOnboarding());
+    }
+    if (_isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _tryLoadCloudProgress(),
+      );
     }
   }
 
@@ -685,7 +854,67 @@ class _GameHomePageState extends State<GameHomePage> {
     );
   }
 
-  Future<void> _persist() async => AppStateStore.save(_state);
+  Future<void> _persist() async {
+    await AppStateStore.save(_state);
+    final session = _session;
+    if (session == null) return;
+    try {
+      await widget.authService.saveProgress(
+        token: session.token,
+        progress: _state.toJson(),
+      );
+      if (mounted) {
+        setState(() => _syncMessage = '클라우드 동기화 완료');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _syncMessage = '오프라인 저장됨 (클라우드 재시도 가능)');
+      }
+    }
+  }
+
+  Future<void> _tryLoadCloudProgress() async {
+    final session = _session;
+    if (session == null || _syncing) return;
+    setState(() {
+      _syncing = true;
+      _syncMessage = '클라우드 데이터 확인 중...';
+    });
+    try {
+      final cloud = await widget.authService.loadProgress(token: session.token);
+      if (cloud != null) {
+        _state = AppState.fromJson(cloud);
+        await AppStateStore.save(_state);
+      } else {
+        await widget.authService.saveProgress(
+          token: session.token,
+          progress: _state.toJson(),
+        );
+      }
+      if (mounted) {
+        setState(() => _syncMessage = '클라우드 동기화 완료');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _syncMessage = '로컬 모드로 진행 중');
+      }
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  Future<void> _onAuthChanged(StoredSession? session) async {
+    _session = session;
+    await AppStateStore.saveSession(session);
+    if (mounted) {
+      setState(() {
+        _syncMessage = session == null ? '게스트 모드' : '로그인됨: ${session.email}';
+      });
+    }
+    if (session != null) {
+      await _tryLoadCloudProgress();
+    }
+  }
 
   int _earnedPointsFromResult(ScenarioResult result) {
     final base = (result.totalLearningScore * 0.9).round();
@@ -722,7 +951,11 @@ class _GameHomePageState extends State<GameHomePage> {
     }
     if (_state.rewardPoints < item.price) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('포인트가 ${item.price - _state.rewardPoints}점 부족해요. 탐험으로 모아보자!')),
+        SnackBar(
+          content: Text(
+            '포인트가 ${item.price - _state.rewardPoints}점 부족해요. 탐험으로 모아보자!',
+          ),
+        ),
       );
       return;
     }
@@ -790,14 +1023,16 @@ class _GameHomePageState extends State<GameHomePage> {
         },
         onDone: _applyScenarioResult,
       ),
-      _ShopTab(
-        state: _state,
-        onBuyOrEquip: _buyAndEquipItem,
-      ),
+      _MySpaceTab(state: _state, syncMessage: _syncMessage, session: _session),
+      _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
       _WeeklyReportTab(state: _state),
       _GuideTab(
         state: _state,
+        session: _session,
+        isSyncing: _syncing,
         onReset: _resetProgress,
+        onSessionChanged: _onAuthChanged,
+        authService: widget.authService,
         onAgeBandChanged: (band) {
           setState(() {
             _state = _state.copyWith(
@@ -818,6 +1053,7 @@ class _GameHomePageState extends State<GameHomePage> {
         onDestinationSelected: (v) => setState(() => _tabIndex = v),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.explore), label: '탐험 맵'),
+          NavigationDestination(icon: Icon(Icons.home_work), label: '내 공간'),
           NavigationDestination(icon: Icon(Icons.storefront), label: '상점'),
           NavigationDestination(icon: Icon(Icons.insights), label: '리포트'),
           NavigationDestination(icon: Icon(Icons.menu_book), label: '가이드'),
@@ -1241,7 +1477,13 @@ class _AdventureMapCard extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: Text('베이스 $homeEmoji', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
+                    child: Text(
+                      '베이스 $homeEmoji',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                 ),
                 CustomPaint(
@@ -2309,6 +2551,79 @@ class _PerformanceResultCard extends StatelessWidget {
   }
 }
 
+class _MySpaceTab extends StatelessWidget {
+  const _MySpaceTab({
+    required this.state,
+    required this.syncMessage,
+    required this.session,
+  });
+
+  final AppState state;
+  final String? syncMessage;
+  final StoredSession? session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: ListView(
+        children: [
+          Card(
+            color: const Color(0xFFEFF6FF),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '🏠 내 공간',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('계정: ${session?.email ?? '게스트'}'),
+                  Text('동기화 상태: ${syncMessage ?? '로컬 저장 중'}'),
+                  const SizedBox(height: 8),
+                  Text(
+                    '현재 캐릭터: ${state.equippedCharacter.emoji} ${state.equippedCharacter.name}',
+                  ),
+                  Text(
+                    '현재 베이스: ${state.equippedHome.emoji} ${state.equippedHome.name}',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '핵심 진행',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('챕터 진행: ${state.currentScenario} / 10'),
+                  Text('보유 자산: ${state.cash}코인 · 포인트 ${state.rewardPoints}P'),
+                  Text(
+                    '누적 손익: ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인',
+                  ),
+                  Text('보유 아이템: ${state.ownedItemIds.length}개'),
+                  Text(
+                    '평균 판단/리스크/감정: ${state.avgJudgementScore}/${state.avgRiskManagementScore}/${state.avgEmotionControlScore}',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ShopTab extends StatelessWidget {
   const _ShopTab({required this.state, required this.onBuyOrEquip});
 
@@ -2320,7 +2635,9 @@ class _ShopTab extends StatelessWidget {
     final characters = kShopItems
         .where((item) => item.type == CosmeticType.character)
         .toList();
-    final homes = kShopItems.where((item) => item.type == CosmeticType.home).toList();
+    final homes = kShopItems
+        .where((item) => item.type == CosmeticType.home)
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -2333,10 +2650,17 @@ class _ShopTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🛍️ 포인트 상점', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const Text(
+                    '🛍️ 포인트 상점',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(height: 6),
-                  Text('현재 포인트: ${state.rewardPoints}P · 누적 사용: ${state.totalPointsSpent}P'),
-                  Text('장착 중: ${state.equippedCharacter.emoji} ${state.equippedCharacter.name} / ${state.equippedHome.emoji} ${state.equippedHome.name}'),
+                  Text(
+                    '현재 포인트: ${state.rewardPoints}P · 누적 사용: ${state.totalPointsSpent}P',
+                  ),
+                  Text(
+                    '장착 중: ${state.equippedCharacter.emoji} ${state.equippedCharacter.name} / ${state.equippedHome.emoji} ${state.equippedHome.name}',
+                  ),
                 ],
               ),
             ),
@@ -2370,7 +2694,9 @@ class _ShopTab extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  color: equipped ? const Color(0xFFE8F8EE) : const Color(0xFFF7F8FC),
+                  color: equipped
+                      ? const Color(0xFFE8F8EE)
+                      : const Color(0xFFF7F8FC),
                 ),
                 child: Row(
                   children: [
@@ -2380,15 +2706,27 @@ class _ShopTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${item.name} · ${item.price}P', style: const TextStyle(fontWeight: FontWeight.w800)),
-                          Text(item.description, style: const TextStyle(fontSize: 12)),
+                          Text(
+                            '${item.name} · ${item.price}P',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          Text(
+                            item.description,
+                            style: const TextStyle(fontSize: 12),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
                     FilledButton.tonal(
                       onPressed: equipped ? null : () => onBuyOrEquip(item),
-                      child: Text(equipped ? '장착중' : owned ? '장착' : '구매'),
+                      child: Text(
+                        equipped
+                            ? '장착중'
+                            : owned
+                            ? '장착'
+                            : '구매',
+                      ),
                     ),
                   ],
                 ),
@@ -2497,7 +2835,9 @@ class _WeeklyReportTab extends StatelessWidget {
                   ),
                   Text('힌트 사용: ${state.hintUsedCount}회'),
                   Text('현재 자산: ${state.cash}코인'),
-                  Text('탐험 포인트: ${state.rewardPoints}P (누적 획득 ${totalEarnedPoints}P)'),
+                  Text(
+                    '탐험 포인트: ${state.rewardPoints}P (누적 획득 ${totalEarnedPoints}P)',
+                  ),
                   Text(
                     '포인트 소비/저축 비율: ${spendingRatio.toStringAsFixed(1)}% / ${savingRatio.toStringAsFixed(1)}%',
                   ),
@@ -2629,16 +2969,153 @@ class _WeeklyReportTab extends StatelessWidget {
   }
 }
 
+class _AuthCard extends StatefulWidget {
+  const _AuthCard({
+    required this.authService,
+    required this.onSessionChanged,
+    required this.isSyncing,
+    this.session,
+  });
+
+  final AuthSyncService authService;
+  final Future<void> Function(StoredSession?) onSessionChanged;
+  final bool isSyncing;
+  final StoredSession? session;
+
+  @override
+  State<_AuthCard> createState() => _AuthCardState();
+}
+
+class _AuthCardState extends State<_AuthCard> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _loading = false;
+  String? _message;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  bool get _validEmail => RegExp(
+    r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+  ).hasMatch(_emailController.text.trim());
+
+  Future<void> _auth(bool signup) async {
+    if (!_validEmail || _passwordController.text.length < 8) {
+      setState(() => _message = '이메일 형식과 8자 이상 비밀번호를 확인해 주세요.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      final session = signup
+          ? await widget.authService.signup(
+              email: _emailController.text,
+              password: _passwordController.text,
+            )
+          : await widget.authService.login(
+              email: _emailController.text,
+              password: _passwordController.text,
+            );
+      await widget.onSessionChanged(
+        StoredSession(
+          userId: session.userId,
+          email: session.email,
+          token: session.token,
+        ),
+      );
+      if (mounted) {
+        setState(() => _message = signup ? '회원가입 완료!' : '로그인 성공!');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _message = '인증 실패: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = widget.session;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('계정/동기화', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            if (session != null) ...[
+              Text('로그인 계정: ${session.email}'),
+              const SizedBox(height: 6),
+              FilledButton.tonal(
+                onPressed: () => widget.onSessionChanged(null),
+                child: const Text('로그아웃 (로컬 모드)'),
+              ),
+            ] else ...[
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: '이메일(ID)'),
+              ),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '비밀번호 (8자 이상)'),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonal(
+                      onPressed: _loading ? null : () => _auth(true),
+                      child: const Text('회원가입'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _loading ? null : () => _auth(false),
+                      child: const Text('로그인'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (widget.isSyncing || _loading) const LinearProgressIndicator(),
+            if (_message != null) ...[
+              const SizedBox(height: 6),
+              Text(_message!, style: const TextStyle(fontSize: 12)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _GuideTab extends StatelessWidget {
   const _GuideTab({
     required this.state,
     required this.onReset,
     required this.onAgeBandChanged,
+    required this.authService,
+    required this.onSessionChanged,
+    required this.isSyncing,
+    this.session,
   });
 
   final AppState state;
   final VoidCallback onReset;
   final ValueChanged<LearnerAgeBand> onAgeBandChanged;
+  final AuthSyncService authService;
+  final Future<void> Function(StoredSession?) onSessionChanged;
+  final bool isSyncing;
+  final StoredSession? session;
 
   @override
   Widget build(BuildContext context) {
@@ -2657,6 +3134,13 @@ class _GuideTab extends StatelessWidget {
                 '• 점수형 평가: 하나의 정답이 아니라 선택 조합의 질을 평가',
               ),
             ),
+          ),
+          const SizedBox(height: 8),
+          _AuthCard(
+            authService: authService,
+            session: session,
+            onSessionChanged: onSessionChanged,
+            isSyncing: isSyncing,
           ),
           const SizedBox(height: 8),
           Card(
