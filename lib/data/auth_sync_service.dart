@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class AuthSession {
@@ -23,9 +24,15 @@ class AuthSyncService {
     defaultValue: '',
   );
 
+  String get _effectiveBaseUrl {
+    final configured = _baseUrl.trim();
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb) return Uri.base.origin;
+    return 'https://app2.splui.com';
+  }
+
   Uri _uri(String path) {
-    if (_baseUrl.trim().isEmpty) return Uri.parse(path);
-    return Uri.parse('$_baseUrl$path');
+    return Uri.parse(_effectiveBaseUrl).resolve(path);
   }
 
   Future<AuthSession> signup({
