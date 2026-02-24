@@ -45,7 +45,7 @@
       "reasoningChoices": [
         "이번 주 냉방 수요가 실제로 얼마나 늘었는지 확인한다",
         "날씨 밈이 얼마나 유행하는지 본다",
-        "아무 근거 없이 가장 싼 종목만 고른다"
+        "아무 근거 없이 가장 싼 회사만 고른다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -73,7 +73,7 @@
       ],
       "industryOptions": [
         {
-          "label": "교육플랫폼/태블릿",
+          "label": "교육 서비스/태블릿",
           "score": 100
         },
         {
@@ -132,7 +132,7 @@
       ],
       "industryOptions": [
         {
-          "label": "친환경소재/재활용",
+          "label": "친환경 재료/재활용",
           "score": 100
         },
         {
@@ -191,7 +191,7 @@
       ],
       "industryOptions": [
         {
-          "label": "게임/결제플랫폼",
+          "label": "게임/결제서비스",
           "score": 100
         },
         {
@@ -206,7 +206,7 @@
       "quizQuestion": "흥행 뉴스에서 장기적으로 꼭 볼 자료는?",
       "quizOptions": [
         {
-          "label": "이용자 유지율",
+          "label": "계속 쓰는 사람 비율",
           "score": 100
         },
         {
@@ -220,7 +220,7 @@
       ],
       "reasoningQuestion": "게임 신작 흥행 뉴스에서 오래 갈 힘을 보려면?",
       "reasoningChoices": [
-        "초반 인기보다 이용자 유지율과 결제 지속성을 확인한다",
+        "초반 인기보다 계속 쓰는 사람 비율과 결제가 계속되는지을 확인한다",
         "트레일러 조회 수만 보고 끝낸다",
         "게임 캐릭터 이름이 멋진지만 본다"
       ],
@@ -250,7 +250,7 @@
       ],
       "industryOptions": [
         {
-          "label": "에너지/정유",
+          "label": "에너지/기름 정제",
           "score": 100
         },
         {
@@ -269,7 +269,7 @@
           "score": 100
         },
         {
-          "label": "정유",
+          "label": "기름 정제",
           "score": 45
         },
         {
@@ -308,7 +308,7 @@
       ],
       "industryOptions": [
         {
-          "label": "에듀테크/클라우드",
+          "label": "공부 앱/온라인 서버",
           "score": 100
         },
         {
@@ -367,11 +367,11 @@
       ],
       "industryOptions": [
         {
-          "label": "재난대응/대체운송",
+          "label": "재난대응/다른 배송 방법",
           "score": 100
         },
         {
-          "label": "수출물류/신선식품",
+          "label": "수출 배송/신선식품",
           "score": 40
         },
         {
@@ -386,7 +386,7 @@
           "score": 100
         },
         {
-          "label": "바로 몰빵",
+          "label": "바로 한 번에 전부 투자",
           "score": 5
         },
         {
@@ -398,7 +398,7 @@
       "reasoningChoices": [
         "차질 기간과 대체 운송 가능 여부를 함께 계산한다",
         "비 오는 날 사진이 많은지만 본다",
-        "무조건 가장 급락한 종목 하나에 몰빵한다"
+        "무조건 가장 급락한 회사 하나에 한 번에 전부 투자한다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -425,11 +425,11 @@
       ],
       "industryOptions": [
         {
-          "label": "성장주/부동산 관련",
+          "label": "성장 회사/집·건물 관련",
           "score": 100
         },
         {
-          "label": "예금형",
+          "label": "예금 상품",
           "score": 35
         },
         {
@@ -456,7 +456,7 @@
       "reasoningChoices": [
         "대출 부담 완화가 어떤 산업 소비를 늘릴지 연결해 본다",
         "금리 뉴스 알림 개수만 세어 본다",
-        "친구가 찍어준 한 종목만 따라간다"
+        "친구가 찍어준 한 회사만 따라간다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -512,7 +512,7 @@
       ],
       "reasoningQuestion": "식량 가격 불안 뉴스에서 좋은 분석 순서는?",
       "reasoningChoices": [
-        "원재료비 상승이 이익률에 미칠 영향을 먼저 계산한다",
+        "원재료비 상승이 남는 돈 비율에 미칠 영향을 먼저 계산한다",
         "마트 진열대 사진만 보고 판단한다",
         "가격이 오르면 모든 기업이 무조건 이득이라 생각한다"
       ],
@@ -541,7 +541,7 @@
       ],
       "industryOptions": [
         {
-          "label": "배터리/충전기반시설",
+          "label": "배터리/충전 시설",
           "score": 100
         },
         {
@@ -556,7 +556,7 @@
       "quizQuestion": "장기 트렌드를 판단할 때 중요한 것은?",
       "quizOptions": [
         {
-          "label": "기반시설 확산 속도",
+          "label": "기초 시설 늘어나는 속도",
           "score": 100
         },
         {
@@ -631,7 +631,7 @@
       "reasoningChoices": [
         "방문객 수가 행사 기간 이후에도 유지되는지 확인한다",
         "SNS 사진 수만 보고 판단한다",
-        "가장 비싼 종목을 무조건 고른다"
+        "가장 비싼 회사을 무조건 고른다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -674,7 +674,7 @@
       "quizQuestion": "공급 안정의 긍정 효과는?",
       "quizOptions": [
         {
-          "label": "생산 차질 완화",
+          "label": "생산 멈춤 줄어듦",
           "score": 100
         },
         {
@@ -718,7 +718,7 @@
       ],
       "industryOptions": [
         {
-          "label": "콘텐츠제작/스트리밍",
+          "label": "영상 만들기/영상 서비스",
           "score": 100
         },
         {
@@ -733,7 +733,7 @@
       "quizQuestion": "콘텐츠 흥행의 장기 자료는?",
       "quizOptions": [
         {
-          "label": "구독 유지율",
+          "label": "구독 계속 쓰는 비율",
           "score": 100
         },
         {
@@ -777,11 +777,11 @@
       ],
       "industryOptions": [
         {
-          "label": "교통카드결제/자전거",
+          "label": "교통카드 결제/자전거",
           "score": 100
         },
         {
-          "label": "통근소비/저가유통",
+          "label": "출퇴근 주변 소비/저가유통",
           "score": 40
         },
         {
@@ -792,7 +792,7 @@
       "quizQuestion": "요금 인상 시 소비자 행동 변화로 가능한 것은?",
       "quizOptions": [
         {
-          "label": "대체 이동수단 탐색",
+          "label": "다른 이동 방법 탐색",
           "score": 100
         },
         {
@@ -806,9 +806,9 @@
       ],
       "reasoningQuestion": "교통요금 인상 뉴스의 핵심 체크는?",
       "reasoningChoices": [
-        "대체 이동수단 이용률 변화가 있는지 본다",
+        "다른 이동 방법 이용률 변화가 있는지 본다",
         "헤드라인 길이만 비교한다",
-        "소문만 듣고 몰빵한다"
+        "소문만 듣고 한 번에 전부 투자한다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -836,7 +836,7 @@
       ],
       "industryOptions": [
         {
-          "label": "대체소재/복구서비스",
+          "label": "다른 재료/복구 도움 서비스",
           "score": 100
         },
         {
@@ -851,7 +851,7 @@
       "quizQuestion": "공급 감소가 주는 대표 영향은?",
       "quizOptions": [
         {
-          "label": "원재료 가격 변동 확대",
+          "label": "재료값 들쭉날쭉 커짐",
           "score": 100
         },
         {
@@ -865,9 +865,9 @@
       ],
       "reasoningQuestion": "산불 관련 경제 뉴스에서 무엇을 같이 봐야 할까?",
       "reasoningChoices": [
-        "복구 기간과 대체소재 전환 속도를 같이 본다",
+        "복구 기간과 다른 재료 전환 속도를 같이 본다",
         "사진 조회 수만 본다",
-        "감으로 아무 종목이나 고른다"
+        "감으로 아무 회사이나 고른다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -894,7 +894,7 @@
       ],
       "industryOptions": [
         {
-          "label": "위성통신/항공우주부품",
+          "label": "위성 통신/우주 부품",
           "score": 100
         },
         {
@@ -909,7 +909,7 @@
       "quizQuestion": "우주 산업 뉴스에서 과열을 피하는 방법은?",
       "quizOptions": [
         {
-          "label": "수주·매출 연결 여부 확인",
+          "label": "주문·매출로 이어지는지 확인",
           "score": 100
         },
         {
@@ -925,7 +925,7 @@
       "reasoningChoices": [
         "후속 계약과 반복 발사 계획을 확인한다",
         "기념 영상만 본다",
-        "가장 급등한 종목을 급히 따라 사기한다"
+        "가장 급등한 회사을 급히 따라 사기한다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -983,7 +983,7 @@
       "reasoningChoices": [
         "외부활동 자료가 실제로 회복되는지 확인한다",
         "희망적인 느낌만 본다",
-        "오늘 오른 종목만 쫓아간다"
+        "오늘 오른 회사만 쫓아간다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -1010,7 +1010,7 @@
       ],
       "industryOptions": [
         {
-          "label": "IoT센서/도시소프트웨어",
+          "label": "똑똑한 센서/도시 관리 앱",
           "score": 100
         },
         {
@@ -1025,7 +1025,7 @@
       "quizQuestion": "예산 확대 뉴스에서 가장 먼저 확인할 것은?",
       "quizOptions": [
         {
-          "label": "실제 발주 일정",
+          "label": "실제 주문 일정",
           "score": 100
         },
         {
@@ -1041,7 +1041,7 @@
       "reasoningChoices": [
         "예산 발표 뒤 실제 발주와 계약이 나오는지 본다",
         "브랜드 이름만 보고 판단한다",
-        "친구 말만 듣고 전부 매수한다"
+        "친구 말만 듣고 전부 사기한다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -1068,11 +1068,11 @@
       ],
       "industryOptions": [
         {
-          "label": "수입유통/해외여행",
+          "label": "수입 판매/해외여행",
           "score": 100
         },
         {
-          "label": "수출비중 제조",
+          "label": "수출 많이 하는 공장",
           "score": 35
         },
         {
@@ -1083,11 +1083,11 @@
       "quizQuestion": "원화 오름세의 일반적 효과는?",
       "quizOptions": [
         {
-          "label": "수입 원가 부담 완화",
+          "label": "수입 재료 사는 돈 부담 줄어듦",
           "score": 100
         },
         {
-          "label": "수출 수익성 자동 개선",
+          "label": "수출 돈 버는 힘 자동 개선",
           "score": 25
         },
         {
@@ -1099,7 +1099,7 @@
       "reasoningChoices": [
         "수입·수출 기업에 미치는 영향을 나눠 본다",
         "환율 숫자 하나만 본다",
-        "그날 인기 종목만 따라간다"
+        "그날 인기 회사만 따라간다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -1158,7 +1158,7 @@
       "reasoningChoices": [
         "기온 전망과 에너지 사용량 추이를 함께 본다",
         "날씨 이모티콘만 본다",
-        "무조건 최고가 종목을 산다"
+        "무조건 최고가 회사을 산다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -1186,11 +1186,11 @@
       ],
       "industryOptions": [
         {
-          "label": "네트워크복구/백업망",
+          "label": "인터넷 복구/예비 인터넷망",
           "score": 100
         },
         {
-          "label": "고화질스트리밍/실시간게임",
+          "label": "고화질영상 서비스/바로 하는 게임",
           "score": 35
         },
         {
@@ -1201,7 +1201,7 @@
       "quizQuestion": "통신 장애 뉴스에서 우선 볼 것은?",
       "quizOptions": [
         {
-          "label": "복구 예상 시간",
+          "label": "고치는 데 걸릴 시간",
           "score": 100
         },
         {
@@ -1244,7 +1244,7 @@
       ],
       "industryOptions": [
         {
-          "label": "친환경농산물/급식물류",
+          "label": "친환경농산물/급식 배송",
           "score": 100
         },
         {
@@ -1302,7 +1302,7 @@
       ],
       "industryOptions": [
         {
-          "label": "숙박/광고마케팅",
+          "label": "숙박/광고",
           "score": 100
         },
         {
@@ -1333,7 +1333,7 @@
       "reasoningChoices": [
         "행사 전후 객실 점유율과 광고 집행을 함께 본다",
         "개막식 영상만 본다",
-        "한 종목에 전액 투자한다"
+        "한 회사에 전액 투자한다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -1360,7 +1360,7 @@
       ],
       "industryOptions": [
         {
-          "label": "핀테크결제/보안인증",
+          "label": "간편 결제/안전 확인 기술",
           "score": 100
         },
         {
@@ -1418,7 +1418,7 @@
       ],
       "industryOptions": [
         {
-          "label": "수소충전/연료전지",
+          "label": "수소 충전/연료전지",
           "score": 100
         },
         {
@@ -1433,7 +1433,7 @@
       "quizQuestion": "친환경 교통 확대의 핵심 자료는?",
       "quizOptions": [
         {
-          "label": "운행 대수와 충전 기반시설",
+          "label": "운행 대수와 충전 기초 시설",
           "score": 100
         },
         {
@@ -1476,7 +1476,7 @@
       ],
       "industryOptions": [
         {
-          "label": "물류자동화/산업로봇",
+          "label": "배송 자동화/일하는 로봇",
           "score": 100
         },
         {
@@ -1534,7 +1534,7 @@
       ],
       "industryOptions": [
         {
-          "label": "건설자재/안전점검",
+          "label": "건설 재료/안전 점검",
           "score": 100
         },
         {
@@ -1565,7 +1565,7 @@
       "reasoningChoices": [
         "예산 확정과 집행 시점을 분리해 확인한다",
         "기사 제목만 보고 결론낸다",
-        "친구와 같은 종목만 산다"
+        "친구와 같은 회사만 산다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -1592,7 +1592,7 @@
       ],
       "industryOptions": [
         {
-          "label": "교육서비스/학습콘텐츠",
+          "label": "교육 서비스/공부 콘텐츠",
           "score": 100
         },
         {
@@ -1623,7 +1623,7 @@
       "reasoningChoices": [
         "지원 대상 확대가 실제 이용 증가로 이어지는지 본다",
         "포스터 문구만 본다",
-        "무조건 최고가 종목을 고른다"
+        "무조건 최고가 회사을 고른다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,
@@ -1650,7 +1650,7 @@
       ],
       "industryOptions": [
         {
-          "label": "바이오생산/콜드체인물류",
+          "label": "바이오 생산/저온 배송",
           "score": 100
         },
         {
@@ -1712,7 +1712,7 @@
           "score": 100
         },
         {
-          "label": "화상회의 대체수요",
+          "label": "화상회의 대신 쓰이던 수요",
           "score": 35
         },
         {
@@ -1737,9 +1737,9 @@
       ],
       "reasoningQuestion": "항공 정상화 뉴스에서 지속성을 보려면?",
       "reasoningChoices": [
-        "탑승률과 노선별 수익성을 함께 본다",
+        "탑승률과 노선별 돈 버는 힘을 함께 본다",
         "공항 사진만 보고 판단한다",
-        "이름이 익숙한 종목만 고른다"
+        "이름이 익숙한 회사만 고른다"
       ],
       "reasoningBestByDifficulty": {
         "easy": 0,

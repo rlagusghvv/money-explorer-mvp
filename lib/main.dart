@@ -1947,19 +1947,113 @@ class _GameFlowTutorialDialog extends StatefulWidget {
 
 class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
   int _step = 0;
+  int? _sampleIndustry;
+  int? _sampleReason;
 
   static const _steps = [
     ('1/5', '📰 뉴스 보기', '짧은 뉴스를 읽고 어떤 일이 생겼는지 먼저 파악해요.'),
-    ('2/5', '✅ 정답 고르기', '가장 관련 있는 산업 카드를 하나 골라요.'),
-    ('3/5', '🧠 이유 고르기', '왜 그렇게 생각했는지 근거를 선택해요.'),
-    ('4/5', '💰 투자 비중 정하기', '20~80% 중에서 투자 비중을 정해요. 너무 크게 넣지 않아도 좋아요.'),
-    ('5/5', '🎁 결과/보상 확인', '결과 카드에서 점수와 보상을 보고 다음 챕터로 가요.'),
+    ('2/5', '✅ 선택하기', '영향 받는 산업을 고르고, 왜 그런지 이유도 골라요.'),
+    ('3/5', '🧠 근거 확인', '힌트 버튼으로 다시 생각하고, 근거를 고쳐도 괜찮아요.'),
+    ('4/5', '💰 비중 정하기', '20~80% 중에서 투자 비중을 정해요. 너무 크게 넣지 않아도 좋아요.'),
+    ('5/5', '🎮 미니 연습문제', '마지막은 실제로 눌러보는 연습문제예요!'),
   ];
+
+  bool get _isLast => _step == _steps.length - 1;
+  bool get _sampleDone => _sampleIndustry != null && _sampleReason != null;
+
+  Widget _sampleChoice({
+    required String text,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: selected ? const Color(0xFFE8F4FF) : Colors.white,
+          border: Border.all(
+            color: selected ? AppDesign.secondary : const Color(0xFFDCE4F2),
+          ),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _samplePracticeCard() {
+    final industryHint = _sampleIndustry == null ? '👉 먼저 아래 산업 버튼 하나 눌러봐!' : '좋아! 이제 아래 이유 버튼도 눌러보자.';
+    final reasonHint = _sampleReason == null ? '👉 이유 버튼을 고르면 연습 완료!' : '완료! 이렇게 실제 게임도 같은 흐름이야.';
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDDE6F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('연습 뉴스: 날씨가 갑자기 추워져서 난방을 많이 켰어요.', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+          const SizedBox(height: 6),
+          const Text('Q1. 어디가 도움을 받을까?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          _sampleChoice(
+            text: '난방 기계 파는 곳',
+            selected: _sampleIndustry == 0,
+            onTap: () => setState(() => _sampleIndustry = 0),
+          ),
+          _sampleChoice(
+            text: '아이스크림 가게',
+            selected: _sampleIndustry == 1,
+            onTap: () => setState(() => _sampleIndustry = 1),
+          ),
+          const SizedBox(height: 4),
+          Text(industryHint, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4C5B77))),
+          const SizedBox(height: 8),
+          const Text('Q2. 그렇게 생각한 이유는?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          _sampleChoice(
+            text: '추우면 난방을 더 많이 써서 관련 물건을 더 살 수 있어요.',
+            selected: _sampleReason == 0,
+            onTap: () => setState(() => _sampleReason = 0),
+          ),
+          _sampleChoice(
+            text: '친구가 그냥 좋다고 해서요.',
+            selected: _sampleReason == 1,
+            onTap: () => setState(() => _sampleReason = 1),
+          ),
+          const SizedBox(height: 4),
+          Text(reasonHint, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4C5B77))),
+          if (_sampleDone)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE9FFF1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBFECD1)),
+              ),
+              child: Text(
+                _sampleIndustry == 0 && _sampleReason == 0
+                    ? '정확해! 뉴스 → 산업 → 이유 순서로 잘 골랐어.'
+                    : '좋은 시도야! 실제 게임에선 정답보다 근거가 얼마나 맞는지가 점수가 돼.',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final current = _steps[_step];
-    final isLast = _step == _steps.length - 1;
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Padding(
@@ -1973,6 +2067,13 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
             Text(current.$2, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
             const SizedBox(height: 8),
             Text(current.$3, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            if (_isLast) _samplePracticeCard(),
+            if (!_isLast)
+              const Text(
+                '처음 한 번만 보여요. 바로 시작하고 싶으면 건너뛰기를 눌러도 돼요.',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
             const SizedBox(height: 14),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
@@ -1981,11 +2082,6 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
                 value: (_step + 1) / _steps.length,
                 backgroundColor: const Color(0xFFE8EEFB),
               ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              '처음 한 번만 보여요. 바로 시작하고 싶으면 건너뛰기를 눌러도 돼요.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 14),
             Row(
@@ -1997,13 +2093,14 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
                 const Spacer(),
                 FilledButton(
                   onPressed: () {
-                    if (isLast) {
+                    if (_isLast) {
+                      if (!_sampleDone) return;
                       Navigator.pop(context, true);
                       return;
                     }
                     setState(() => _step += 1);
                   },
-                  child: Text(isLast ? '연습 시작' : '다음'),
+                  child: Text(_isLast ? (_sampleDone ? '연습 완료!' : '버튼 눌러서 연습 완료하기') : '다음'),
                 ),
               ],
             ),
