@@ -166,11 +166,7 @@ class AppDesign {
   static const BorderRadius chipRadius = BorderRadius.all(Radius.circular(14));
 
   static const List<BoxShadow> cardShadow = [
-    BoxShadow(
-      color: Color(0x120D1632),
-      blurRadius: 18,
-      offset: Offset(0, 8),
-    ),
+    BoxShadow(color: Color(0x120D1632), blurRadius: 18, offset: Offset(0, 8)),
   ];
 
   static TextStyle get title => const TextStyle(
@@ -188,7 +184,11 @@ class AppDesign {
 }
 
 class AppCard extends StatelessWidget {
-  const AppCard({super.key, required this.child, this.padding = const EdgeInsets.all(AppDesign.spaceMd)});
+  const AppCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(AppDesign.spaceMd),
+  });
 
   final Widget child;
   final EdgeInsets padding;
@@ -1493,24 +1493,44 @@ class _GameHomePageState extends State<GameHomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('뉴스 포트폴리오 탐험대'),
+        title: const Text(
+          '뉴스 포트폴리오 탐험대',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        centerTitle: false,
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
       ),
       body: SafeArea(child: pages[_tabIndex]),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: AppDesign.surface,
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: AppDesign.primarySoft,
-        selectedIndex: _tabIndex,
-        onDestinationSelected: (v) => setState(() => _tabIndex = v),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.explore), label: '탐험 맵'),
-          NavigationDestination(icon: Icon(Icons.cottage), label: '마이홈'),
-          NavigationDestination(icon: Icon(Icons.storefront), label: '상점'),
-          NavigationDestination(icon: Icon(Icons.insights), label: '리포트'),
-          NavigationDestination(icon: Icon(Icons.menu_book), label: '가이드'),
-        ],
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A293F6B),
+              blurRadius: 20,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: NavigationBar(
+          height: 68,
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          indicatorColor: const Color(0xFFE8EBFF),
+          selectedIndex: _tabIndex,
+          onDestinationSelected: (v) => setState(() => _tabIndex = v),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.explore), label: '탐험 맵'),
+            NavigationDestination(icon: Icon(Icons.cottage), label: '마이홈'),
+            NavigationDestination(icon: Icon(Icons.storefront), label: '상점'),
+            NavigationDestination(icon: Icon(Icons.insights), label: '리포트'),
+            NavigationDestination(icon: Icon(Icons.menu_book), label: '가이드'),
+          ],
+        ),
       ),
     );
   }
@@ -1584,7 +1604,6 @@ class _PlayTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final isCompactMobile = media.size.width <= 430 || media.size.height <= 820;
     final done = state.currentScenario >= scenarios.length;
     final chapter = done
         ? scenarios.length
@@ -1596,127 +1615,97 @@ class _PlayTab extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppDesign.bgTop, AppDesign.bgBottom, Color(0xFFFFFFFF)],
+          colors: [Color(0xFFF3F6FF), Color(0xFFE8F0FF), Colors.white],
         ),
       ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(16, isCompactMobile ? 10 : 16, 16, 16),
-        child: Column(
-          children: [
-            if (!isCompactMobile) ...[
-              _MascotMapHeader(
-                state: state,
-                total: scenarios.length,
-                mascotEmoji: state.equippedCharacter.emoji,
-                homeEmoji: state.equippedHome.emoji,
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(14, 10, 14, media.padding.bottom + 14),
+        children: [
+          _MascotMapHeader(
+            state: state,
+            total: scenarios.length,
+            mascotEmoji: state.equippedCharacter.emoji,
+            homeEmoji: state.equippedHome.emoji,
+          ),
+          const SizedBox(height: 10),
+          _ChapterObjectiveBanner(
+            chapter: chapter,
+            objective: chapterObjective,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _DifficultySelector(
+                  current: state.selectedDifficulty,
+                  onChanged: onDifficultyChanged,
+                ),
               ),
-              const SizedBox(height: 8),
-              _ChapterObjectiveBanner(
-                chapter: chapter,
-                objective: chapterObjective,
-              ),
-              const SizedBox(height: 10),
-            ] else ...[
+              const SizedBox(width: 8),
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: const Color(0xFFEFF6FF),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1A304566),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  '🧸 챕터 $chapter · $chapterObjective',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              children: [
-                Expanded(
-                  child: _DifficultySelector(
-                    current: state.selectedDifficulty,
-                    onChanged: onDifficultyChanged,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Tooltip(
+                child: Tooltip(
                   message: state.soundMuted ? '효과음 켜기' : '효과음 끄기',
-                  child: IconButton.filledTonal(
+                  child: IconButton(
                     onPressed: () => onSoundMutedChanged(!state.soundMuted),
                     icon: Icon(
-                      state.soundMuted ? Icons.volume_off : Icons.volume_up,
+                      state.soundMuted
+                          ? Icons.volume_off_rounded
+                          : Icons.volume_up_rounded,
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (!isCompactMobile || done) ...[
-              _AdventureMapCard(
-                state: state,
-                totalScenarios: scenarios.length,
-                compact: isCompactMobile,
-                homeEmoji: state.equippedHome.emoji,
               ),
-              const SizedBox(height: 10),
-            ] else ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: const Color(0xFFEAF4FF),
-                ),
-                child: Text(
-                  '🗺️ 집중 모드 · 챕터 ${state.currentScenario + 1}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
             ],
-            if (done)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  color: const Color(0xFFE6FFF4),
-                ),
-                child: const Text(
-                  '🏆 모든 챕터를 완주했어요! 리포트 탭에서 3대 KPI를 확인해보세요.',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              )
-            else
-              Expanded(
-                child: ScenarioPlayCard(
-                  key: ValueKey(
-                    'scenario-${state.currentScenario}-${state.selectedDifficulty.index}',
-                  ),
-                  scenario: scenarios[state.currentScenario],
-                  cash: state.cash,
-                  difficulty: state.selectedDifficulty,
-                  learnerAgeBand: state.learnerAgeBand,
-                  chapterCondition: _conditionForNextChapter(),
-                  soundMuted: state.soundMuted,
-                  onDone: onDone,
-                ),
+          ),
+          const SizedBox(height: 10),
+          _AdventureMapCard(
+            state: state,
+            totalScenarios: scenarios.length,
+            homeEmoji: state.equippedHome.emoji,
+          ),
+          const SizedBox(height: 12),
+          if (done)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                color: const Color(0xFFE7FFF2),
+                border: Border.all(color: const Color(0xFFB6F1CF)),
               ),
-          ],
-        ),
+              child: const Text(
+                '🏆 모든 챕터를 완주했어요! 리포트 탭에서 3대 KPI를 확인해보세요.',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
+            )
+          else
+            SizedBox(
+              height: media.size.height * 0.66,
+              child: ScenarioPlayCard(
+                key: ValueKey(
+                  'scenario-${state.currentScenario}-${state.selectedDifficulty.index}',
+                ),
+                scenario: scenarios[state.currentScenario],
+                cash: state.cash,
+                difficulty: state.selectedDifficulty,
+                learnerAgeBand: state.learnerAgeBand,
+                chapterCondition: _conditionForNextChapter(),
+                soundMuted: state.soundMuted,
+                onDone: onDone,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1737,17 +1726,18 @@ class _ChapterObjectiveBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFFFFF8E8),
-        border: Border.all(color: const Color(0xFFFFDFA5)),
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFFFFF7DF),
+        border: Border.all(color: const Color(0xFFFFDC8B)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('🎯', style: TextStyle(fontSize: 18)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '챕터 $chapter 학습 목표: $objective',
+              '챕터 $chapter 핵심 목표\n$objective',
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 13,
@@ -1783,29 +1773,57 @@ class _MascotMapHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         gradient: const LinearGradient(
-          colors: [Color(0xFFFFF4E5), Color(0xFFE9F7FF)],
+          colors: [Color(0xFF6E63FF), Color(0xFF3E8BFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x40426DFF),
+            blurRadius: 22,
+            offset: Offset(0, 12),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 54,
-            height: 54,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
             ),
             child: Center(
-              child: Text(mascotEmoji, style: const TextStyle(fontSize: 28)),
+              child: Text(mascotEmoji, style: const TextStyle(fontSize: 29)),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              '챕터 $chapter 이동 중 · 자산 ${state.cash}코인\n$homeEmoji 베이스 · 탐험 포인트 ${state.rewardPoints}P',
-              style: const TextStyle(fontWeight: FontWeight.w700),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '탐험맵 챕터 $chapter / $total',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '$homeEmoji 베이스 · ${state.cash}코인 · ${state.rewardPoints}P',
+                  style: const TextStyle(
+                    color: Color(0xFFE8EDFF),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1823,12 +1841,18 @@ class _DifficultySelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AppDesign.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppDesign.border),
-        boxShadow: AppDesign.cardShadow,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDDE5F6)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14304566),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: DifficultyLevel.values
@@ -1838,13 +1862,16 @@ class _DifficultySelector extends StatelessWidget {
                   onTap: () => onChanged(d),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: current == d
-                          ? const Color(0xFF6C63FF)
-                          : const Color(0xFFF1F3F8),
+                      borderRadius: BorderRadius.circular(13),
+                      gradient: current == d
+                          ? const LinearGradient(
+                              colors: [Color(0xFF6E63FF), Color(0xFF4A8BFF)],
+                            )
+                          : null,
+                      color: current == d ? null : const Color(0xFFF2F5FB),
                     ),
                     child: Column(
                       children: [
@@ -1854,17 +1881,20 @@ class _DifficultySelector extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                             color: current == d
                                 ? Colors.white
-                                : const Color(0xFF444B6E),
+                                : const Color(0xFF3F496A),
+                            fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           d.questName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             color: current == d
-                                ? Colors.white70
-                                : Colors.black54,
+                                ? const Color(0xFFE5E9FF)
+                                : const Color(0xFF7C86A3),
                           ),
                         ),
                       ],
@@ -1884,13 +1914,11 @@ class _AdventureMapCard extends StatelessWidget {
     required this.state,
     required this.totalScenarios,
     required this.homeEmoji,
-    this.compact = false,
   });
 
   final AppState state;
   final int totalScenarios;
   final String homeEmoji;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1901,36 +1929,43 @@ class _AdventureMapCard extends StatelessWidget {
     });
 
     return Container(
-      height: compact ? 120 : 170,
+      height: 178,
       width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         gradient: const LinearGradient(
-          colors: [Color(0xFFEAF4FF), Color(0xFFF6EDFF)],
+          colors: [Color(0xFFEAF2FF), Color(0xFFF5EEFF)],
         ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F314566),
+            blurRadius: 22,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Padding(
-        padding: EdgeInsets.all(compact ? 10 : 16),
+        padding: const EdgeInsets.all(14),
         child: LayoutBuilder(
           builder: (context, c) {
             return Stack(
               children: [
                 Positioned(
-                  right: 4,
+                  right: 2,
                   top: 0,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 5,
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      '베이스 $homeEmoji',
+                      '진행중 $homeEmoji',
                       style: const TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         fontSize: 11,
                       ),
                     ),
@@ -1963,8 +1998,8 @@ class _AdventureMapCard extends StatelessWidget {
                     '🌋',
                   ];
                   return Positioned(
-                    left: p.dx * (c.maxWidth - 30),
-                    top: p.dy * (c.maxHeight - 30),
+                    left: p.dx * (c.maxWidth - 34),
+                    top: p.dy * (c.maxHeight - 34),
                     child: _MapNode(
                       index: i + 1,
                       state: status,
@@ -1997,19 +2032,29 @@ class _MapNode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = switch (state) {
-      _NodeState.done => const Color(0xFF34C759),
-      _NodeState.current => const Color(0xFF6C63FF),
+      _NodeState.done => const Color(0xFF2FC46D),
+      _NodeState.current => const Color(0xFF655BFF),
       _NodeState.locked => const Color(0xFFCFD5E4),
     };
 
     return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: bg,
+        shape: BoxShape.circle,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
       child: Center(
         child: state == _NodeState.done
-            ? const Icon(Icons.check, color: Colors.white, size: 17)
-            : Text(icon, style: const TextStyle(fontSize: 14)),
+            ? const Icon(Icons.check_rounded, color: Colors.white, size: 19)
+            : Text(icon, style: const TextStyle(fontSize: 15)),
       ),
     );
   }
@@ -2347,18 +2392,32 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     const totalSteps = 5;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppDesign.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppDesign.border),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6A63FF), Color(0xFF4A8BFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x2B4F68FF),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '진행 단계 ${_stage + 1}/$totalSteps',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: 8),
           ClipRRect(
@@ -2366,14 +2425,18 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             child: LinearProgressIndicator(
               minHeight: 8,
               value: (_stage + 1) / totalSteps,
-              backgroundColor: const Color(0xFFE9EDF7),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF6C63FF)),
+              backgroundColor: Colors.white24,
+              valueColor: const AlwaysStoppedAnimation(Colors.white),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             _mascotSpeech,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFE8EDFF),
+            ),
           ),
         ],
       ),
@@ -2680,30 +2743,49 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
+        duration: const Duration(milliseconds: 170),
         margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: selected ? AppDesign.primarySoft : AppDesign.surface,
+          gradient: selected
+              ? const LinearGradient(
+                  colors: [Color(0xFFEEF0FF), Color(0xFFEAF5FF)],
+                )
+              : null,
+          color: selected ? null : Colors.white,
           border: Border.all(
-            color: selected ? AppDesign.primary : AppDesign.border,
+            color: selected ? const Color(0xFF7167FF) : const Color(0xFFDDE4F3),
+            width: selected ? 1.5 : 1,
           ),
-          boxShadow: selected ? AppDesign.cardShadow : null,
+          boxShadow: selected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x1F4A67D3),
+                    blurRadius: 14,
+                    offset: Offset(0, 6),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           children: [
             Icon(
-              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked,
               color: selected
-                  ? const Color(0xFF6C63FF)
-                  : const Color(0xFF9DA6BC),
+                  ? const Color(0xFF675EFF)
+                  : const Color(0xFFA2ABC1),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -3045,33 +3127,75 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   Widget _scenarioHeadline(Scenario s) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F8FF),
-        borderRadius: BorderRadius.circular(12),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF3F7FF), Color(0xFFF7F2FF)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDDE5F7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '챕터 ${s.id}',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF5B688F),
+            ),
           ),
-          const SizedBox(height: 2),
-          Text(s.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(
+            s.title,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+          ),
         ],
       ),
     );
   }
 
   Widget _gameSection({required String title, required Widget child}) {
-    return AppCard(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x17304066),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppDesign.title.copyWith(fontSize: 16)),
-          const SizedBox(height: 6),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF1FF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF5A62E8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           child,
         ],
       ),
@@ -4298,66 +4422,66 @@ class _ShopTab extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(12),
       child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            ...items.map((item) {
-              final owned = state.ownedItemIds.contains(item.id);
-              final equipped = switch (item.type) {
-                CosmeticType.character => state.equippedCharacterId == item.id,
-                CosmeticType.home => state.equippedHomeId == item.id,
-                CosmeticType.decoration =>
-                  item.zone != null &&
-                      state.equippedDecorations[item.zone!] == item.id,
-              };
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          ...items.map((item) {
+            final owned = state.ownedItemIds.contains(item.id);
+            final equipped = switch (item.type) {
+              CosmeticType.character => state.equippedCharacterId == item.id,
+              CosmeticType.home => state.equippedHomeId == item.id,
+              CosmeticType.decoration =>
+                item.zone != null &&
+                    state.equippedDecorations[item.zone!] == item.id,
+            };
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: equipped
-                      ? const Color(0xFFE8F8EE)
-                      : const Color(0xFFF7F8FC),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ItemThumbnail(item: item),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${item.name}${item.zone == null ? '' : ' (${item.zone!.label})'} · ${item.price}P',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          Text(
-                            item.description,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: equipped
+                    ? const Color(0xFFE8F8EE)
+                    : const Color(0xFFF7F8FC),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ItemThumbnail(item: item),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${item.name}${item.zone == null ? '' : ' (${item.zone!.label})'} · ${item.price}P',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          item.description,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonal(
-                      onPressed: equipped ? null : () => onBuyOrEquip(item),
-                      child: Text(
-                        equipped
-                            ? '장착중'
-                            : owned
-                            ? '장착'
-                            : '구매',
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonal(
+                    onPressed: equipped ? null : () => onBuyOrEquip(item),
+                    child: Text(
+                      equipped
+                          ? '장착중'
+                          : owned
+                          ? '장착'
+                          : '구매',
                     ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }
