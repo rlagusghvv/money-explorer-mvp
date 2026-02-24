@@ -45,11 +45,11 @@ class ChapterCondition {
 
   String summary(LearnerAgeBand band) {
     final volatilityWord = volatilityShift > 0
-        ? '변동성 +$volatilityShift'
+        ? '+$volatilityShift'
         : volatilityShift < 0
-        ? '변동성 $volatilityShift'
-        : '변동성 0';
-    return '${marketMood.icon(band)} 시장기분 ${marketMood.label} · $volatilityWord\n$riskContext';
+        ? '$volatilityShift'
+        : '0';
+    return '${marketMood.icon(band)} ${marketMood.label} · 변동 $volatilityWord';
   }
 }
 
@@ -1324,7 +1324,7 @@ class _PlayTab extends StatelessWidget {
                 child: Text(
                   '🧸 챕터 $chapter · $chapterObjective',
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     fontSize: 12.5,
                   ),
                 ),
@@ -1335,8 +1335,6 @@ class _PlayTab extends StatelessWidget {
               current: state.selectedDifficulty,
               onChanged: onDifficultyChanged,
             ),
-            const SizedBox(height: 8),
-            _LearnerProfileBanner(state: state),
             const SizedBox(height: 8),
             if (!isCompactMobile || done) ...[
               _AdventureMapCard(
@@ -1358,7 +1356,7 @@ class _PlayTab extends StatelessWidget {
                   color: const Color(0xFFEAF4FF),
                 ),
                 child: Text(
-                  '🗺️ 모바일은 문제 풀이 집중 모드예요. (현재 챕터: ${state.currentScenario + 1})',
+                  '🗺️ 집중 모드 · 챕터 ${state.currentScenario + 1}',
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
@@ -1551,28 +1549,6 @@ class _DifficultySelector extends StatelessWidget {
               ),
             )
             .toList(),
-      ),
-    );
-  }
-}
-
-class _LearnerProfileBanner extends StatelessWidget {
-  const _LearnerProfileBanner({required this.state});
-
-  final AppState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F2FF),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        '👤 학습자 프로필: ${state.learnerAgeBand.label} · ${state.learnerAgeBand.learningStyle}',
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }
@@ -1785,9 +1761,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int _wrongAttempts = 0;
   _PerformanceSnapshot? _resultSnapshot;
   ScenarioResult? _pendingResult;
-  String _mascotSpeech = '뉴스를 읽고 어떤 산업이 먼저 움직일지 찾아보자!';
+  String _mascotSpeech = '뉴스 한 줄! 어디가 움직일까?';
 
-  static const String _fallbackReasoningQuestion = '어떤 분석 관점이 가장 중요할까?';
   static const List<String> _fallbackReasoningChoices = [
     '뉴스와 직접 연결된 산업 먼저 확인',
     '영향이 몇 주/몇 달 갈지 기간 확인',
@@ -1805,24 +1780,20 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
   String _bandPrompt(String base) {
     return switch (widget.learnerAgeBand) {
-      LearnerAgeBand.younger => '쉽게 풀어보자: $base',
-      LearnerAgeBand.middle => '생각해보자: $base',
-      LearnerAgeBand.older => '분석 포인트: $base',
+      LearnerAgeBand.younger => '쉽게: $base',
+      LearnerAgeBand.middle => '생각: $base',
+      LearnerAgeBand.older => '분석: $base',
     };
   }
 
   String _hintText(Scenario s) {
     return switch (widget.learnerAgeBand) {
       LearnerAgeBand.younger =>
-        '힌트: 예를 들어 에어컨·전기처럼 바로 쓰임이 늘면 수혜가 될 수 있어요. '
-            '이번 뉴스에서는 "${s.goodIndustries.first}" 쪽이 유리하고, '
-            '"${s.badIndustries.first}" 쪽은 조심해요.',
+        '힌트: 수혜 "${s.goodIndustries.first}" 👍 / 주의 "${s.badIndustries.first}" ⚠️',
       LearnerAgeBand.middle =>
-        '힌트: 수혜(${s.goodIndustries.join(', ')})와 피해(${s.badIndustries.join(', ')})를 함께 놓고 '
-            '영향 기간(짧음/중간)을 비교해보세요.',
+        '힌트: 수혜 ${s.goodIndustries.join(', ')} · 주의 ${s.badIndustries.join(', ')}',
       LearnerAgeBand.older =>
-        '힌트: 1차 수혜(${s.goodIndustries.join(', ')})뿐 아니라 2차 파급과 '
-            '역풍 요인(${s.badIndustries.join(', ')})을 같이 검토해 기대수익 대비 리스크를 계산해보세요.',
+        '힌트: 수혜 ${s.goodIndustries.join(', ')} / 역풍 ${s.badIndustries.join(', ')}',
     };
   }
 
@@ -1838,10 +1809,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     _quizChoices = [...widget.scenario.quizOptions]
       ..shuffle(Random(widget.scenario.id * 991 + DateTime.now().microsecond));
   }
-
-  String get _reasoningQuestion => _bandPrompt(
-    widget.scenario.reasoningQuestion ?? _fallbackReasoningQuestion,
-  );
 
   List<String> get _reasoningChoices {
     final custom = widget.scenario.reasoningChoices;
@@ -2085,7 +2052,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       setState(() {
         _wrongAttempts = 1;
         _hintUnlocked = true;
-        _mascotSpeech = '좋은 시도야! 정답 하나가 아니라 점수를 올리는 방식이야. 힌트를 열었어!';
+        _mascotSpeech = '좋은 시도! 힌트 열렸어. 한 번 더 해보자!';
         _resultSnapshot = null;
       });
       return;
@@ -2129,8 +2096,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     setState(() {
       _submitted = true;
       _mascotSpeech = learningScore >= 80
-          ? '멋져! 투자 비중과 판단 근거를 함께 잘 맞췄어!'
-          : '좋아! 이번 기록을 바탕으로 다음 챕터에서 비중 조절까지 연습해보자.';
+          ? '멋져! 근거와 비중 둘 다 좋았어!'
+          : '좋아! 다음은 비중만 조금 더 다듬자.';
       _resultSnapshot = _PerformanceSnapshot(
         scenarioTitle: widget.scenario.title,
         judgementScore: judgementScore,
@@ -2211,7 +2178,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         _newsCard(s),
         const SizedBox(height: 10),
         _gameSection(
-          title: '1) ${_bandPrompt('어떤 산업 카드에 투자할까?')}',
+          title: '1) 산업 선택',
           child: Column(
             children: List.generate(
               _industryChoices.length,
@@ -2222,7 +2189,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                     ? null
                     : () => setState(() {
                         _selectedIndustry = i;
-                        _mascotSpeech = '좋아! 다음은 근거를 더 깊게 정리해보자.';
+                        _mascotSpeech = '좋아! 이제 이유를 고르자.';
                       }),
               ),
             ),
@@ -2230,7 +2197,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '2) $_reasoningQuestion',
+          title: '2) 이유 선택',
           child: Column(
             children: List.generate(
               _reasoningChoices.length,
@@ -2241,7 +2208,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                     ? null
                     : () => setState(() {
                         _reasoningAnswer = i;
-                        _mascotSpeech = '좋아! 이제 리스크 비율을 조절해보자.';
+                        _mascotSpeech = '좋아! 퀴즈 한 문제만 더!';
                       }),
               ),
             ),
@@ -2249,9 +2216,17 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '3) ${_bandPrompt(s.quizQuestion)}',
+          title: '3) 퀴즈',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                _bandPrompt(s.quizQuestion),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
               ...List.generate(
                 _quizChoices.length,
                 (i) => _choiceTile(
@@ -2293,7 +2268,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '이제 마지막 단계! 투자 비중을 선택해요. (높을수록 수익/손실 모두 커짐)',
+                        '높을수록 많이 오르고, 많이 내려요.',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -2313,8 +2288,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                                 ? null
                                 : (_) => setState(() {
                                     _allocationPercent = v;
-                                    _mascotSpeech =
-                                        '좋아, $v% 비중 확정! 이제 점수를 확인해보자!';
+                                    _mascotSpeech = '좋아, $v% 선택 완료!';
                                   }),
                           );
                         }).toList(),
@@ -2324,8 +2298,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                         alignment: Alignment.centerRight,
                         child: Text(
                           _allocation == null
-                              ? '투자 비중을 선택해 주세요.'
-                              : '투자금 $_investedCoins코인 (보유 ${widget.cash}코인 중 $_allocation%)',
+                              ? '비중을 골라주세요.'
+                              : '투자금 $_investedCoins코인',
                         ),
                       ),
                     ],
@@ -2419,50 +2393,34 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '🗺️ ${widget.difficulty.questName} · 챕터 ${s.id} · ${widget.learnerAgeBand.label}',
+            '🗺️ 챕터 ${s.id}',
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             s.title,
             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
           ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF3FF),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              '이번 챕터 핵심: $_chapterObjective',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF3D4E91),
-                fontSize: 12,
-              ),
-            ),
-          ),
           const SizedBox(height: 8),
-          Text(
-            '학습 모드: ${widget.learnerAgeBand.introLine}',
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F7FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '🔀 분기 컨디션\n${widget.chapterCondition.summary(widget.learnerAgeBand)}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _tag(
+                '🎯 $_chapterObjective',
+                const Color(0xFFEFF3FF),
+                const Color(0xFF3D4E91),
+              ),
+              _tag(
+                widget.chapterCondition.summary(widget.learnerAgeBand),
+                const Color(0xFFE8F7FF),
+                const Color(0xFF245E7A),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(s.news),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           if (widget.difficulty == DifficultyLevel.easy)
             Wrap(
               spacing: 8,
@@ -2482,7 +2440,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             )
           else
             const Text(
-              '💡 고급 모드: 수혜/피해와 기간을 스스로 추론해 점수를 높여보세요.',
+              '💡 스스로 수혜/주의 산업을 찾아보자!',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF4E5B7A),
@@ -2597,12 +2555,6 @@ class _PerformanceResultCard extends StatelessWidget {
     return '괜찮아, 탐험은 연습이야! 투자 비율을 조절하면 더 안정적으로 갈 수 있어.';
   }
 
-  String get _riskComment {
-    if (snapshot.volatilityRisk <= 20) return '흔들림이 작아 안정적이야.';
-    if (snapshot.volatilityRisk <= 40) return '적당한 흔들림, 관리 가능한 수준!';
-    return '변동성이 큰 편이야. 분산과 비율 조절을 시도해보자!';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -2632,46 +2584,29 @@ class _PerformanceResultCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '• 다음 챕터 컨디션: ${snapshot.chapterConditionLine}',
+            '다음 챕터: ${snapshot.chapterConditionLine}',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
-          Text('• 투자 비중: ${snapshot.allocationPercent}%'),
-          Text('• 투자금: ${snapshot.invested}코인'),
-          Text('• 수익/손실 계산: ${snapshot.formulaLine}'),
+          Text(
+            '비중 ${snapshot.allocationPercent}% · 투자금 ${snapshot.invested}코인',
+          ),
           if (snapshot.hintPenalty > 0)
-            Text('• 힌트 사용 페널티: -${snapshot.hintPenalty}코인'),
+            Text(
+              '힌트 -${snapshot.hintPenalty}코인',
+              style: const TextStyle(fontSize: 12),
+            ),
           Text(
-            '• 최종 변화: ${snapshot.finalProfit >= 0 ? '+' : ''}${snapshot.finalProfit}코인',
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            '최종 ${snapshot.finalProfit >= 0 ? '+' : ''}${snapshot.finalProfit}코인',
+            style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
           Text(
-            '• 리스크 해석: $_riskComment',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          const Text('🎯 맞춤 코칭', style: TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text(
-            '1) 잘한 점: ${snapshot.goodPoint}',
+            '코칭: ${snapshot.nextAction}',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
           Text(
-            '2) 아쉬운 점: ${snapshot.weakPoint}',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          Text(
-            '3) 다음 행동: ${snapshot.nextAction}',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '• 보너스 팁: ${snapshot.coachingLine}',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          Text(
-            '• 총평: $_overallComment',
+            '한 줄 요약: $_overallComment',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
         ],
