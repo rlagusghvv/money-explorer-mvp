@@ -1820,7 +1820,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   String _mascotSpeech = '뉴스 한 줄! 어디가 움직일까?';
   int _stage = 0;
   final AudioPlayer _sfxPlayer = AudioPlayer();
-  bool _audioUnlocked = false;
 
   static const List<String> _fallbackReasoningChoices = [
     '뉴스와 직접 연결된 산업 먼저 확인',
@@ -1996,25 +1995,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     };
   }
 
-  Future<void> _ensureAudioUnlocked() async {
-    if (_audioUnlocked || widget.soundMuted) return;
-    try {
-      await _sfxPlayer.setVolume(0);
-      if (kIsWeb) {
-        final webAssetUrl = Uri.base.resolve('assets/assets/audio/correct_beep.wav').toString();
-        await _sfxPlayer.play(UrlSource(webAssetUrl));
-      } else {
-        await _sfxPlayer.play(AssetSource('audio/correct_beep.wav'));
-      }
-      await _sfxPlayer.stop();
-      await _sfxPlayer.setVolume(1);
-      _audioUnlocked = true;
-    } catch (_) {
-      // iOS WebView/Safari 오디오 잠금이 남아있을 수 있어 다음 사용자 제스처에서 재시도.
-    }
-  }
-
-  List<String> _webAudioCandidates(String assetRelativePath) {
+    List<String> _webAudioCandidates(String assetRelativePath) {
     final mp3Path = assetRelativePath.endsWith('.wav')
         ? assetRelativePath.replaceFirst('.wav', '.mp3')
         : assetRelativePath;
@@ -2033,8 +2014,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       }
       return;
     }
-
-    await _ensureAudioUnlocked();
 
     try {
       await _sfxPlayer.setVolume(volume);
@@ -2111,8 +2090,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
   void _selectWithSfx(VoidCallback updater) {
     if (_submitted) return;
-    setState(updater);
     _playSelectSfx();
+    setState(updater);
   }
 
   Future<void> _confirmCurrentStep() async {
