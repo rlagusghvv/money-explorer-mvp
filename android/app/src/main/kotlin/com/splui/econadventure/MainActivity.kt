@@ -1,4 +1,4 @@
-package com.example.kid_econ_mvp
+package com.splui.econadventure
 
 import io.flutter.embedding.android.FlutterActivity
 
