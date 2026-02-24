@@ -145,17 +145,27 @@ extension DifficultyLabel on DifficultyLevel {
 }
 
 class AppDesign {
-  static const Color bgTop = Color(0xFFF3F6FF);
-  static const Color bgBottom = Color(0xFFEDF3FF);
+  // Kid-friendly palette inspired by cheerful learning apps (Duolingo-like).
+  static const Color bgTop = Color(0xFFF3FFF4);
+  static const Color bgBottom = Color(0xFFEAF6FF);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceSoft = Color(0xFFF6F8FF);
-  static const Color primary = Color(0xFF5B61F6);
-  static const Color primarySoft = Color(0xFFE7E9FF);
-  static const Color accent = Color(0xFF20A772);
-  static const Color warning = Color(0xFFFFB84D);
-  static const Color textStrong = Color(0xFF1F2A44);
-  static const Color textMuted = Color(0xFF66708A);
-  static const Color border = Color(0xFFDCE3F4);
+  static const Color surfaceSoft = Color(0xFFF6FBFF);
+
+  static const Color primary = Color(0xFF58CC02);
+  static const Color primaryDeep = Color(0xFF3E9E1A);
+  static const Color primarySoft = Color(0xFFEAF8DC);
+  static const Color secondary = Color(0xFF1CB0F6);
+  static const Color secondarySoft = Color(0xFFE3F5FF);
+  static const Color accent = Color(0xFFFFC800);
+  static const Color warning = Color(0xFFFF9F43);
+
+  static const Color success = Color(0xFF2BB673);
+  static const Color danger = Color(0xFFE1565B);
+
+  static const Color textStrong = Color(0xFF1F2937);
+  static const Color textMuted = Color(0xFF5B6476);
+  static const Color textOnDark = Color(0xFFFFFFFF);
+  static const Color border = Color(0xFFD7E6EF);
 
   static const double spaceXs = 6;
   static const double spaceSm = 10;
@@ -234,7 +244,9 @@ class KidEconMvpApp extends StatelessWidget {
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: AppDesign.primary,
-            foregroundColor: Colors.white,
+            foregroundColor: AppDesign.textStrong,
+            disabledBackgroundColor: const Color(0xFFE2E8F0),
+            disabledForegroundColor: const Color(0xFF8A94A6),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
@@ -1197,7 +1209,7 @@ class _GameHomePageState extends State<GameHomePage> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: selectedBand == band
-                              ? const Color(0xFF6C63FF)
+                              ? AppDesign.secondary
                               : const Color(0xFFD8DCEE),
                         ),
                         color: selectedBand == band
@@ -1519,7 +1531,7 @@ class _GameHomePageState extends State<GameHomePage> {
           height: 68,
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
-          indicatorColor: const Color(0xFFE8EBFF),
+          indicatorColor: AppDesign.primarySoft,
           selectedIndex: _tabIndex,
           onDestinationSelected: (v) => setState(() => _tabIndex = v),
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
@@ -1615,7 +1627,7 @@ class _PlayTab extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF3F6FF), Color(0xFFE8F0FF), Colors.white],
+          colors: [AppDesign.bgTop, AppDesign.secondarySoft, Colors.white],
         ),
       ),
       child: ListView(
@@ -1727,8 +1739,8 @@ class _ChapterObjectiveBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFFFFF7DF),
-        border: Border.all(color: const Color(0xFFFFDC8B)),
+        color: const Color(0xFFFFF4D9),
+        border: Border.all(color: const Color(0xFFFFE18A)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1741,7 +1753,7 @@ class _ChapterObjectiveBanner extends StatelessWidget {
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 13,
-                color: Color(0xFF5F4A1F),
+                color: Color(0xFF4A3D1B),
               ),
             ),
           ),
@@ -1775,7 +1787,7 @@ class _MascotMapHeader extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         gradient: const LinearGradient(
-          colors: [Color(0xFF6E63FF), Color(0xFF3E8BFF)],
+          colors: [AppDesign.primaryDeep, AppDesign.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1868,7 +1880,7 @@ class _DifficultySelector extends StatelessWidget {
                       borderRadius: BorderRadius.circular(13),
                       gradient: current == d
                           ? const LinearGradient(
-                              colors: [Color(0xFF6E63FF), Color(0xFF4A8BFF)],
+                              colors: [AppDesign.primaryDeep, AppDesign.secondary],
                             )
                           : null,
                       color: current == d ? null : const Color(0xFFF2F5FB),
@@ -2032,9 +2044,9 @@ class _MapNode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = switch (state) {
-      _NodeState.done => const Color(0xFF2FC46D),
-      _NodeState.current => const Color(0xFF655BFF),
-      _NodeState.locked => const Color(0xFFCFD5E4),
+      _NodeState.done => AppDesign.success,
+      _NodeState.current => AppDesign.secondary,
+      _NodeState.locked => const Color(0xFFC8D4E2),
     };
 
     return Container(
@@ -2069,11 +2081,11 @@ class _MapPathPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final donePaint = Paint()
-      ..color = const Color(0xFF62D48F)
+      ..color = const Color(0xFF43C97C)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 6;
     final todoPaint = Paint()
-      ..color = const Color(0x80A8B3C7)
+      ..color = const Color(0x809DB2C6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 6;
 
@@ -2395,7 +2407,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF6A63FF), Color(0xFF4A8BFF)],
+          colors: [AppDesign.primaryDeep, AppDesign.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -2750,12 +2762,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           borderRadius: BorderRadius.circular(16),
           gradient: selected
               ? const LinearGradient(
-                  colors: [Color(0xFFEEF0FF), Color(0xFFEAF5FF)],
+                  colors: [AppDesign.secondarySoft, Color(0xFFE9FBFF)],
                 )
               : null,
           color: selected ? null : Colors.white,
           border: Border.all(
-            color: selected ? const Color(0xFF7167FF) : const Color(0xFFDDE4F3),
+            color: selected ? AppDesign.secondary : AppDesign.border,
             width: selected ? 1.5 : 1,
           ),
           boxShadow: selected
@@ -3107,7 +3119,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                     },
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
-                backgroundColor: const Color(0xFF1F8D48),
+                backgroundColor: AppDesign.primaryDeep,
                 foregroundColor: Colors.white,
               ),
               icon: const Icon(Icons.arrow_forward),
@@ -3286,7 +3298,7 @@ class _PerformanceResultCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         gradient: const LinearGradient(
-          colors: [Color(0xFFF6F9FF), Color(0xFFEFF4FF)],
+          colors: [AppDesign.surfaceSoft, AppDesign.secondarySoft],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -3418,7 +3430,7 @@ class _HomeThemePreset {
         name: 'Ocean',
       ),
       _ => const _HomeThemePreset(
-        wallGradient: [Color(0xFFF3F6FF), Color(0xFFDCE6FF)],
+        wallGradient: [AppDesign.bgTop, Color(0xFFDCE6FF)],
         floorGradient: [Color(0xFFF4DDBA), Color(0xFFDAAF75)],
         accent: Color(0xFF5A6DA5),
         atmosphere: '🏕️',
@@ -3913,7 +3925,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                                       decoration: BoxDecoration(
                                         border: selected
                                             ? Border.all(
-                                                color: const Color(0xFF6C63FF),
+                                                color: AppDesign.secondary,
                                                 width: 2,
                                               )
                                             : null,
@@ -3949,7 +3961,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                                         width: 30,
                                         height: 30,
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF6C63FF),
+                                          color: AppDesign.secondary,
                                           borderRadius: BorderRadius.circular(
                                             16,
                                           ),
@@ -4328,10 +4340,10 @@ class _SlotPreviewChip extends StatelessWidget {
         width: 88,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAEFFF) : Colors.white,
+          color: selected ? AppDesign.secondarySoft : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? const Color(0xFF6C63FF) : const Color(0xFFDCE0EA),
+            color: selected ? AppDesign.secondary : AppDesign.border,
           ),
         ),
         child: Column(
@@ -4381,7 +4393,7 @@ class _ShopTab extends StatelessWidget {
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFEFF4FF), Color(0xFFE7F7F0)],
+                colors: [AppDesign.secondarySoft, AppDesign.primarySoft],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -4442,7 +4454,7 @@ class _ShopTab extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 color: equipped
-                    ? const Color(0xFFE8F8EE)
+                    ? AppDesign.primarySoft
                     : const Color(0xFFF7F8FC),
               ),
               child: Row(
