@@ -864,8 +864,7 @@ class AppStateStore {
               ? decorationRaw[zone.key] as String?
               : null,
       },
-      homeThemeName:
-          (prefs.getString(_kHomeThemeName) ?? '').trim().isNotEmpty
+      homeThemeName: (prefs.getString(_kHomeThemeName) ?? '').trim().isNotEmpty
           ? (prefs.getString(_kHomeThemeName) ?? '').trim()
           : initial.homeThemeName,
       totalPointsSpent:
@@ -2082,17 +2081,17 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     };
   }
 
-    List<String> _webAudioCandidates(String assetRelativePath) {
+  List<String> _webAudioCandidates(String assetRelativePath) {
     final mp3Path = assetRelativePath.endsWith('.wav')
         ? assetRelativePath.replaceFirst('.wav', '.mp3')
         : assetRelativePath;
-    return [
-      assetRelativePath,
-      mp3Path,
-    ];
+    return [assetRelativePath, mp3Path];
   }
 
-  Future<void> _playSfxAsset(String assetRelativePath, {double volume = 1}) async {
+  Future<void> _playSfxAsset(
+    String assetRelativePath, {
+    double volume = 1,
+  }) async {
     if (widget.soundMuted) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3212,7 +3211,7 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '🏠 사이월드 감성 마이홈',
+                    '마이홈 스튜디오',
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 8),
@@ -3380,7 +3379,11 @@ class _RoomAnchor {
 }
 
 class _RoomPlacedItem {
-  const _RoomPlacedItem({required this.item, required this.anchor, required this.zone});
+  const _RoomPlacedItem({
+    required this.item,
+    required this.anchor,
+    required this.zone,
+  });
 
   final ShopItem item;
   final _RoomAnchor anchor;
@@ -3402,7 +3405,11 @@ class _MyHomeRoomCard extends StatelessWidget {
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(0, -0.55), Size(168, 66), 1),
-    DecorationZone.window: _RoomAnchor(Alignment(0.72, -0.45), Size(100, 68), 2),
+    DecorationZone.window: _RoomAnchor(
+      Alignment(0.72, -0.45),
+      Size(100, 68),
+      2,
+    ),
     DecorationZone.shelf: _RoomAnchor(Alignment(-0.7, -0.05), Size(100, 54), 3),
     DecorationZone.desk: _RoomAnchor(Alignment(0.62, 0.08), Size(112, 58), 4),
     DecorationZone.floor: _RoomAnchor(Alignment(-0.58, 0.62), Size(130, 58), 5),
@@ -3411,16 +3418,17 @@ class _MyHomeRoomCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = _HomeThemePreset.fromHomeId(state.equippedHomeId);
-    final items = DecorationZone.values
-        .map((zone) {
-          final item = itemById(state.equippedDecorations[zone]);
-          final anchor = _anchors[zone];
-          if (item == null || anchor == null) return null;
-          return _RoomPlacedItem(item: item, anchor: anchor, zone: zone);
-        })
-        .whereType<_RoomPlacedItem>()
-        .toList()
-      ..sort((a, b) => a.anchor.depth.compareTo(b.anchor.depth));
+    final items =
+        DecorationZone.values
+            .map((zone) {
+              final item = itemById(state.equippedDecorations[zone]);
+              final anchor = _anchors[zone];
+              if (item == null || anchor == null) return null;
+              return _RoomPlacedItem(item: item, anchor: anchor, zone: zone);
+            })
+            .whereType<_RoomPlacedItem>()
+            .toList()
+          ..sort((a, b) => a.anchor.depth.compareTo(b.anchor.depth));
 
     return Card(
       child: Padding(
@@ -3429,7 +3437,7 @@ class _MyHomeRoomCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '🎨 ${state.homeThemeName} · ${theme.atmosphere} ${theme.name}',
+              '${state.homeThemeName} · ${theme.name}',
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
@@ -3445,11 +3453,15 @@ class _MyHomeRoomCard extends StatelessWidget {
                           painter: _MiniRoomShellPainter(theme: theme),
                         ),
                       ),
-                      Positioned.fill(child: _ThemeAtmosphereLayer(theme: theme)),
+                      Positioned.fill(
+                        child: _ThemeAtmosphereLayer(theme: theme),
+                      ),
                       ...items.map((placed) {
-                        final left = (c.maxWidth - placed.anchor.size.width) *
+                        final left =
+                            (c.maxWidth - placed.anchor.size.width) *
                             ((placed.anchor.alignment.x + 1) / 2);
-                        final top = (c.maxHeight - placed.anchor.size.height) *
+                        final top =
+                            (c.maxHeight - placed.anchor.size.height) *
                             ((placed.anchor.alignment.y + 1) / 2);
                         return Positioned(
                           left: left,
@@ -3459,43 +3471,39 @@ class _MyHomeRoomCard extends StatelessWidget {
                           child: _DecorationObject(item: placed.item),
                         );
                       }),
-                      ..._anchors.entries.map((entry) {
-                        final anchor = entry.value;
-                        return Align(
-                          alignment: anchor.alignment,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 2),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              entry.key.label,
-                              style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        );
-                      }),
+
+                      // 슬롯 라벨은 모바일 화면 혼잡도를 줄이기 위해 노출하지 않습니다.
                       Align(
                         alignment: const Alignment(0.04, 0.42),
                         child: Container(
                           constraints: const BoxConstraints(maxWidth: 140),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.96),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: theme.accent.withValues(alpha: 0.3)),
+                            border: Border.all(
+                              color: theme.accent.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(state.equippedCharacter.emoji, style: const TextStyle(fontSize: 34)),
+                              _ItemThumbnail(
+                                item: state.equippedCharacter,
+                                compact: true,
+                              ),
+                              const SizedBox(height: 4),
                               Text(
                                 state.equippedCharacter.name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11,
+                                ),
                               ),
                             ],
                           ),
@@ -3506,13 +3514,24 @@ class _MyHomeRoomCard extends StatelessWidget {
                         opacity: showEquipFx ? 1 : 0,
                         child: Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFFFCE1),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: const Color(0xFFFFE083)),
+                              border: Border.all(
+                                color: const Color(0xFFFFE083),
+                              ),
                             ),
-                            child: Text('✨ $equipFxLabel', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                            child: Text(
+                              '✨ $equipFxLabel',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -3523,7 +3542,7 @@ class _MyHomeRoomCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '현재 홈 테마: ${state.equippedHome.emoji} ${state.equippedHome.name}',
+              '현재 홈 테마: ${state.equippedHome.name}',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ],
@@ -3556,11 +3575,19 @@ class _MiniRoomShellPainter extends CustomPainter {
       ..lineTo(0, size.height)
       ..close();
     final floorPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: theme.floorGradient,
-      ).createShader(Rect.fromLTWH(0, size.height * 0.62, size.width, size.height * 0.38));
+      ..shader =
+          LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: theme.floorGradient,
+          ).createShader(
+            Rect.fromLTWH(
+              0,
+              size.height * 0.62,
+              size.width,
+              size.height * 0.38,
+            ),
+          );
     canvas.drawPath(floorPath, floorPaint);
 
     final seamPaint = Paint()
@@ -3587,21 +3614,24 @@ class _ThemeAtmosphereLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     if (theme.name == 'Forest') {
       return Stack(
-        children: const [
+        children: [
           Positioned(
-            left: 10,
-            bottom: 84,
-            child: Text('🌲', style: TextStyle(fontSize: 26)),
+            left: 12,
+            bottom: 90,
+            child: Icon(
+              Icons.park,
+              size: 22,
+              color: theme.accent.withValues(alpha: 0.42),
+            ),
           ),
           Positioned(
-            left: 44,
+            right: 20,
             bottom: 88,
-            child: Text('🌿', style: TextStyle(fontSize: 20)),
-          ),
-          Positioned(
-            right: 18,
-            bottom: 86,
-            child: Text('🌲', style: TextStyle(fontSize: 24)),
+            child: Icon(
+              Icons.eco,
+              size: 20,
+              color: theme.accent.withValues(alpha: 0.34),
+            ),
           ),
         ],
       );
@@ -3610,55 +3640,179 @@ class _ThemeAtmosphereLayer extends StatelessWidget {
       return Align(
         alignment: Alignment.bottomCenter,
         child: Container(
-          height: 84,
-          margin: const EdgeInsets.only(bottom: 92),
+          height: 70,
+          margin: const EdgeInsets.only(bottom: 96),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Colors.transparent, theme.accent.withValues(alpha: 0.2)],
+              colors: [
+                Colors.transparent,
+                theme.accent.withValues(alpha: 0.14),
+              ],
             ),
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('🏢', style: TextStyle(fontSize: 18)),
-              Text('🏬', style: TextStyle(fontSize: 18)),
-              Text('🏙️', style: TextStyle(fontSize: 20)),
-              Text('🏢', style: TextStyle(fontSize: 18)),
-            ],
           ),
         ),
       );
     }
     if (theme.name == 'Space') {
       return Stack(
-        children: const [
+        children: [
           Positioned(
-            left: 18,
-            top: 18,
-            child: Text('⭐', style: TextStyle(fontSize: 14)),
+            left: 24,
+            top: 20,
+            child: Icon(
+              Icons.star,
+              size: 14,
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
           ),
           Positioned(
-            right: 24,
-            top: 28,
-            child: Text('✨', style: TextStyle(fontSize: 16)),
-          ),
-          Positioned(
-            left: 70,
-            top: 40,
-            child: Text('🪐', style: TextStyle(fontSize: 20)),
-          ),
-          Positioned(
-            right: 62,
-            top: 60,
-            child: Text('🌌', style: TextStyle(fontSize: 16)),
+            right: 30,
+            top: 34,
+            child: Icon(
+              Icons.brightness_2,
+              size: 16,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
           ),
         ],
       );
     }
     return const SizedBox.shrink();
+  }
+}
+
+class _MiniroomVisualSpec {
+  const _MiniroomVisualSpec({
+    required this.icon,
+    required this.gradient,
+    this.iconColor,
+  });
+
+  final IconData icon;
+  final List<Color> gradient;
+  final Color? iconColor;
+}
+
+_MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
+  switch (item.id) {
+    case 'char_fox':
+      return const _MiniroomVisualSpec(
+        icon: Icons.pets,
+        gradient: [Color(0xFFFFE0BF), Color(0xFFFFC58F)],
+      );
+    case 'char_penguin':
+      return const _MiniroomVisualSpec(
+        icon: Icons.flutter_dash,
+        gradient: [Color(0xFFDDEAFF), Color(0xFFBAD2FF)],
+      );
+    case 'char_tiger':
+      return const _MiniroomVisualSpec(
+        icon: Icons.cruelty_free,
+        gradient: [Color(0xFFFFD6B3), Color(0xFFFFB27A)],
+      );
+    case 'char_robot':
+      return const _MiniroomVisualSpec(
+        icon: Icons.smart_toy,
+        gradient: [Color(0xFFE2E7F0), Color(0xFFB7C2D4)],
+      );
+    case 'char_unicorn':
+      return const _MiniroomVisualSpec(
+        icon: Icons.auto_awesome,
+        gradient: [Color(0xFFF3DCFF), Color(0xFFD7BEFF)],
+      );
+    case 'home_forest':
+      return const _MiniroomVisualSpec(
+        icon: Icons.park,
+        gradient: [Color(0xFFDEF5D9), Color(0xFFBDE6AE)],
+      );
+    case 'home_city':
+      return const _MiniroomVisualSpec(
+        icon: Icons.location_city,
+        gradient: [Color(0xFFDDE8FF), Color(0xFFB6C8F2)],
+      );
+    case 'home_ocean':
+      return const _MiniroomVisualSpec(
+        icon: Icons.water,
+        gradient: [Color(0xFFD2F6FF), Color(0xFF9FE8FF)],
+      );
+    case 'home_space':
+      return const _MiniroomVisualSpec(
+        icon: Icons.rocket_launch,
+        gradient: [Color(0xFF2E2254), Color(0xFF503C96)],
+        iconColor: Colors.white,
+      );
+    case 'home_castle':
+      return const _MiniroomVisualSpec(
+        icon: Icons.castle,
+        gradient: [Color(0xFFE7DFFF), Color(0xFFCCB8FF)],
+      );
+    case 'deco_wall_chart':
+      return const _MiniroomVisualSpec(
+        icon: Icons.show_chart,
+        gradient: [Color(0xFFE0EBFF), Color(0xFFC7D8FF)],
+      );
+    case 'deco_wall_star':
+      return const _MiniroomVisualSpec(
+        icon: Icons.star_border,
+        gradient: [Color(0xFFFFF2C7), Color(0xFFFFE6A1)],
+      );
+    case 'deco_wall_frame':
+      return const _MiniroomVisualSpec(
+        icon: Icons.filter_frames,
+        gradient: [Color(0xFFEFE8DA), Color(0xFFDED0B8)],
+      );
+    case 'deco_floor_rug':
+      return const _MiniroomVisualSpec(
+        icon: Icons.texture,
+        gradient: [Color(0xFFE9E3F9), Color(0xFFD8CFF2)],
+      );
+    case 'deco_floor_coinbox':
+      return const _MiniroomVisualSpec(
+        icon: Icons.savings,
+        gradient: [Color(0xFFFFE8BF), Color(0xFFFFD78F)],
+      );
+    case 'deco_floor_plant':
+      return const _MiniroomVisualSpec(
+        icon: Icons.local_florist,
+        gradient: [Color(0xFFD8F3D5), Color(0xFFB7E8B2)],
+      );
+    case 'deco_desk_globe':
+      return const _MiniroomVisualSpec(
+        icon: Icons.public,
+        gradient: [Color(0xFFD9EEFF), Color(0xFFB9D8FF)],
+      );
+    case 'deco_desk_trophy':
+      return const _MiniroomVisualSpec(
+        icon: Icons.emoji_events,
+        gradient: [Color(0xFFFFEDC2), Color(0xFFFFD892)],
+      );
+    case 'deco_shelf_books':
+      return const _MiniroomVisualSpec(
+        icon: Icons.menu_book,
+        gradient: [Color(0xFFE3E9F8), Color(0xFFC7D4F2)],
+      );
+    case 'deco_shelf_piggy':
+      return const _MiniroomVisualSpec(
+        icon: Icons.account_balance_wallet,
+        gradient: [Color(0xFFFEE0E7), Color(0xFFF8C3CF)],
+      );
+    case 'deco_window_curtain':
+      return const _MiniroomVisualSpec(
+        icon: Icons.blinds,
+        gradient: [Color(0xFFE8EEFF), Color(0xFFC9D6FF)],
+      );
+    case 'deco_window_cloud':
+      return const _MiniroomVisualSpec(
+        icon: Icons.cloud,
+        gradient: [Color(0xFFE5F0FF), Color(0xFFC8E0FF)],
+      );
+    default:
+      return const _MiniroomVisualSpec(
+        icon: Icons.home_filled,
+        gradient: [Color(0xFFE9EEFF), Color(0xFFD3DCFF)],
+      );
   }
 }
 
@@ -3669,68 +3823,30 @@ class _DecorationObject extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = _miniroomSpecForItem(item);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: visual.gradient,
+        ),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          if (item.id == 'deco_wall_chart')
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 5,
-                      width: 50,
-                      color: const Color(0xFF9AB4FF),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 5,
-                      width: 70,
-                      color: const Color(0xFF76D39B),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 5,
-                      width: 34,
-                      color: const Color(0xFFFFB36B),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            Center(
-              child: Text(item.emoji, style: const TextStyle(fontSize: 28)),
-            ),
-          Positioned(
-            bottom: 4,
-            right: 6,
-            child: Text(
-              item.name,
-              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+      child: Center(
+        child: Icon(
+          visual.icon,
+          size: 28,
+          color: visual.iconColor ?? const Color(0xFF34415F),
+        ),
       ),
     );
   }
@@ -3744,25 +3860,25 @@ class _ItemThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = compact ? 46.0 : 58.0;
-    final isHome = item.type == CosmeticType.home;
-    final isDeco = item.type == CosmeticType.decoration;
-    final bg = isHome
-        ? _HomeThemePreset.fromHomeId(item.id).wallGradient.first
-        : isDeco
-        ? const Color(0xFFF2F4FA)
-        : const Color(0xFFFFF3DD);
+    final visual = _miniroomSpecForItem(item);
+    final size = compact ? 44.0 : 56.0;
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: bg,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: visual.gradient,
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white),
       ),
-      child: Center(
-        child: Text(item.emoji, style: TextStyle(fontSize: compact ? 22 : 30)),
+      child: Icon(
+        visual.icon,
+        size: compact ? 20 : 26,
+        color: visual.iconColor ?? const Color(0xFF34415F),
       ),
     );
   }
@@ -3788,7 +3904,7 @@ class _SlotPreviewChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        width: 96,
+        width: 88,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFEAEFFF) : Colors.white,
@@ -3857,7 +3973,7 @@ class _ShopTab extends StatelessWidget {
                     '현재 포인트: ${state.rewardPoints}P · 누적 사용: ${state.totalPointsSpent}P',
                   ),
                   Text(
-                    '장착 중: ${state.equippedCharacter.emoji} ${state.equippedCharacter.name} / ${state.equippedHome.emoji} ${state.equippedHome.name}',
+                    '장착 중: ${state.equippedCharacter.name} / ${state.equippedHome.name}',
                   ),
                 ],
               ),
