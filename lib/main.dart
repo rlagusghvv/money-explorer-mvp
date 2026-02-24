@@ -274,7 +274,7 @@ class ScenarioResult {
 
 enum CosmeticType { character, home, decoration }
 
-enum DecorationZone { wall, floor, desk }
+enum DecorationZone { wall, floor, desk, shelf, window }
 
 extension DecorationZoneX on DecorationZone {
   String get key => name;
@@ -282,7 +282,9 @@ extension DecorationZoneX on DecorationZone {
   String get label => switch (this) {
     DecorationZone.wall => '벽 꾸미기',
     DecorationZone.floor => '바닥 꾸미기',
-    DecorationZone.desk => '소품 선반',
+    DecorationZone.desk => '책상',
+    DecorationZone.shelf => '선반',
+    DecorationZone.window => '창문',
   };
 }
 
@@ -422,6 +424,15 @@ const List<ShopItem> kShopItems = [
     description: '벽을 환하게 만드는 별빛 장식!',
   ),
   ShopItem(
+    id: 'deco_wall_frame',
+    name: '경제 명언 액자',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.wall,
+    price: 90,
+    emoji: '🖼️',
+    description: '벽 중앙을 채우는 미니 액자 장식!',
+  ),
+  ShopItem(
     id: 'deco_floor_rug',
     name: '포근 러그',
     type: CosmeticType.decoration,
@@ -440,13 +451,22 @@ const List<ShopItem> kShopItems = [
     description: '저축 습관을 보여주는 미니 박스!',
   ),
   ShopItem(
+    id: 'deco_floor_plant',
+    name: '힐링 화분',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.floor,
+    price: 95,
+    emoji: '🪴',
+    description: '방 분위기를 살리는 코너 화분!',
+  ),
+  ShopItem(
     id: 'deco_desk_globe',
     name: '뉴스 지구본',
     type: CosmeticType.decoration,
     zone: DecorationZone.desk,
     price: 0,
     emoji: '🌍',
-    description: '선반 위 글로벌 뉴스 탐험 소품!',
+    description: '책상 위 글로벌 뉴스 탐험 소품!',
   ),
   ShopItem(
     id: 'deco_desk_trophy',
@@ -456,6 +476,42 @@ const List<ShopItem> kShopItems = [
     price: 120,
     emoji: '🏆',
     description: '챕터 완주를 기념하는 반짝 트로피!',
+  ),
+  ShopItem(
+    id: 'deco_shelf_books',
+    name: '경제 도서 세트',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.shelf,
+    price: 0,
+    emoji: '📚',
+    description: '선반에 꽂아두는 경제 필독서!',
+  ),
+  ShopItem(
+    id: 'deco_shelf_piggy',
+    name: '부자 돼지 저금통',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.shelf,
+    price: 115,
+    emoji: '🐷',
+    description: '선반 위 저축 습관 마스코트!',
+  ),
+  ShopItem(
+    id: 'deco_window_curtain',
+    name: '하늘 커튼',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.window,
+    price: 0,
+    emoji: '🪟',
+    description: '창문을 아늑하게 꾸미는 커튼!',
+  ),
+  ShopItem(
+    id: 'deco_window_cloud',
+    name: '구름 모빌',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.window,
+    price: 100,
+    emoji: '☁️',
+    description: '창가에 달아두는 가벼운 모빌!',
   ),
 ];
 
@@ -474,6 +530,7 @@ class AppState {
     required this.equippedCharacterId,
     required this.equippedHomeId,
     required this.equippedDecorations,
+    required this.homeThemeName,
     required this.totalPointsSpent,
     required this.soundMuted,
   });
@@ -494,6 +551,8 @@ class AppState {
       'deco_wall_chart',
       'deco_floor_rug',
       'deco_desk_globe',
+      'deco_shelf_books',
+      'deco_window_curtain',
     },
     equippedCharacterId: 'char_default',
     equippedHomeId: 'home_base_default',
@@ -501,7 +560,10 @@ class AppState {
       DecorationZone.wall: 'deco_wall_chart',
       DecorationZone.floor: 'deco_floor_rug',
       DecorationZone.desk: 'deco_desk_globe',
+      DecorationZone.shelf: 'deco_shelf_books',
+      DecorationZone.window: 'deco_window_curtain',
     },
+    homeThemeName: '나의 미니룸',
     totalPointsSpent: 0,
     soundMuted: false,
   );
@@ -519,6 +581,7 @@ class AppState {
   final String equippedCharacterId;
   final String equippedHomeId;
   final Map<DecorationZone, String?> equippedDecorations;
+  final String homeThemeName;
   final int totalPointsSpent;
   final bool soundMuted;
 
@@ -601,6 +664,10 @@ class AppState {
               ? equippedDecorations[zone]
               : null,
       },
+      homeThemeName:
+          (json['homeThemeName'] as String?)?.trim().isNotEmpty == true
+          ? (json['homeThemeName'] as String).trim()
+          : initial.homeThemeName,
       totalPointsSpent:
           (json['totalPointsSpent'] as num?)?.round() ??
           initial.totalPointsSpent,
@@ -625,6 +692,7 @@ class AppState {
       for (final entry in equippedDecorations.entries)
         entry.key.key: entry.value,
     },
+    'homeThemeName': homeThemeName,
     'totalPointsSpent': totalPointsSpent,
     'soundMuted': soundMuted,
   };
@@ -643,6 +711,7 @@ class AppState {
     String? equippedCharacterId,
     String? equippedHomeId,
     Map<DecorationZone, String?>? equippedDecorations,
+    String? homeThemeName,
     int? totalPointsSpent,
     bool? soundMuted,
   }) {
@@ -660,6 +729,7 @@ class AppState {
       equippedCharacterId: equippedCharacterId ?? this.equippedCharacterId,
       equippedHomeId: equippedHomeId ?? this.equippedHomeId,
       equippedDecorations: equippedDecorations ?? this.equippedDecorations,
+      homeThemeName: homeThemeName ?? this.homeThemeName,
       totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
       soundMuted: soundMuted ?? this.soundMuted,
     );
@@ -683,6 +753,7 @@ class AppStateStore {
   static const _kTotalPointsSpent = 'totalPointsSpent';
   static const _kAuthSession = 'authSession';
   static const _kSoundMuted = 'soundMuted';
+  static const _kHomeThemeName = 'homeThemeName';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -793,6 +864,10 @@ class AppStateStore {
               ? decorationRaw[zone.key] as String?
               : null,
       },
+      homeThemeName:
+          (prefs.getString(_kHomeThemeName) ?? '').trim().isNotEmpty
+          ? (prefs.getString(_kHomeThemeName) ?? '').trim()
+          : initial.homeThemeName,
       totalPointsSpent:
           prefs.getInt(_kTotalPointsSpent) ?? initial.totalPointsSpent,
       soundMuted: prefs.getBool(_kSoundMuted) ?? initial.soundMuted,
@@ -835,6 +910,7 @@ class AppStateStore {
     );
     await prefs.setInt(_kTotalPointsSpent, state.totalPointsSpent);
     await prefs.setBool(_kSoundMuted, state.soundMuted);
+    await prefs.setString(_kHomeThemeName, state.homeThemeName);
 
     final encoded = state.results
         .map(
@@ -1165,6 +1241,16 @@ class _GameHomePageState extends State<GameHomePage> {
     _persist();
   }
 
+  void _updateHomeThemeName(String value) {
+    final normalized = value.trim();
+    final next = normalized.isEmpty ? '나의 미니룸' : normalized;
+    if (next == _state.homeThemeName) return;
+    setState(() {
+      _state = _state.copyWith(homeThemeName: next);
+    });
+    _persist();
+  }
+
   void _resetProgress() {
     setState(() {
       _state = AppState.initial().copyWith(
@@ -1199,6 +1285,7 @@ class _GameHomePageState extends State<GameHomePage> {
         syncMessage: _syncMessage,
         session: _session,
         onPlaceDecoration: _placeDecoration,
+        onThemeNameChanged: _updateHomeThemeName,
       ),
       _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
       _WeeklyReportTab(state: _state),
@@ -3029,12 +3116,14 @@ class _MyHomeTab extends StatefulWidget {
     required this.syncMessage,
     required this.session,
     required this.onPlaceDecoration,
+    required this.onThemeNameChanged,
   });
 
   final AppState state;
   final String? syncMessage;
   final StoredSession? session;
   final void Function(DecorationZone zone, String? itemId) onPlaceDecoration;
+  final ValueChanged<String> onThemeNameChanged;
 
   @override
   State<_MyHomeTab> createState() => _MyHomeTabState();
@@ -3043,6 +3132,21 @@ class _MyHomeTab extends StatefulWidget {
 class _MyHomeTabState extends State<_MyHomeTab> {
   bool _showEquipFx = false;
   String _equipFxLabel = '장착 완료!';
+  late final TextEditingController _themeNameController;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeNameController = TextEditingController(
+      text: widget.state.homeThemeName,
+    );
+  }
+
+  @override
+  void dispose() {
+    _themeNameController.dispose();
+    super.dispose();
+  }
 
   ShopItem? _itemById(String? id) {
     if (id == null) return null;
@@ -3055,6 +3159,9 @@ class _MyHomeTabState extends State<_MyHomeTab> {
   @override
   void didUpdateWidget(covariant _MyHomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_themeNameController.text != widget.state.homeThemeName) {
+      _themeNameController.text = widget.state.homeThemeName;
+    }
     if (oldWidget.state.equippedHomeId != widget.state.equippedHomeId) {
       _triggerEquipFx('테마 변경!');
       return;
@@ -3121,6 +3228,37 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             itemById: _itemById,
             showEquipFx: _showEquipFx,
             equipFxLabel: _equipFxLabel,
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '테마 이름',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _themeNameController,
+                    maxLength: 16,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      hintText: '예: 경제탐험 아지트',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                    onSubmitted: widget.onThemeNameChanged,
+                    onEditingComplete: () {
+                      widget.onThemeNameChanged(_themeNameController.text);
+                      FocusScope.of(context).unfocus();
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           Card(
@@ -3233,6 +3371,22 @@ class _MyHomeTabState extends State<_MyHomeTab> {
   }
 }
 
+class _RoomAnchor {
+  const _RoomAnchor(this.alignment, this.size, this.depth);
+
+  final Alignment alignment;
+  final Size size;
+  final int depth;
+}
+
+class _RoomPlacedItem {
+  const _RoomPlacedItem({required this.item, required this.anchor, required this.zone});
+
+  final ShopItem item;
+  final _RoomAnchor anchor;
+  final DecorationZone zone;
+}
+
 class _MyHomeRoomCard extends StatelessWidget {
   const _MyHomeRoomCard({
     required this.state,
@@ -3246,12 +3400,27 @@ class _MyHomeRoomCard extends StatelessWidget {
   final bool showEquipFx;
   final String equipFxLabel;
 
+  static const Map<DecorationZone, _RoomAnchor> _anchors = {
+    DecorationZone.wall: _RoomAnchor(Alignment(0, -0.55), Size(168, 66), 1),
+    DecorationZone.window: _RoomAnchor(Alignment(0.72, -0.45), Size(100, 68), 2),
+    DecorationZone.shelf: _RoomAnchor(Alignment(-0.7, -0.05), Size(100, 54), 3),
+    DecorationZone.desk: _RoomAnchor(Alignment(0.62, 0.08), Size(112, 58), 4),
+    DecorationZone.floor: _RoomAnchor(Alignment(-0.58, 0.62), Size(130, 58), 5),
+  };
+
   @override
   Widget build(BuildContext context) {
     final theme = _HomeThemePreset.fromHomeId(state.equippedHomeId);
-    final wallItem = itemById(state.equippedDecorations[DecorationZone.wall]);
-    final floorItem = itemById(state.equippedDecorations[DecorationZone.floor]);
-    final deskItem = itemById(state.equippedDecorations[DecorationZone.desk]);
+    final items = DecorationZone.values
+        .map((zone) {
+          final item = itemById(state.equippedDecorations[zone]);
+          final anchor = _anchors[zone];
+          if (item == null || anchor == null) return null;
+          return _RoomPlacedItem(item: item, anchor: anchor, zone: zone);
+        })
+        .whereType<_RoomPlacedItem>()
+        .toList()
+      ..sort((a, b) => a.anchor.depth.compareTo(b.anchor.depth));
 
     return Card(
       child: Padding(
@@ -3260,150 +3429,95 @@ class _MyHomeRoomCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '🎨 마이홈 룸 · ${theme.atmosphere} ${theme.name} 프리셋',
+              '🎨 ${state.homeThemeName} · ${theme.atmosphere} ${theme.name}',
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
             AspectRatio(
-              aspectRatio: 1.45,
+              aspectRatio: 1.32,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: theme.wallGradient,
-                          ),
+                child: LayoutBuilder(
+                  builder: (context, c) => Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _MiniRoomShellPainter(theme: theme),
                         ),
                       ),
-                    ),
-                    Positioned.fill(child: _ThemeAtmosphereLayer(theme: theme)),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: 92,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: theme.floorGradient,
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (wallItem != null)
-                      Positioned(
-                        left: 18,
-                        top: 16,
-                        right: 18,
-                        height: 68,
-                        child: _DecorationObject(item: wallItem),
-                      ),
-                    if (floorItem != null)
-                      Positioned(
-                        left: 14,
-                        bottom: 20,
-                        width: 112,
-                        height: 56,
-                        child: _DecorationObject(item: floorItem),
-                      ),
-                    Positioned(
-                      right: 12,
-                      bottom: 72,
-                      width: 92,
-                      height: 56,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.42),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    if (deskItem != null)
-                      Positioned(
-                        right: 16,
-                        bottom: 74,
-                        width: 86,
-                        height: 48,
-                        child: _DecorationObject(item: deskItem),
-                      ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 16,
-                      child: Center(
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 150),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.94),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: theme.accent.withValues(alpha: 0.28),
+                      Positioned.fill(child: _ThemeAtmosphereLayer(theme: theme)),
+                      ...items.map((placed) {
+                        final left = (c.maxWidth - placed.anchor.size.width) *
+                            ((placed.anchor.alignment.x + 1) / 2);
+                        final top = (c.maxHeight - placed.anchor.size.height) *
+                            ((placed.anchor.alignment.y + 1) / 2);
+                        return Positioned(
+                          left: left,
+                          top: top,
+                          width: placed.anchor.size.width,
+                          height: placed.anchor.size.height,
+                          child: _DecorationObject(item: placed.item),
+                        );
+                      }),
+                      ..._anchors.entries.map((entry) {
+                        final anchor = entry.value;
+                        return Align(
+                          alignment: anchor.alignment,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(999),
                             ),
+                            child: Text(
+                              entry.key.label,
+                              style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        );
+                      }),
+                      Align(
+                        alignment: const Alignment(0.04, 0.42),
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 140),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.96),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: theme.accent.withValues(alpha: 0.3)),
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                state.equippedCharacter.emoji,
-                                style: const TextStyle(fontSize: 40),
-                              ),
+                              Text(state.equippedCharacter.emoji, style: const TextStyle(fontSize: 34)),
                               Text(
                                 state.equippedCharacter.name,
-                                textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 12,
-                                ),
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
                               ),
                             ],
                           ),
                         ),
                       ),
-                    ),
-                    AnimatedOpacity(
-                      duration: const Duration(milliseconds: 220),
-                      opacity: showEquipFx ? 1 : 0,
-                      child: Center(
-                        child: AnimatedScale(
-                          duration: const Duration(milliseconds: 260),
-                          scale: showEquipFx ? 1 : 0.7,
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 220),
+                        opacity: showEquipFx ? 1 : 0,
+                        child: Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFFFCE1),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: const Color(0xFFFFE083),
-                              ),
+                              border: Border.all(color: const Color(0xFFFFE083)),
                             ),
-                            child: Text(
-                              '✨ $equipFxLabel',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
+                            child: Text('✨ $equipFxLabel', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -3417,6 +3531,51 @@ class _MyHomeRoomCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MiniRoomShellPainter extends CustomPainter {
+  const _MiniRoomShellPainter({required this.theme});
+
+  final _HomeThemePreset theme;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final wallRect = Rect.fromLTWH(0, 0, size.width, size.height * 0.62);
+    final wallPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: theme.wallGradient,
+      ).createShader(wallRect);
+    canvas.drawRect(wallRect, wallPaint);
+
+    final floorPath = Path()
+      ..moveTo(size.width * 0.08, size.height * 0.62)
+      ..lineTo(size.width * 0.92, size.height * 0.62)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    final floorPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: theme.floorGradient,
+      ).createShader(Rect.fromLTWH(0, size.height * 0.62, size.width, size.height * 0.38));
+    canvas.drawPath(floorPath, floorPaint);
+
+    final seamPaint = Paint()
+      ..color = theme.accent.withValues(alpha: 0.24)
+      ..strokeWidth = 2.4;
+    canvas.drawLine(
+      Offset(size.width * 0.08, size.height * 0.62),
+      Offset(size.width * 0.92, size.height * 0.62),
+      seamPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniRoomShellPainter oldDelegate) =>
+      oldDelegate.theme.name != theme.name;
 }
 
 class _ThemeAtmosphereLayer extends StatelessWidget {
