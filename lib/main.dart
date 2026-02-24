@@ -1417,6 +1417,25 @@ class _GameHomePageState extends State<GameHomePage> {
     );
   }
 
+  void _jumpToDifferentScenarioForTesting() {
+    final total = widget.scenarios.length;
+    if (total == 0) return;
+
+    final hasValidCurrent =
+        _state.currentScenario >= 0 && _state.currentScenario < total;
+    final candidates = List<int>.generate(total, (i) => i);
+    if (hasValidCurrent && total > 1) {
+      candidates.remove(_state.currentScenario);
+    }
+
+    final nextScenario = candidates[Random().nextInt(candidates.length)];
+    setState(() {
+      _state = _state.copyWith(currentScenario: nextScenario);
+      _tabIndex = 0;
+    });
+    _persist();
+  }
+
   void _buyAndEquipItem(ShopItem item) {
     if (_state.ownedItemIds.contains(item.id)) {
       _equipItem(item);
@@ -1537,6 +1556,7 @@ class _GameHomePageState extends State<GameHomePage> {
           _persist();
         },
         onDone: _applyScenarioResult,
+        onJumpToDifferentScenario: _jumpToDifferentScenarioForTesting,
         onSoundMutedChanged: (muted) {
           setState(() => _state = _state.copyWith(soundMuted: muted));
           _persist();
@@ -1622,6 +1642,7 @@ class _PlayTab extends StatelessWidget {
     required this.state,
     required this.scenarios,
     required this.onDone,
+    required this.onJumpToDifferentScenario,
     required this.onDifficultyChanged,
     required this.onSoundMutedChanged,
   });
@@ -1629,6 +1650,7 @@ class _PlayTab extends StatelessWidget {
   final AppState state;
   final List<Scenario> scenarios;
   final ValueChanged<ScenarioResult> onDone;
+  final VoidCallback onJumpToDifferentScenario;
   final ValueChanged<DifficultyLevel> onDifficultyChanged;
   final ValueChanged<bool> onSoundMutedChanged;
 
@@ -1754,6 +1776,20 @@ class _PlayTab extends StatelessWidget {
             state: state,
             totalScenarios: scenarios.length,
             homeEmoji: state.equippedHome.emoji,
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: onJumpToDifferentScenario,
+              icon: const Icon(Icons.shuffle_rounded, size: 18),
+              label: const Text('다른 문제 보기'),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                side: const BorderSide(color: AppDesign.primarySoft),
+                foregroundColor: AppDesign.primaryDeep,
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           if (done)
