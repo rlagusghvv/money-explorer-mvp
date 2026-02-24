@@ -2014,6 +2014,16 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     }
   }
 
+  List<String> _webAudioCandidates(String assetRelativePath) {
+    final mp3Path = assetRelativePath.endsWith('.wav')
+        ? assetRelativePath.replaceFirst('.wav', '.mp3')
+        : assetRelativePath;
+    return [
+      assetRelativePath,
+      mp3Path,
+    ];
+  }
+
   Future<void> _playSfxAsset(String assetRelativePath, {double volume = 1}) async {
     if (widget.soundMuted) return;
 
@@ -2022,12 +2032,17 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     try {
       await _sfxPlayer.setVolume(volume);
       if (kIsWeb) {
-        final webAssetUrl = Uri.base.resolve('assets/assets/$assetRelativePath').toString();
-        await _sfxPlayer.play(UrlSource(webAssetUrl));
+        for (final path in _webAudioCandidates(assetRelativePath)) {
+          try {
+            final webAssetUrl = Uri.base.resolve('assets/assets/$path').toString();
+            await _sfxPlayer.play(UrlSource(webAssetUrl));
+            return;
+          } catch (_) {}
+        }
       } else {
         await _sfxPlayer.play(AssetSource(assetRelativePath));
+        return;
       }
-      return;
     } catch (_) {
       // non-blocking UX: ignore playback failures.
     }

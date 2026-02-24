@@ -64,6 +64,8 @@ flutter:
     - assets/scenarios.json
     - assets/audio/correct_beep.wav
     - assets/audio/wrong_beep.wav
+    - assets/audio/correct_beep.mp3
+    - assets/audio/wrong_beep.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:
