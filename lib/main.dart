@@ -276,6 +276,51 @@ enum CosmeticType { character, home, decoration }
 
 enum DecorationZone { wall, floor, desk, shelf, window }
 
+class RoomItemAdjustment {
+  const RoomItemAdjustment({
+    this.offsetX = 0,
+    this.offsetY = 0,
+    this.scale = 1,
+  });
+
+  final double offsetX;
+  final double offsetY;
+  final double scale;
+
+  static const defaults = RoomItemAdjustment();
+
+  RoomItemAdjustment copyWith({
+    double? offsetX,
+    double? offsetY,
+    double? scale,
+  }) {
+    return RoomItemAdjustment(
+      offsetX: offsetX ?? this.offsetX,
+      offsetY: offsetY ?? this.offsetY,
+      scale: scale ?? this.scale,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'offsetX': offsetX,
+    'offsetY': offsetY,
+    'scale': scale,
+  };
+
+  factory RoomItemAdjustment.fromJson(Object? json) {
+    if (json is! Map) return defaults;
+    final map = json.cast<Object?, Object?>();
+    final offsetX = (map['offsetX'] as num?)?.toDouble() ?? 0;
+    final offsetY = (map['offsetY'] as num?)?.toDouble() ?? 0;
+    final scale = (map['scale'] as num?)?.toDouble() ?? 1;
+    return RoomItemAdjustment(
+      offsetX: offsetX.clamp(-40, 40),
+      offsetY: offsetY.clamp(-40, 40),
+      scale: scale.clamp(0.72, 1.38),
+    );
+  }
+}
+
 extension DecorationZoneX on DecorationZone {
   String get key => name;
 
@@ -530,6 +575,7 @@ class AppState {
     required this.equippedCharacterId,
     required this.equippedHomeId,
     required this.equippedDecorations,
+    required this.decorationAdjustments,
     required this.homeThemeName,
     required this.totalPointsSpent,
     required this.soundMuted,
@@ -563,6 +609,13 @@ class AppState {
       DecorationZone.shelf: 'deco_shelf_books',
       DecorationZone.window: 'deco_window_curtain',
     },
+    decorationAdjustments: {
+      DecorationZone.wall: RoomItemAdjustment.defaults,
+      DecorationZone.floor: RoomItemAdjustment.defaults,
+      DecorationZone.desk: RoomItemAdjustment.defaults,
+      DecorationZone.shelf: RoomItemAdjustment.defaults,
+      DecorationZone.window: RoomItemAdjustment.defaults,
+    },
     homeThemeName: '나의 미니룸',
     totalPointsSpent: 0,
     soundMuted: false,
@@ -581,6 +634,7 @@ class AppState {
   final String equippedCharacterId;
   final String equippedHomeId;
   final Map<DecorationZone, String?> equippedDecorations;
+  final Map<DecorationZone, RoomItemAdjustment> decorationAdjustments;
   final String homeThemeName;
   final int totalPointsSpent;
   final bool soundMuted;
@@ -630,6 +684,8 @@ class AppState {
       for (final zone in DecorationZone.values)
         zone: rawDecorations[zone.key] as String?,
     };
+    final rawAdjustments =
+        json['decorationAdjustments'] as Map<String, dynamic>? ?? const {};
 
     return AppState(
       playerName: json['playerName'] as String? ?? initial.playerName,
@@ -664,6 +720,10 @@ class AppState {
               ? equippedDecorations[zone]
               : null,
       },
+      decorationAdjustments: {
+        for (final zone in DecorationZone.values)
+          zone: RoomItemAdjustment.fromJson(rawAdjustments[zone.key]),
+      },
       homeThemeName:
           (json['homeThemeName'] as String?)?.trim().isNotEmpty == true
           ? (json['homeThemeName'] as String).trim()
@@ -692,6 +752,10 @@ class AppState {
       for (final entry in equippedDecorations.entries)
         entry.key.key: entry.value,
     },
+    'decorationAdjustments': {
+      for (final entry in decorationAdjustments.entries)
+        entry.key.key: entry.value.toJson(),
+    },
     'homeThemeName': homeThemeName,
     'totalPointsSpent': totalPointsSpent,
     'soundMuted': soundMuted,
@@ -711,6 +775,7 @@ class AppState {
     String? equippedCharacterId,
     String? equippedHomeId,
     Map<DecorationZone, String?>? equippedDecorations,
+    Map<DecorationZone, RoomItemAdjustment>? decorationAdjustments,
     String? homeThemeName,
     int? totalPointsSpent,
     bool? soundMuted,
@@ -729,6 +794,8 @@ class AppState {
       equippedCharacterId: equippedCharacterId ?? this.equippedCharacterId,
       equippedHomeId: equippedHomeId ?? this.equippedHomeId,
       equippedDecorations: equippedDecorations ?? this.equippedDecorations,
+      decorationAdjustments:
+          decorationAdjustments ?? this.decorationAdjustments,
       homeThemeName: homeThemeName ?? this.homeThemeName,
       totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
       soundMuted: soundMuted ?? this.soundMuted,
@@ -750,6 +817,7 @@ class AppStateStore {
   static const _kEquippedCharacterId = 'equippedCharacterId';
   static const _kEquippedHomeId = 'equippedHomeId';
   static const _kEquippedDecorations = 'equippedDecorations';
+  static const _kDecorationAdjustments = 'decorationAdjustments';
   static const _kTotalPointsSpent = 'totalPointsSpent';
   static const _kAuthSession = 'authSession';
   static const _kSoundMuted = 'soundMuted';
@@ -838,6 +906,16 @@ class AppStateStore {
       }
     }
 
+    Map<String, dynamic> adjustmentRaw = const {};
+    final adjustmentJson = prefs.getString(_kDecorationAdjustments);
+    if (adjustmentJson != null && adjustmentJson.isNotEmpty) {
+      try {
+        adjustmentRaw = jsonDecode(adjustmentJson) as Map<String, dynamic>;
+      } catch (_) {
+        adjustmentRaw = const {};
+      }
+    }
+
     return AppState(
       playerName: prefs.getString(_kPlayerName) ?? initial.playerName,
       cash: prefs.getInt(_kCash) ?? initial.cash,
@@ -863,6 +941,10 @@ class AppStateStore {
           zone: owned.contains(decorationRaw[zone.key])
               ? decorationRaw[zone.key] as String?
               : null,
+      },
+      decorationAdjustments: {
+        for (final zone in DecorationZone.values)
+          zone: RoomItemAdjustment.fromJson(adjustmentRaw[zone.key]),
       },
       homeThemeName: (prefs.getString(_kHomeThemeName) ?? '').trim().isNotEmpty
           ? (prefs.getString(_kHomeThemeName) ?? '').trim()
@@ -905,6 +987,13 @@ class AppStateStore {
       jsonEncode({
         for (final entry in state.equippedDecorations.entries)
           entry.key.key: entry.value,
+      }),
+    );
+    await prefs.setString(
+      _kDecorationAdjustments,
+      jsonEncode({
+        for (final entry in state.decorationAdjustments.entries)
+          entry.key.key: entry.value.toJson(),
       }),
     );
     await prefs.setInt(_kTotalPointsSpent, state.totalPointsSpent);
@@ -1240,6 +1329,17 @@ class _GameHomePageState extends State<GameHomePage> {
     _persist();
   }
 
+  void _updateDecorationAdjustment(
+    DecorationZone zone,
+    RoomItemAdjustment adjustment,
+  ) {
+    final next = {..._state.decorationAdjustments, zone: adjustment};
+    setState(() {
+      _state = _state.copyWith(decorationAdjustments: next);
+    });
+    _persist();
+  }
+
   void _updateHomeThemeName(String value) {
     final normalized = value.trim();
     final next = normalized.isEmpty ? '나의 미니룸' : normalized;
@@ -1284,6 +1384,7 @@ class _GameHomePageState extends State<GameHomePage> {
         syncMessage: _syncMessage,
         session: _session,
         onPlaceDecoration: _placeDecoration,
+        onDecorationAdjusted: _updateDecorationAdjustment,
         onThemeNameChanged: _updateHomeThemeName,
       ),
       _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
@@ -3115,6 +3216,7 @@ class _MyHomeTab extends StatefulWidget {
     required this.syncMessage,
     required this.session,
     required this.onPlaceDecoration,
+    required this.onDecorationAdjusted,
     required this.onThemeNameChanged,
   });
 
@@ -3122,6 +3224,8 @@ class _MyHomeTab extends StatefulWidget {
   final String? syncMessage;
   final StoredSession? session;
   final void Function(DecorationZone zone, String? itemId) onPlaceDecoration;
+  final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
+  onDecorationAdjusted;
   final ValueChanged<String> onThemeNameChanged;
 
   @override
@@ -3320,6 +3424,16 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                               ),
                             ],
                           ),
+                          if (selected != null) ...[
+                            const SizedBox(height: 8),
+                            _ZoneNudgeControls(
+                              adjustment:
+                                  state.decorationAdjustments[zone] ??
+                                  RoomItemAdjustment.defaults,
+                              onChanged: (adjustment) =>
+                                  widget.onDecorationAdjusted(zone, adjustment),
+                            ),
+                          ],
                           if (ownedItems.isEmpty)
                             const Padding(
                               padding: EdgeInsets.only(top: 6),
@@ -3383,11 +3497,13 @@ class _RoomPlacedItem {
     required this.item,
     required this.anchor,
     required this.zone,
+    required this.adjustment,
   });
 
   final ShopItem item;
   final _RoomAnchor anchor;
   final DecorationZone zone;
+  final RoomItemAdjustment adjustment;
 }
 
 class _MyHomeRoomCard extends StatelessWidget {
@@ -3404,15 +3520,23 @@ class _MyHomeRoomCard extends StatelessWidget {
   final String equipFxLabel;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
-    DecorationZone.wall: _RoomAnchor(Alignment(0, -0.55), Size(168, 66), 1),
+    DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(138, 88), 1),
     DecorationZone.window: _RoomAnchor(
-      Alignment(0.72, -0.45),
-      Size(100, 68),
+      Alignment(0.66, -0.42),
+      Size(124, 88),
       2,
     ),
-    DecorationZone.shelf: _RoomAnchor(Alignment(-0.7, -0.05), Size(100, 54), 3),
-    DecorationZone.desk: _RoomAnchor(Alignment(0.62, 0.08), Size(112, 58), 4),
-    DecorationZone.floor: _RoomAnchor(Alignment(-0.58, 0.62), Size(130, 58), 5),
+    DecorationZone.shelf: _RoomAnchor(
+      Alignment(-0.70, -0.02),
+      Size(138, 118),
+      3,
+    ),
+    DecorationZone.desk: _RoomAnchor(Alignment(0.44, 0.28), Size(176, 122), 4),
+    DecorationZone.floor: _RoomAnchor(
+      Alignment(-0.18, 0.70),
+      Size(206, 112),
+      5,
+    ),
   };
 
   @override
@@ -3424,7 +3548,14 @@ class _MyHomeRoomCard extends StatelessWidget {
               final item = itemById(state.equippedDecorations[zone]);
               final anchor = _anchors[zone];
               if (item == null || anchor == null) return null;
-              return _RoomPlacedItem(item: item, anchor: anchor, zone: zone);
+              return _RoomPlacedItem(
+                item: item,
+                anchor: anchor,
+                zone: zone,
+                adjustment:
+                    state.decorationAdjustments[zone] ??
+                    RoomItemAdjustment.defaults,
+              );
             })
             .whereType<_RoomPlacedItem>()
             .toList()
@@ -3449,63 +3580,45 @@ class _MyHomeRoomCard extends StatelessWidget {
                   builder: (context, c) => Stack(
                     children: [
                       Positioned.fill(
-                        child: CustomPaint(
-                          painter: _MiniRoomShellPainter(theme: theme),
+                        child: Image.asset(
+                          'assets/miniroom/generated/room_bg_isometric.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, error, stackTrace) => CustomPaint(
+                            painter: _MiniRoomShellPainter(theme: theme),
+                          ),
                         ),
                       ),
-                      Positioned.fill(
-                        child: _ThemeAtmosphereLayer(theme: theme),
-                      ),
                       ...items.map((placed) {
+                        final width =
+                            placed.anchor.size.width * placed.adjustment.scale;
+                        final height =
+                            placed.anchor.size.height * placed.adjustment.scale;
                         final left =
-                            (c.maxWidth - placed.anchor.size.width) *
-                            ((placed.anchor.alignment.x + 1) / 2);
+                            (c.maxWidth - width) *
+                                ((placed.anchor.alignment.x + 1) / 2) +
+                            placed.adjustment.offsetX;
                         final top =
-                            (c.maxHeight - placed.anchor.size.height) *
-                            ((placed.anchor.alignment.y + 1) / 2);
+                            (c.maxHeight - height) *
+                                ((placed.anchor.alignment.y + 1) / 2) +
+                            placed.adjustment.offsetY;
                         return Positioned(
                           left: left,
                           top: top,
-                          width: placed.anchor.size.width,
-                          height: placed.anchor.size.height,
+                          width: width,
+                          height: height,
                           child: _DecorationObject(item: placed.item),
                         );
                       }),
 
                       // 슬롯 라벨은 모바일 화면 혼잡도를 줄이기 위해 노출하지 않습니다.
                       Align(
-                        alignment: const Alignment(0.04, 0.42),
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 140),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.96),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: theme.accent.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _ItemThumbnail(
-                                item: state.equippedCharacter,
-                                compact: true,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                state.equippedCharacter.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                        alignment: const Alignment(0.03, 0.52),
+                        child: SizedBox(
+                          width: 110,
+                          height: 110,
+                          child: _ItemThumbnail(
+                            item: state.equippedCharacter,
+                            compact: false,
                           ),
                         ),
                       ),
@@ -3605,98 +3718,28 @@ class _MiniRoomShellPainter extends CustomPainter {
       oldDelegate.theme.name != theme.name;
 }
 
-class _ThemeAtmosphereLayer extends StatelessWidget {
-  const _ThemeAtmosphereLayer({required this.theme});
-
-  final _HomeThemePreset theme;
-
-  @override
-  Widget build(BuildContext context) {
-    if (theme.name == 'Forest') {
-      return Stack(
-        children: [
-          Positioned(
-            left: 12,
-            bottom: 90,
-            child: Icon(
-              Icons.park,
-              size: 22,
-              color: theme.accent.withValues(alpha: 0.42),
-            ),
-          ),
-          Positioned(
-            right: 20,
-            bottom: 88,
-            child: Icon(
-              Icons.eco,
-              size: 20,
-              color: theme.accent.withValues(alpha: 0.34),
-            ),
-          ),
-        ],
-      );
-    }
-    if (theme.name == 'City') {
-      return Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          height: 70,
-          margin: const EdgeInsets.only(bottom: 96),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                theme.accent.withValues(alpha: 0.14),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    if (theme.name == 'Space') {
-      return Stack(
-        children: [
-          Positioned(
-            left: 24,
-            top: 20,
-            child: Icon(
-              Icons.star,
-              size: 14,
-              color: Colors.white.withValues(alpha: 0.7),
-            ),
-          ),
-          Positioned(
-            right: 30,
-            top: 34,
-            child: Icon(
-              Icons.brightness_2,
-              size: 16,
-              color: Colors.white.withValues(alpha: 0.6),
-            ),
-          ),
-        ],
-      );
-    }
-    return const SizedBox.shrink();
-  }
-}
-
 class _MiniroomVisualSpec {
   const _MiniroomVisualSpec({
     required this.icon,
     required this.gradient,
     this.iconColor,
+    this.assetPath,
   });
 
   final IconData icon;
   final List<Color> gradient;
   final Color? iconColor;
+  final String? assetPath;
 }
 
 _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
   switch (item.id) {
+    case 'char_default':
+      return const _MiniroomVisualSpec(
+        icon: Icons.pets,
+        gradient: [Color(0xFFFFE6C9), Color(0xFFFFCFA1)],
+        assetPath: 'assets/miniroom/generated/item_teddy_bear.png',
+      );
     case 'char_fox':
       return const _MiniroomVisualSpec(
         icon: Icons.pets,
@@ -3752,56 +3795,67 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
       return const _MiniroomVisualSpec(
         icon: Icons.show_chart,
         gradient: [Color(0xFFE0EBFF), Color(0xFFC7D8FF)],
+        assetPath: 'assets/miniroom/generated/item_wall_frame.png',
       );
     case 'deco_wall_star':
       return const _MiniroomVisualSpec(
         icon: Icons.star_border,
         gradient: [Color(0xFFFFF2C7), Color(0xFFFFE6A1)],
+        assetPath: 'assets/miniroom/generated/item_wall_clock.png',
       );
     case 'deco_wall_frame':
       return const _MiniroomVisualSpec(
         icon: Icons.filter_frames,
         gradient: [Color(0xFFEFE8DA), Color(0xFFDED0B8)],
+        assetPath: 'assets/miniroom/generated/item_wall_frame.png',
       );
     case 'deco_floor_rug':
       return const _MiniroomVisualSpec(
         icon: Icons.texture,
         gradient: [Color(0xFFE9E3F9), Color(0xFFD8CFF2)],
+        assetPath: 'assets/miniroom/generated/item_round_rug.png',
       );
     case 'deco_floor_coinbox':
       return const _MiniroomVisualSpec(
         icon: Icons.savings,
         gradient: [Color(0xFFFFE8BF), Color(0xFFFFD78F)],
+        assetPath: 'assets/miniroom/generated/item_storage_box.png',
       );
     case 'deco_floor_plant':
       return const _MiniroomVisualSpec(
         icon: Icons.local_florist,
         gradient: [Color(0xFFD8F3D5), Color(0xFFB7E8B2)],
+        assetPath: 'assets/miniroom/generated/item_potted_plant_small.png',
       );
     case 'deco_desk_globe':
       return const _MiniroomVisualSpec(
         icon: Icons.public,
         gradient: [Color(0xFFD9EEFF), Color(0xFFB9D8FF)],
+        assetPath: 'assets/miniroom/generated/item_globe.png',
       );
     case 'deco_desk_trophy':
       return const _MiniroomVisualSpec(
         icon: Icons.emoji_events,
         gradient: [Color(0xFFFFEDC2), Color(0xFFFFD892)],
+        assetPath: 'assets/miniroom/generated/item_mini_table.png',
       );
     case 'deco_shelf_books':
       return const _MiniroomVisualSpec(
         icon: Icons.menu_book,
         gradient: [Color(0xFFE3E9F8), Color(0xFFC7D4F2)],
+        assetPath: 'assets/miniroom/generated/item_bookshelf.png',
       );
     case 'deco_shelf_piggy':
       return const _MiniroomVisualSpec(
         icon: Icons.account_balance_wallet,
         gradient: [Color(0xFFFEE0E7), Color(0xFFF8C3CF)],
+        assetPath: 'assets/miniroom/generated/item_toy_shelf.png',
       );
     case 'deco_window_curtain':
       return const _MiniroomVisualSpec(
         icon: Icons.blinds,
         gradient: [Color(0xFFE8EEFF), Color(0xFFC9D6FF)],
+        assetPath: 'assets/miniroom/generated/item_window_curtain.png',
       );
     case 'deco_window_cloud':
       return const _MiniroomVisualSpec(
@@ -3824,30 +3878,22 @@ class _DecorationObject extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = _miniroomSpecForItem(item);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: visual.gradient,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          visual.icon,
-          size: 28,
-          color: visual.iconColor ?? const Color(0xFF34415F),
-        ),
-      ),
+    return Center(
+      child: visual.assetPath != null
+          ? Image.asset(
+              visual.assetPath!,
+              fit: BoxFit.contain,
+              errorBuilder: (_, error, stackTrace) => Icon(
+                visual.icon,
+                size: 34,
+                color: visual.iconColor ?? const Color(0xFF34415F),
+              ),
+            )
+          : Icon(
+              visual.icon,
+              size: 34,
+              color: visual.iconColor ?? const Color(0xFF34415F),
+            ),
     );
   }
 }
@@ -3861,24 +3907,116 @@ class _ItemThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = _miniroomSpecForItem(item);
-    final size = compact ? 44.0 : 56.0;
+    final size = compact ? 52.0 : 96.0;
 
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
+      child: visual.assetPath != null
+          ? Image.asset(
+              visual.assetPath!,
+              fit: BoxFit.contain,
+              errorBuilder: (_, error, stackTrace) => Icon(
+                visual.icon,
+                size: compact ? 24 : 40,
+                color: visual.iconColor ?? const Color(0xFF34415F),
+              ),
+            )
+          : Icon(
+              visual.icon,
+              size: compact ? 24 : 40,
+              color: visual.iconColor ?? const Color(0xFF34415F),
+            ),
+    );
+  }
+}
+
+class _ZoneNudgeControls extends StatelessWidget {
+  const _ZoneNudgeControls({required this.adjustment, required this.onChanged});
+
+  final RoomItemAdjustment adjustment;
+  final ValueChanged<RoomItemAdjustment> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget miniSlider({
+      required String label,
+      required double value,
+      required double min,
+      required double max,
+      required ValueChanged<double> onChanged,
+    }) {
+      return Row(
+        children: [
+          SizedBox(
+            width: 30,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 2.5,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+              ),
+              child: Slider(
+                value: value,
+                min: min,
+                max: max,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: visual.gradient,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFDDE3F0)),
       ),
-      child: Icon(
-        visual.icon,
-        size: compact ? 20 : 26,
-        color: visual.iconColor ?? const Color(0xFF34415F),
+      child: Column(
+        children: [
+          miniSlider(
+            label: 'X',
+            value: adjustment.offsetX,
+            min: -30,
+            max: 30,
+            onChanged: (value) =>
+                onChanged(adjustment.copyWith(offsetX: value)),
+          ),
+          miniSlider(
+            label: 'Y',
+            value: adjustment.offsetY,
+            min: -30,
+            max: 30,
+            onChanged: (value) =>
+                onChanged(adjustment.copyWith(offsetY: value)),
+          ),
+          miniSlider(
+            label: '크기',
+            value: adjustment.scale,
+            min: 0.75,
+            max: 1.35,
+            onChanged: (value) => onChanged(adjustment.copyWith(scale: value)),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => onChanged(RoomItemAdjustment.defaults),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('초기화', style: TextStyle(fontSize: 11)),
+            ),
+          ),
+        ],
       ),
     );
   }
