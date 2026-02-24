@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -473,6 +474,7 @@ class AppState {
     required this.equippedHomeId,
     required this.equippedDecorations,
     required this.totalPointsSpent,
+    required this.soundMuted,
   });
 
   factory AppState.initial() => const AppState(
@@ -500,6 +502,7 @@ class AppState {
       DecorationZone.desk: 'deco_desk_globe',
     },
     totalPointsSpent: 0,
+    soundMuted: false,
   );
 
   final String playerName;
@@ -516,6 +519,7 @@ class AppState {
   final String equippedHomeId;
   final Map<DecorationZone, String?> equippedDecorations;
   final int totalPointsSpent;
+  final bool soundMuted;
 
   ShopItem get equippedCharacter => kShopItems.firstWhere(
     (item) => item.id == equippedCharacterId,
@@ -599,6 +603,7 @@ class AppState {
       totalPointsSpent:
           (json['totalPointsSpent'] as num?)?.round() ??
           initial.totalPointsSpent,
+      soundMuted: json['soundMuted'] == true,
     );
   }
 
@@ -620,6 +625,7 @@ class AppState {
         entry.key.key: entry.value,
     },
     'totalPointsSpent': totalPointsSpent,
+    'soundMuted': soundMuted,
   };
 
   AppState copyWith({
@@ -637,6 +643,7 @@ class AppState {
     String? equippedHomeId,
     Map<DecorationZone, String?>? equippedDecorations,
     int? totalPointsSpent,
+    bool? soundMuted,
   }) {
     return AppState(
       playerName: playerName ?? this.playerName,
@@ -653,6 +660,7 @@ class AppState {
       equippedHomeId: equippedHomeId ?? this.equippedHomeId,
       equippedDecorations: equippedDecorations ?? this.equippedDecorations,
       totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
+      soundMuted: soundMuted ?? this.soundMuted,
     );
   }
 }
@@ -673,6 +681,7 @@ class AppStateStore {
   static const _kEquippedDecorations = 'equippedDecorations';
   static const _kTotalPointsSpent = 'totalPointsSpent';
   static const _kAuthSession = 'authSession';
+  static const _kSoundMuted = 'soundMuted';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -785,6 +794,7 @@ class AppStateStore {
       },
       totalPointsSpent:
           prefs.getInt(_kTotalPointsSpent) ?? initial.totalPointsSpent,
+      soundMuted: prefs.getBool(_kSoundMuted) ?? initial.soundMuted,
     );
   }
 
@@ -823,6 +833,7 @@ class AppStateStore {
       }),
     );
     await prefs.setInt(_kTotalPointsSpent, state.totalPointsSpent);
+    await prefs.setBool(_kSoundMuted, state.soundMuted);
 
     final encoded = state.results
         .map(
@@ -1177,6 +1188,10 @@ class _GameHomePageState extends State<GameHomePage> {
           _persist();
         },
         onDone: _applyScenarioResult,
+        onSoundMutedChanged: (muted) {
+          setState(() => _state = _state.copyWith(soundMuted: muted));
+          _persist();
+        },
       ),
       _MyHomeTab(
         state: _state,
@@ -1229,12 +1244,14 @@ class _PlayTab extends StatelessWidget {
     required this.scenarios,
     required this.onDone,
     required this.onDifficultyChanged,
+    required this.onSoundMutedChanged,
   });
 
   final AppState state;
   final List<Scenario> scenarios;
   final ValueChanged<ScenarioResult> onDone;
   final ValueChanged<DifficultyLevel> onDifficultyChanged;
+  final ValueChanged<bool> onSoundMutedChanged;
 
   static const List<String> _chapterObjectives = [
     '기회비용: 여러 선택지 중 가장 좋은 선택을 찾아요.',
@@ -1342,9 +1359,25 @@ class _PlayTab extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
-            _DifficultySelector(
-              current: state.selectedDifficulty,
-              onChanged: onDifficultyChanged,
+            Row(
+              children: [
+                Expanded(
+                  child: _DifficultySelector(
+                    current: state.selectedDifficulty,
+                    onChanged: onDifficultyChanged,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: state.soundMuted ? '효과음 켜기' : '효과음 끄기',
+                  child: IconButton.filledTonal(
+                    onPressed: () => onSoundMutedChanged(!state.soundMuted),
+                    icon: Icon(
+                      state.soundMuted ? Icons.volume_off : Icons.volume_up,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             if (!isCompactMobile || done) ...[
@@ -1400,6 +1433,7 @@ class _PlayTab extends StatelessWidget {
                   difficulty: state.selectedDifficulty,
                   learnerAgeBand: state.learnerAgeBand,
                   chapterCondition: _conditionForNextChapter(),
+                  soundMuted: state.soundMuted,
                   onDone: onDone,
                 ),
               ),
@@ -1745,6 +1779,7 @@ class ScenarioPlayCard extends StatefulWidget {
     required this.difficulty,
     required this.learnerAgeBand,
     required this.chapterCondition,
+    required this.soundMuted,
     required this.onDone,
   });
 
@@ -1753,6 +1788,7 @@ class ScenarioPlayCard extends StatefulWidget {
   final DifficultyLevel difficulty;
   final LearnerAgeBand learnerAgeBand;
   final ChapterCondition chapterCondition;
+  final bool soundMuted;
   final ValueChanged<ScenarioResult> onDone;
 
   @override
@@ -1781,6 +1817,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   _PerformanceSnapshot? _resultSnapshot;
   ScenarioResult? _pendingResult;
   String _mascotSpeech = '뉴스 한 줄! 어디가 움직일까?';
+  int _stage = 0;
+  final AudioPlayer _sfxPlayer = AudioPlayer();
 
   static const List<String> _fallbackReasoningChoices = [
     '뉴스와 직접 연결된 산업 먼저 확인',
@@ -1820,6 +1858,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   void initState() {
     super.initState();
     _prepareShuffledChoices();
+  }
+
+  @override
+  void dispose() {
+    _sfxPlayer.dispose();
+    super.dispose();
   }
 
   void _prepareShuffledChoices() {
@@ -1919,9 +1963,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     };
   }
 
-  bool get _canSelectAllocation =>
-      _selectedIndustry != null && _reasoningAnswer != null && _isQuizAnswered;
-
   int _quizInteractionScore() {
     switch (_quizType) {
       case QuizInteractionType.multipleChoice:
@@ -1960,6 +2001,82 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       QuizInteractionType.ordering => '순서 배열: 영향이 큰 순서대로 정리했어요.',
       QuizInteractionType.matching => '매칭: 이슈와 산업을 짝지어 연결했어요.',
     };
+  }
+
+  Future<void> _playFeedbackSfx(bool isCorrect) async {
+    if (widget.soundMuted) return;
+    final path = isCorrect
+        ? 'audio/correct_beep.wav'
+        : 'audio/wrong_beep.wav';
+    try {
+      await _sfxPlayer.play(AssetSource(path));
+    } catch (_) {}
+  }
+
+  Widget _stepProgress() {
+    const labels = ['질문 1', '질문 2', '질문 3', '투자', '결과'];
+    return Row(
+      children: List.generate(labels.length, (i) {
+        final done = i < _stage;
+        final current = i == _stage;
+        return Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: done || current
+                  ? const Color(0xFFEAE8FF)
+                  : const Color(0xFFF2F4F9),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              labels[i],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: current ? const Color(0xFF4A3FD1) : const Color(0xFF637091),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Future<void> _confirmCurrentStep() async {
+    if (_stage == 0) {
+      if (_selectedIndustry == null) return;
+      final ok = _industryChoices[_selectedIndustry!].score >= 70;
+      await _playFeedbackSfx(ok);
+      if (!mounted) return;
+      setState(() {
+        _stage = 1;
+        _mascotSpeech = ok ? '정확해! 이제 이유를 골라보자.' : '괜찮아! 이유를 고르며 다시 정리해보자.';
+      });
+      return;
+    }
+    if (_stage == 1) {
+      if (_reasoningAnswer == null) return;
+      final ok = _reasoningScore() >= 75;
+      await _playFeedbackSfx(ok);
+      if (!mounted) return;
+      setState(() {
+        _stage = 2;
+        _mascotSpeech = ok ? '좋아! 마지막 질문 카드야.' : '좋은 시도야! 질문 카드에서 만회해보자.';
+      });
+      return;
+    }
+    if (_stage == 2) {
+      if (!_isQuizAnswered) return;
+      final ok = _quizInteractionScore() >= 70;
+      await _playFeedbackSfx(ok);
+      if (!mounted) return;
+      setState(() {
+        _stage = 3;
+        _mascotSpeech = ok ? '굿! 이제 투자 비중을 정해보자.' : '좋아! 이제 투자 비중으로 균형을 맞춰보자.';
+      });
+    }
   }
 
   int get _investedCoins {
@@ -2180,6 +2297,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
     setState(() {
       _submitted = true;
+      _stage = 4;
       _mascotSpeech = learningScore >= 80
           ? '멋져! 근거와 비중 둘 다 좋았어!'
           : '좋아! 다음은 비중만 조금 더 다듬자.';
@@ -2415,158 +2533,152 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   @override
   Widget build(BuildContext context) {
     final s = widget.scenario;
-
     final mobileSafeBottom = MediaQuery.of(context).viewPadding.bottom;
 
-    return ListView(
-      padding: EdgeInsets.only(bottom: mobileSafeBottom + 220),
-      children: [
-        _bubbleCard(_mascotSpeech),
-        const SizedBox(height: 10),
-        _newsCard(s),
-        const SizedBox(height: 10),
-        _gameSection(
-          title: '1) 산업 선택',
-          child: Column(
-            children: List.generate(
+    Widget stepCard;
+    if (_stage == 0) {
+      stepCard = _gameSection(
+        title: '질문 카드 1 · 어떤 산업이 움직일까?',
+        child: Column(
+          children: [
+            ...List.generate(
               _industryChoices.length,
               (i) => _choiceTile(
                 text: _industryChoices[i].label,
                 selected: _selectedIndustry == i,
-                onTap: _submitted
-                    ? null
-                    : () => setState(() {
-                        _selectedIndustry = i;
-                        _mascotSpeech = '좋아! 이제 이유를 고르자.';
-                      }),
+                onTap: _submitted ? null : () => setState(() => _selectedIndustry = i),
               ),
             ),
-          ),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: _selectedIndustry == null || _submitted ? null : _confirmCurrentStep,
+              child: const Text('선택 확인하고 다음'),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        _gameSection(
-          title: '2) 이유 선택',
-          child: Column(
-            children: List.generate(
+      );
+    } else if (_stage == 1) {
+      stepCard = _gameSection(
+        title: '질문 카드 2 · 이유를 골라봐!',
+        child: Column(
+          children: [
+            ...List.generate(
               _reasoningChoices.length,
               (i) => _choiceTile(
                 text: _reasoningChoices[i],
                 selected: _reasoningAnswer == i,
-                onTap: _submitted
-                    ? null
-                    : () => setState(() {
-                        _reasoningAnswer = i;
-                        _mascotSpeech = '좋아! 퀴즈 한 문제만 더!';
-                      }),
+                onTap: _submitted ? null : () => setState(() => _reasoningAnswer = i),
               ),
             ),
-          ),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: _reasoningAnswer == null || _submitted ? null : _confirmCurrentStep,
+              child: const Text('선택 확인하고 다음'),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        _gameSection(
-          title: '3) 질문 카드',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _quizInteractionWidget(s),
-              const SizedBox(height: 10),
-              if (_hintUnlocked && !_hintUsed)
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => _hintUsed = true),
-                  icon: const Icon(Icons.lightbulb),
-                  label: Text(
-                    '힌트 보기 (1회, -${widget.difficulty.hintPenalty}코인)',
-                  ),
-                ),
-              if (_hintUsed)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(_hintText(s)),
-                ),
-              const SizedBox(height: 10),
-              if (_canSelectAllocation)
-                _gameSection(
-                  title:
-                      '4) 투자 비중 선택 ${_allocation == null ? '(미선택)' : '$_allocation%'}',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '높을수록 많이 오르고, 많이 내려요.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF4E5B7A),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [20, 30, 40, 50, 60, 70, 80].map((v) {
-                          final selected = _allocation == v;
-                          return ChoiceChip(
-                            label: Text('$v%'),
-                            selected: selected,
-                            onSelected: _submitted
-                                ? null
-                                : (_) => setState(() {
-                                    _allocationPercent = v;
-                                    _mascotSpeech = '좋아, $v% 선택 완료!';
-                                  }),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          _allocation == null
-                              ? '비중을 골라주세요.'
-                              : '투자금 $_investedCoins코인',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              FilledButton.icon(
-                onPressed: (_submitted || _allocation == null) ? null : _submit,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  backgroundColor: const Color(0xFF6C63FF),
-                  foregroundColor: Colors.white,
-                ),
-                icon: const Icon(Icons.check_circle),
-                label: Text(_wrongAttempts == 0 ? '점수 확인' : '재도전 완료'),
+      );
+    } else if (_stage == 2) {
+      stepCard = _gameSection(
+        title: '질문 카드 3 · 마지막 퀴즈!',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _quizInteractionWidget(s),
+            const SizedBox(height: 10),
+            if (_hintUnlocked && !_hintUsed)
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _hintUsed = true),
+                icon: const Icon(Icons.lightbulb),
+                label: Text('힌트 보기 (1회, -${widget.difficulty.hintPenalty}코인)'),
               ),
-              if (_resultSnapshot != null) ...[
-                const SizedBox(height: 10),
-                _PerformanceResultCard(snapshot: _resultSnapshot!),
-                const SizedBox(height: 10),
-                FilledButton.icon(
-                  onPressed: _pendingResult == null
-                      ? null
-                      : () {
-                          final next = _pendingResult;
-                          if (next != null) widget.onDone(next);
-                        },
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                    backgroundColor: const Color(0xFF1F8D48),
-                    foregroundColor: Colors.white,
-                  ),
-                  icon: const Icon(Icons.arrow_forward),
-                  label: const Text('다음 챕터로 이동'),
+            if (_hintUsed)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
-            ],
-          ),
+                child: Text(_hintText(s)),
+              ),
+            FilledButton(
+              onPressed: !_isQuizAnswered || _submitted ? null : _confirmCurrentStep,
+              child: const Text('선택 확인하고 다음'),
+            ),
+          ],
         ),
+      );
+    } else if (_stage == 3) {
+      stepCard = _gameSection(
+        title: '투자 카드 · 비중을 선택해요',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('높을수록 많이 오르고, 많이 내려요.'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [20, 30, 40, 50, 60, 70, 80].map((v) {
+                final selected = _allocation == v;
+                return ChoiceChip(
+                  label: Text('$v%'),
+                  selected: selected,
+                  onSelected: _submitted ? null : (_) => setState(() => _allocationPercent = v),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(_allocation == null ? '비중을 골라주세요.' : '투자금 $_investedCoins코인'),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: (_submitted || _allocation == null) ? null : _submit,
+              style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+              icon: const Icon(Icons.check_circle),
+              label: Text(_wrongAttempts == 0 ? '점수 확인' : '재도전 완료'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      stepCard = _gameSection(
+        title: '결과 카드',
+        child: Column(
+          children: [
+            if (_resultSnapshot != null) _PerformanceResultCard(snapshot: _resultSnapshot!),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _pendingResult == null ? null : () {
+                final next = _pendingResult;
+                if (next != null) widget.onDone(next);
+              },
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                backgroundColor: const Color(0xFF1F8D48),
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.arrow_forward),
+              label: const Text('다음 챕터로 이동'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      padding: EdgeInsets.only(bottom: mobileSafeBottom + 120),
+      children: [
+        _bubbleCard(_mascotSpeech),
+        const SizedBox(height: 10),
+        _stepProgress(),
+        const SizedBox(height: 10),
+        _newsCard(s),
+        const SizedBox(height: 10),
+        stepCard,
       ],
     );
   }
