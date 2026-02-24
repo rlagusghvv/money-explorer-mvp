@@ -10,6 +10,8 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
+const kAppUiVersion = 'ui-2026.02.24-r1';
+
 void main() {
   runApp(const KidEconMvpApp());
 }
@@ -1623,6 +1625,21 @@ class _GameHomePageState extends State<GameHomePage> {
         centerTitle: false,
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFFDDE3F2)),
+            ),
+            child: const Text(
+              kAppUiVersion,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(child: pages[_tabIndex]),
       bottomNavigationBar: Container(
