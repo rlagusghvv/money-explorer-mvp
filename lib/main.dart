@@ -1825,15 +1825,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     '영향이 몇 주/몇 달 갈지 기간 확인',
     '수혜+피해를 함께 보고 분산 전략 세우기',
   ];
-  static const List<String> _chapterObjectiveKeywords = [
-    '기회비용',
-    '분산투자',
-    '리스크 관리',
-  ];
-
-  String get _chapterObjective =>
-      _chapterObjectiveKeywords[(widget.scenario.id - 1) %
-          _chapterObjectiveKeywords.length];
 
   String _bandPrompt(String base) {
     return switch (widget.learnerAgeBand) {
@@ -2005,42 +1996,45 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
   Future<void> _playFeedbackSfx(bool isCorrect) async {
     if (widget.soundMuted) return;
-    final path = isCorrect
-        ? 'audio/correct_beep.wav'
-        : 'audio/wrong_beep.wav';
+    final path = isCorrect ? 'audio/correct_beep.wav' : 'audio/wrong_beep.wav';
     try {
       await _sfxPlayer.play(AssetSource(path));
     } catch (_) {}
   }
 
   Widget _stepProgress() {
-    const labels = ['질문 1', '질문 2', '질문 3', '투자', '결과'];
-    return Row(
-      children: List.generate(labels.length, (i) {
-        final done = i < _stage;
-        final current = i == _stage;
-        return Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(
-              color: done || current
-                  ? const Color(0xFFEAE8FF)
-                  : const Color(0xFFF2F4F9),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              labels[i],
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: current ? const Color(0xFF4A3FD1) : const Color(0xFF637091),
-              ),
+    const totalSteps = 5;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '진행 단계 ${_stage + 1}/$totalSteps',
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: (_stage + 1) / totalSteps,
+              backgroundColor: const Color(0xFFE9EDF7),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF6C63FF)),
             ),
           ),
-        );
-      }),
+          const SizedBox(height: 8),
+          Text(
+            _mascotSpeech,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2538,52 +2532,63 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     Widget stepCard;
     if (_stage == 0) {
       stepCard = _gameSection(
-        title: '질문 카드 1 · 어떤 산업이 움직일까?',
+        title: '문제 1',
         child: Column(
           children: [
+            _scenarioHeadline(s),
             ...List.generate(
               _industryChoices.length,
               (i) => _choiceTile(
                 text: _industryChoices[i].label,
                 selected: _selectedIndustry == i,
-                onTap: _submitted ? null : () => setState(() => _selectedIndustry = i),
+                onTap: _submitted
+                    ? null
+                    : () => setState(() => _selectedIndustry = i),
               ),
             ),
             const SizedBox(height: 10),
             FilledButton(
-              onPressed: _selectedIndustry == null || _submitted ? null : _confirmCurrentStep,
-              child: const Text('선택 확인하고 다음'),
+              onPressed: _selectedIndustry == null || _submitted
+                  ? null
+                  : _confirmCurrentStep,
+              child: const Text('다음'),
             ),
           ],
         ),
       );
     } else if (_stage == 1) {
       stepCard = _gameSection(
-        title: '질문 카드 2 · 이유를 골라봐!',
+        title: '문제 2',
         child: Column(
           children: [
+            _scenarioHeadline(s),
             ...List.generate(
               _reasoningChoices.length,
               (i) => _choiceTile(
                 text: _reasoningChoices[i],
                 selected: _reasoningAnswer == i,
-                onTap: _submitted ? null : () => setState(() => _reasoningAnswer = i),
+                onTap: _submitted
+                    ? null
+                    : () => setState(() => _reasoningAnswer = i),
               ),
             ),
             const SizedBox(height: 10),
             FilledButton(
-              onPressed: _reasoningAnswer == null || _submitted ? null : _confirmCurrentStep,
-              child: const Text('선택 확인하고 다음'),
+              onPressed: _reasoningAnswer == null || _submitted
+                  ? null
+                  : _confirmCurrentStep,
+              child: const Text('다음'),
             ),
           ],
         ),
       );
     } else if (_stage == 2) {
       stepCard = _gameSection(
-        title: '질문 카드 3 · 마지막 퀴즈!',
+        title: '문제 3',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _scenarioHeadline(s),
             _quizInteractionWidget(s),
             const SizedBox(height: 10),
             if (_hintUnlocked && !_hintUsed)
@@ -2603,18 +2608,21 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 child: Text(_hintText(s)),
               ),
             FilledButton(
-              onPressed: !_isQuizAnswered || _submitted ? null : _confirmCurrentStep,
-              child: const Text('선택 확인하고 다음'),
+              onPressed: !_isQuizAnswered || _submitted
+                  ? null
+                  : _confirmCurrentStep,
+              child: const Text('다음'),
             ),
           ],
         ),
       );
     } else if (_stage == 3) {
       stepCard = _gameSection(
-        title: '투자 카드 · 비중을 선택해요',
+        title: '투자 비중',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _scenarioHeadline(s),
             const Text('높을수록 많이 오르고, 많이 내려요.'),
             const SizedBox(height: 8),
             Wrap(
@@ -2625,21 +2633,27 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 return ChoiceChip(
                   label: Text('$v%'),
                   selected: selected,
-                  onSelected: _submitted ? null : (_) => setState(() => _allocationPercent = v),
+                  onSelected: _submitted
+                      ? null
+                      : (_) => setState(() => _allocationPercent = v),
                 );
               }).toList(),
             ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
-              child: Text(_allocation == null ? '비중을 골라주세요.' : '투자금 $_investedCoins코인'),
+              child: Text(
+                _allocation == null ? '비중을 골라주세요.' : '투자금 $_investedCoins코인',
+              ),
             ),
             const SizedBox(height: 10),
             FilledButton.icon(
               onPressed: (_submitted || _allocation == null) ? null : _submit,
-              style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+              ),
               icon: const Icon(Icons.check_circle),
-              label: Text(_wrongAttempts == 0 ? '점수 확인' : '재도전 완료'),
+              label: Text('제출'),
             ),
           ],
         ),
@@ -2649,13 +2663,16 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         title: '결과 카드',
         child: Column(
           children: [
-            if (_resultSnapshot != null) _PerformanceResultCard(snapshot: _resultSnapshot!),
+            if (_resultSnapshot != null)
+              _PerformanceResultCard(snapshot: _resultSnapshot!),
             const SizedBox(height: 10),
             FilledButton.icon(
-              onPressed: _pendingResult == null ? null : () {
-                final next = _pendingResult;
-                if (next != null) widget.onDone(next);
-              },
+              onPressed: _pendingResult == null
+                  ? null
+                  : () {
+                      final next = _pendingResult;
+                      if (next != null) widget.onDone(next);
+                    },
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
                 backgroundColor: const Color(0xFF1F8D48),
@@ -2671,122 +2688,28 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
     return ListView(
       padding: EdgeInsets.only(bottom: mobileSafeBottom + 120),
-      children: [
-        _bubbleCard(_mascotSpeech),
-        const SizedBox(height: 10),
-        _stepProgress(),
-        const SizedBox(height: 10),
-        _newsCard(s),
-        const SizedBox(height: 10),
-        stepCard,
-      ],
+      children: [_stepProgress(), const SizedBox(height: 10), stepCard],
     );
   }
 
-  Widget _bubbleCard(String speech) {
+  Widget _scenarioHeadline(Scenario s) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF3D5),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Center(
-              child: Text('🧸', style: TextStyle(fontSize: 26)),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF2F7FF),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                speech,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _newsCard(Scenario s) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white,
+        color: const Color(0xFFF5F8FF),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '🗺️ 챕터 ${s.id}',
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            '챕터 ${s.id}',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 4),
-          Text(
-            s.title,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _tag(
-                '🎯 $_chapterObjective',
-                const Color(0xFFEFF3FF),
-                const Color(0xFF3D4E91),
-              ),
-              _tag(
-                widget.chapterCondition.summary(widget.learnerAgeBand),
-                const Color(0xFFE8F7FF),
-                const Color(0xFF245E7A),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(s.news),
-          const SizedBox(height: 8),
-          if (widget.difficulty == DifficultyLevel.easy)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _tag(
-                  '수혜 ${s.goodIndustries.join(', ')}',
-                  const Color(0xFFE6F8EA),
-                  const Color(0xFF1F8D48),
-                ),
-                _tag(
-                  '피해 ${s.badIndustries.join(', ')}',
-                  const Color(0xFFFFECEC),
-                  const Color(0xFFB93838),
-                ),
-              ],
-            )
-          else
-            const Text(
-              '💡 스스로 수혜/주의 산업을 찾아보자!',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF4E5B7A),
-              ),
-            ),
+          const SizedBox(height: 2),
+          Text(s.title, style: const TextStyle(fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -2806,20 +2729,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           const SizedBox(height: 6),
           child,
         ],
-      ),
-    );
-  }
-
-  Widget _tag(String text, Color bg, Color fg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }
