@@ -2015,24 +2015,30 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       return;
     }
 
+    final player = kIsWeb ? AudioPlayer() : _sfxPlayer;
+
     try {
-      await _sfxPlayer.setVolume(volume);
+      await player.setReleaseMode(ReleaseMode.stop);
+      await player.setVolume(volume);
       if (kIsWeb) {
         for (final path in _webAudioCandidates(assetRelativePath)) {
           for (final prefix in const ['assets/assets/', 'assets/']) {
             try {
               final webAssetUrl = Uri.base.resolve('$prefix$path').toString();
-              await _sfxPlayer.play(UrlSource(webAssetUrl));
+              await player.play(UrlSource(webAssetUrl));
+              if (kIsWeb) {
+                await player.dispose();
+              }
               return;
             } catch (_) {}
           }
         }
       } else {
         try {
-          await _sfxPlayer.play(AssetSource(assetRelativePath));
+          await player.play(AssetSource(assetRelativePath));
           return;
         } catch (_) {
-          await _sfxPlayer.play(AssetSource('assets/$assetRelativePath'));
+          await player.play(AssetSource('assets/$assetRelativePath'));
           return;
         }
       }
@@ -2041,6 +2047,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('⚠️ 효과음 재생 실패 (기기 무음/브라우저 정책 확인)')),
         );
+      }
+    } finally {
+      if (kIsWeb) {
+        try {
+          await player.dispose();
+        } catch (_) {}
       }
     }
   }
