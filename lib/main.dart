@@ -12,6 +12,38 @@ import 'models/scenario.dart';
 
 const kAppUiVersion = 'ui-2026.02.24-r2';
 
+const _kSeoulOffset = Duration(hours: 9);
+
+enum DailyMissionType { solveFive, accuracy70, reviewOne }
+
+extension DailyMissionTypeX on DailyMissionType {
+  String get key => name;
+
+  String get title => switch (this) {
+    DailyMissionType.solveFive => '오늘 문제 5개 풀기',
+    DailyMissionType.accuracy70 => '정답률 70% 이상 달성',
+    DailyMissionType.reviewOne => '복습 1회 완료',
+  };
+
+  String get subtitle => switch (this) {
+    DailyMissionType.solveFive => '오늘 5문제를 끝내면 완료!',
+    DailyMissionType.accuracy70 => '오늘 기준 정답률 70% 이상이면 완료!',
+    DailyMissionType.reviewOne => '오답 복습 라운드 1번 완료하면 완료!',
+  };
+
+  int get rewardCoins => switch (this) {
+    DailyMissionType.solveFive => 120,
+    DailyMissionType.accuracy70 => 90,
+    DailyMissionType.reviewOne => 60,
+  };
+
+  int get rewardPoints => switch (this) {
+    DailyMissionType.solveFive => 45,
+    DailyMissionType.accuracy70 => 35,
+    DailyMissionType.reviewOne => 25,
+  };
+}
+
 void main() {
   runApp(const KidEconMvpApp());
 }
@@ -813,6 +845,9 @@ class AppState {
     required this.totalPointsSpent,
     required this.soundMuted,
     required this.wrongAnswerNotes,
+    required this.dailyMissionDateKey,
+    required this.dailyClaimedMissionIds,
+    required this.dailyReviewCompletedCount,
   });
 
   factory AppState.initial() => const AppState(
@@ -855,6 +890,9 @@ class AppState {
     totalPointsSpent: 0,
     soundMuted: false,
     wrongAnswerNotes: [],
+    dailyMissionDateKey: '',
+    dailyClaimedMissionIds: {},
+    dailyReviewCompletedCount: 0,
   );
 
   final String playerName;
@@ -876,6 +914,9 @@ class AppState {
   final int totalPointsSpent;
   final bool soundMuted;
   final List<WrongAnswerNote> wrongAnswerNotes;
+  final String dailyMissionDateKey;
+  final Set<String> dailyClaimedMissionIds;
+  final int dailyReviewCompletedCount;
 
   ShopItem get equippedCharacter => kShopItems.firstWhere(
     (item) => item.id == equippedCharacterId,
@@ -975,6 +1016,13 @@ class AppState {
           .whereType<Map<String, dynamic>>()
           .map(WrongAnswerNote.fromJson)
           .toList(),
+      dailyMissionDateKey: json['dailyMissionDateKey'] as String? ?? '',
+      dailyClaimedMissionIds:
+          (json['dailyClaimedMissionIds'] as List<dynamic>? ?? const [])
+              .whereType<String>()
+              .toSet(),
+      dailyReviewCompletedCount:
+          (json['dailyReviewCompletedCount'] as num?)?.round() ?? 0,
     );
   }
 
@@ -1004,6 +1052,9 @@ class AppState {
     'totalPointsSpent': totalPointsSpent,
     'soundMuted': soundMuted,
     'wrongAnswerNotes': wrongAnswerNotes.map((e) => e.toJson()).toList(),
+    'dailyMissionDateKey': dailyMissionDateKey,
+    'dailyClaimedMissionIds': dailyClaimedMissionIds.toList(),
+    'dailyReviewCompletedCount': dailyReviewCompletedCount,
   };
 
   AppState copyWith({
@@ -1026,6 +1077,9 @@ class AppState {
     int? totalPointsSpent,
     bool? soundMuted,
     List<WrongAnswerNote>? wrongAnswerNotes,
+    String? dailyMissionDateKey,
+    Set<String>? dailyClaimedMissionIds,
+    int? dailyReviewCompletedCount,
   }) {
     return AppState(
       playerName: playerName ?? this.playerName,
@@ -1048,6 +1102,11 @@ class AppState {
       totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
       soundMuted: soundMuted ?? this.soundMuted,
       wrongAnswerNotes: wrongAnswerNotes ?? this.wrongAnswerNotes,
+      dailyMissionDateKey: dailyMissionDateKey ?? this.dailyMissionDateKey,
+      dailyClaimedMissionIds:
+          dailyClaimedMissionIds ?? this.dailyClaimedMissionIds,
+      dailyReviewCompletedCount:
+          dailyReviewCompletedCount ?? this.dailyReviewCompletedCount,
     );
   }
 }
@@ -1073,6 +1132,9 @@ class AppStateStore {
   static const _kSoundMuted = 'soundMuted';
   static const _kHomeThemeName = 'homeThemeName';
   static const _kWrongAnswerNotes = 'wrongAnswerNotes';
+  static const _kDailyMissionDateKey = 'dailyMissionDateKey';
+  static const _kDailyClaimedMissionIds = 'dailyClaimedMissionIds';
+  static const _kDailyReviewCompletedCount = 'dailyReviewCompletedCount';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1219,6 +1281,11 @@ class AppStateStore {
           prefs.getInt(_kTotalPointsSpent) ?? initial.totalPointsSpent,
       soundMuted: prefs.getBool(_kSoundMuted) ?? initial.soundMuted,
       wrongAnswerNotes: wrongNotes,
+      dailyMissionDateKey: prefs.getString(_kDailyMissionDateKey) ?? '',
+      dailyClaimedMissionIds:
+          (prefs.getStringList(_kDailyClaimedMissionIds) ?? const []).toSet(),
+      dailyReviewCompletedCount:
+          prefs.getInt(_kDailyReviewCompletedCount) ?? 0,
     );
   }
 
@@ -1270,6 +1337,15 @@ class AppStateStore {
     await prefs.setString(
       _kWrongAnswerNotes,
       jsonEncode(state.wrongAnswerNotes.map((e) => e.toJson()).toList()),
+    );
+    await prefs.setString(_kDailyMissionDateKey, state.dailyMissionDateKey);
+    await prefs.setStringList(
+      _kDailyClaimedMissionIds,
+      state.dailyClaimedMissionIds.toList(),
+    );
+    await prefs.setInt(
+      _kDailyReviewCompletedCount,
+      state.dailyReviewCompletedCount,
     );
 
     final encoded = state.results
@@ -1348,6 +1424,79 @@ class _GameHomePageState extends State<GameHomePage> {
   bool get _isLoggedIn => _session != null;
   bool get _isReviewMode => _reviewQueue.isNotEmpty;
 
+  String _seoulDateKey([DateTime? dateTime]) {
+    final nowKst = (dateTime ?? DateTime.now()).toUtc().add(_kSeoulOffset);
+    final month = nowKst.month.toString().padLeft(2, '0');
+    final day = nowKst.day.toString().padLeft(2, '0');
+    return '${nowKst.year}-$month-$day';
+  }
+
+  AppState _stateWithDailyResetIfNeeded(AppState source) {
+    final today = _seoulDateKey();
+    if (source.dailyMissionDateKey == today) return source;
+    return source.copyWith(
+      dailyMissionDateKey: today,
+      dailyClaimedMissionIds: <String>{},
+      dailyReviewCompletedCount: 0,
+    );
+  }
+
+  ({int solved, int correct, int reviewDone}) _todayMissionProgress() {
+    final today = _seoulDateKey();
+    final todayResults = _state.results
+        .where((e) => _seoulDateKey(e.timestamp) == today)
+        .toList();
+    final correctCount = todayResults.where((e) => e.judgementScore >= 70).length;
+    return (
+      solved: todayResults.length,
+      correct: correctCount,
+      reviewDone: _state.dailyReviewCompletedCount,
+    );
+  }
+
+  bool _isMissionComplete(DailyMissionType type) {
+    final progress = _todayMissionProgress();
+    return switch (type) {
+      DailyMissionType.solveFive => progress.solved >= 5,
+      DailyMissionType.accuracy70 =>
+        progress.solved > 0 &&
+            ((progress.correct / progress.solved) * 100) >= 70,
+      DailyMissionType.reviewOne => progress.reviewDone >= 1,
+    };
+  }
+
+  void _claimDailyMission(DailyMissionType type) {
+    if (_state.dailyClaimedMissionIds.contains(type.key)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('이미 오늘 보상을 받았어요!')));
+      return;
+    }
+    if (!_isMissionComplete(type)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('미션 조건을 먼저 달성해보자!')));
+      return;
+    }
+
+    final nextClaims = {..._state.dailyClaimedMissionIds, type.key};
+    setState(() {
+      _state = _state.copyWith(
+        cash: _state.cash + type.rewardCoins,
+        rewardPoints: _state.rewardPoints + type.rewardPoints,
+        dailyClaimedMissionIds: nextClaims,
+      );
+    });
+    _persist();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '🎉 ${type.title} 보상 획득! +${type.rewardCoins}코인, +${type.rewardPoints}P',
+        ),
+      ),
+    );
+  }
+
   void _recordWrongAnswer(Scenario scenario, WrongStageType stageType) {
     final now = DateTime.now();
     final note = WrongAnswerNote(
@@ -1388,10 +1537,16 @@ class _GameHomePageState extends State<GameHomePage> {
     setState(() {
       _reviewQueue = const [];
       _reviewRoundIndex = 0;
+      if (completed) {
+        _state = _state.copyWith(
+          dailyReviewCompletedCount: _state.dailyReviewCompletedCount + 1,
+        );
+      }
     });
     if (completed) {
+      _persist();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('복습 라운드 완료! 이제 탐험 맵으로 돌아가도 좋아요.')),
+        const SnackBar(content: Text('복습 라운드 완료! 데일리 미션도 확인해보세요 🎯')),
       );
     }
   }
@@ -1419,8 +1574,11 @@ class _GameHomePageState extends State<GameHomePage> {
   @override
   void initState() {
     super.initState();
-    _state = widget.initialState;
+    _state = _stateWithDailyResetIfNeeded(widget.initialState);
     _session = widget.initialSession;
+    if (_state.dailyMissionDateKey != widget.initialState.dailyMissionDateKey) {
+      _persist();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_state.onboarded) {
         await _showOnboarding();
@@ -1561,7 +1719,7 @@ class _GameHomePageState extends State<GameHomePage> {
     try {
       final cloud = await widget.authService.loadProgress(token: session.token);
       if (cloud != null) {
-        _state = AppState.fromJson(cloud);
+        _state = _stateWithDailyResetIfNeeded(AppState.fromJson(cloud));
         await AppStateStore.save(_state);
       } else {
         await widget.authService.saveProgress(
@@ -1766,6 +1924,15 @@ class _GameHomePageState extends State<GameHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final normalizedState = _stateWithDailyResetIfNeeded(_state);
+    if (normalizedState.dailyMissionDateKey != _state.dailyMissionDateKey) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _state = normalizedState);
+        _persist();
+      });
+    }
+
     final pages = [
       _PlayTab(
         state: _state,
@@ -1822,6 +1989,8 @@ class _GameHomePageState extends State<GameHomePage> {
         state: _state,
         onStartReview: _startReviewRound,
         isReviewRunning: _isReviewMode,
+        onClaimMission: _claimDailyMission,
+        seoulDateKey: _seoulDateKey(),
       ),
       _GuideTab(
         state: _state,
@@ -5226,11 +5395,52 @@ class _WeeklyReportTab extends StatelessWidget {
     required this.state,
     required this.onStartReview,
     required this.isReviewRunning,
+    required this.onClaimMission,
+    required this.seoulDateKey,
   });
 
   final AppState state;
   final VoidCallback onStartReview;
   final bool isReviewRunning;
+  final ValueChanged<DailyMissionType> onClaimMission;
+  final String seoulDateKey;
+
+  String _dateKeySeoul(DateTime dateTime) {
+    final kst = dateTime.toUtc().add(_kSeoulOffset);
+    final month = kst.month.toString().padLeft(2, '0');
+    final day = kst.day.toString().padLeft(2, '0');
+    return '${kst.year}-$month-$day';
+  }
+
+  ({int solved, int correct, int reviewDone}) _todayProgress() {
+    final todayResults = state.results
+        .where((e) => _dateKeySeoul(e.timestamp) == seoulDateKey)
+        .toList();
+    return (
+      solved: todayResults.length,
+      correct: todayResults.where((e) => e.judgementScore >= 70).length,
+      reviewDone: state.dailyReviewCompletedCount,
+    );
+  }
+
+  bool _isComplete(DailyMissionType type, ({int solved, int correct, int reviewDone}) progress) {
+    return switch (type) {
+      DailyMissionType.solveFive => progress.solved >= 5,
+      DailyMissionType.accuracy70 =>
+        progress.solved > 0 && ((progress.correct / progress.solved) * 100) >= 70,
+      DailyMissionType.reviewOne => progress.reviewDone >= 1,
+    };
+  }
+
+  String _progressLabel(DailyMissionType type, ({int solved, int correct, int reviewDone}) progress) {
+    return switch (type) {
+      DailyMissionType.solveFive => '${progress.solved}/5',
+      DailyMissionType.accuracy70 => progress.solved == 0
+          ? '0% (0/0)'
+          : '${((progress.correct / progress.solved) * 100).round()}% (${progress.correct}/${progress.solved})',
+      DailyMissionType.reviewOne => '${progress.reviewDone}/1',
+    };
+  }
 
   String _decisionInterpretation({
     required int judgement,
@@ -5283,11 +5493,60 @@ class _WeeklyReportTab extends StatelessWidget {
         .toList()
       ..sort((a, b) => b.wrongAt.compareTo(a.wrongAt));
     final pendingWrong = recentWrong.where((e) => !e.isCleared).toList();
+    final progress = _todayProgress();
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
         children: [
+          Card(
+            color: const Color(0xFFEFFAF1),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('🎯 데일리 미션', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text('기준일: $seoulDateKey (Asia/Seoul)'),
+                  const SizedBox(height: 8),
+                  ...DailyMissionType.values.map((type) {
+                    final completed = _isComplete(type, progress);
+                    final claimed = state.dailyClaimedMissionIds.contains(type.key);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFD7E6EF)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(type.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                          const SizedBox(height: 3),
+                          Text('${type.subtitle} · 진행 ${_progressLabel(type, progress)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Text('보상 +${type.rewardCoins}코인 +${type.rewardPoints}P', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                              const Spacer(),
+                              FilledButton.tonal(
+                                onPressed: claimed || !completed ? null : () => onClaimMission(type),
+                                child: Text(claimed ? '수령완료' : completed ? '보상받기' : '진행중'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Card(
             color: const Color(0xFFFFF7E8),
             child: Padding(
