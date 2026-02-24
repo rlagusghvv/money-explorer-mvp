@@ -114,7 +114,7 @@ extension LearnerAgeBandX on LearnerAgeBand {
   String get introLine => switch (this) {
     LearnerAgeBand.younger => '뉴스를 생활 장면과 연결해서 생각해요.',
     LearnerAgeBand.middle => '뉴스의 원인-결과를 단계적으로 분석해요.',
-    LearnerAgeBand.older => '변수 간 상호작용과 리스크를 논리적으로 검토해요.',
+    LearnerAgeBand.older => '여러 영향을 함께 보고 위험을 차분히 살펴봐요.',
   };
 }
 
@@ -595,7 +595,7 @@ const List<ShopItem> kShopItems = [
     type: CosmeticType.home,
     price: 150,
     emoji: '🌊',
-    description: '파도처럼 유연한 리스크 관리!',
+    description: '파도처럼 유연하게 위험 줄이기!',
   ),
   ShopItem(
     id: 'home_space',
@@ -1683,7 +1683,7 @@ class _PlayTab extends StatelessWidget {
   static const List<String> _chapterObjectives = [
     '기회비용: 여러 선택지 중 가장 좋은 선택을 찾아요.',
     '분산투자: 수혜와 피해를 함께 보며 균형을 맞춰요.',
-    '리스크 관리: 투자 비율을 조절해 흔들림을 줄여요.',
+    '위험 관리: 투자 비율을 조절해 흔들림을 줄여요.',
   ];
 
   String _objectiveForChapter(int chapterNumber) {
@@ -1841,7 +1841,7 @@ class _PlayTab extends StatelessWidget {
                 border: Border.all(color: const Color(0xFFB6F1CF)),
               ),
               child: const Text(
-                '🏆 모든 챕터를 완주했어요! 리포트 탭에서 3대 KPI를 확인해보세요.',
+                '🏆 모든 챕터를 완주했어요! 리포트 탭에서 핵심 점수 3가지를 확인해보세요.',
                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
               ),
             )
@@ -2096,8 +2096,8 @@ class _AdventureMapCard extends StatelessWidget {
     '기회비용 기초',
     '수혜·피해 찾기',
     '분산 투자 연습',
-    '리스크 조절',
-    '변동성 대응',
+    '위험 조절',
+    '흔들림 대응',
   ];
 
   @override
@@ -2379,7 +2379,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   static const List<String> _fallbackReasoningChoices = [
     '뉴스와 직접 연결된 산업 먼저 확인',
     '영향이 몇 주/몇 달 갈지 기간 확인',
-    '수혜+피해를 함께 보고 분산 전략 세우기',
+    '도움+피해를 함께 보고 나눠서 계획 세우기',
   ];
 
   String _bandPrompt(String base) {
@@ -2397,7 +2397,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       LearnerAgeBand.middle =>
         '힌트: 수혜 ${s.goodIndustries.join(', ')} · 주의 ${s.badIndustries.join(', ')}',
       LearnerAgeBand.older =>
-        '힌트: 수혜 ${s.goodIndustries.join(', ')} / 역풍 ${s.badIndustries.join(', ')}',
+        '힌트: 도움 ${s.goodIndustries.join(', ')} / 주의 ${s.badIndustries.join(', ')}',
     };
   }
 
@@ -2800,7 +2800,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       DifficultyLevel.hard =>
         adjustedProfit < 0
             ? '하드 모드 경고: 높은 비중 실수는 손실이 커져요. 다음엔 20~50%부터 검증해요.'
-            : '하드 모드 팁: 승률이 높아도 비중 분할로 변동성 충격을 줄여요.',
+            : '하드 모드 팁: 잘 맞아도 비율을 나눠 흔들림 충격을 줄여요.',
     };
 
     final volatilityRisk =
@@ -2840,8 +2840,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             : '좋은 점: "$selectedReasoningLabel"처럼 근거 기반 선택을 시도했어요.',
       LearnerAgeBand.older =>
         industryScore >= 70
-            ? '${explanation.short} "$selectedIndustryLabel" 선택은 뉴스-산업 인과 연결이 타당해요.'
-            : '좋은 점: "$selectedReasoningLabel"으로 가설을 세우고 판단한 접근이 좋아요.',
+            ? '${explanation.short} "$selectedIndustryLabel" 선택은 뉴스와 산업의 연결이 알맞아요.'
+            : '좋은 점: "$selectedReasoningLabel"으로 예상 그림을 세우고 생각한 점이 좋아요.',
     };
 
     final weakPoint = switch (widget.learnerAgeBand) {
@@ -2855,8 +2855,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             : '${explanation.why} "$selectedReasoningLabel"에 확인 데이터 한 줄을 추가해요.',
       LearnerAgeBand.older =>
         reasoningScore >= 75
-            ? '${explanation.risk} 현재 비중 $allocationPercent%는 변동성 대비 포지션 관리가 필요해요.'
-            : '${explanation.why} "$selectedReasoningLabel"에 선행지표/지속기간 근거를 보강해요.',
+            ? '${explanation.risk} 현재 비중 $allocationPercent%는 흔들림을 생각해 조절이 필요해요.'
+            : '${explanation.why} "$selectedReasoningLabel"에 먼저 보이는 자료/지속 기간 근거를 더해요.',
     };
 
     final nextAction = allocationPercent >= 65
@@ -3504,7 +3504,7 @@ class _PerformanceResultCard extends StatelessWidget {
       return '아주 좋아! 수익과 안정성을 함께 챙긴 멋진 운영이야.';
     }
     if (snapshot.learningScore >= 60) {
-      return '좋아! 다음엔 리스크를 조금만 더 다듬으면 더 탄탄해져.';
+      return '좋아! 다음엔 위험 관리만 조금 더 다듬으면 더 탄탄해져.';
     }
     return '괜찮아, 탐험은 연습이야! 투자 비율을 조절하면 더 안정적으로 갈 수 있어.';
   }
@@ -3537,7 +3537,7 @@ class _PerformanceResultCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _metricChip('수익률', '${snapshot.returnPercent}%'),
-              _metricChip('변동성/리스크', '${snapshot.volatilityRisk}'),
+              _metricChip('흔들림/위험', '${snapshot.volatilityRisk}'),
               _metricChip('회복력(안정성)', '${snapshot.resilience}점'),
             ],
           ),
@@ -4729,12 +4729,12 @@ class _WeeklyReportTab extends StatelessWidget {
   }) {
     final quality = ((judgement + risk + emotion) / 3).round();
     if (quality >= 82) {
-      return '의사결정 품질이 매우 좋아요. 근거 확인 → 비중 조절 → 감정 통제가 안정적으로 이어졌어요.';
+      return '결정의 질이 매우 좋아요. 근거 확인 → 비중 조절 → 감정 통제가 안정적으로 이어졌어요.';
     }
     if (quality >= 65) {
-      return '의사결정 품질이 성장 구간이에요. 방향은 맞고, 비중 조절 일관성만 더해지면 점프할 수 있어요.';
+      return '결정의 질이 성장 구간이에요. 방향은 맞고, 비중 조절 일관성만 더해지면 점프할 수 있어요.';
     }
-    return '의사결정 품질이 기초 다지기 단계예요. 뉴스 근거를 1개 더 확인하고 작은 비중부터 시작하면 좋아요.';
+    return '결정의 질이 기초 다지기 단계예요. 뉴스 근거를 1개 더 확인하고 작은 비중부터 시작하면 좋아요.';
   }
 
   List<String> _nextWeekActions({
@@ -4781,7 +4781,7 @@ class _WeeklyReportTab extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '📊 성장 리포트 (핵심 KPI)',
+                    '📊 성장 리포트 (핵심 점수)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
@@ -4796,7 +4796,7 @@ class _WeeklyReportTab extends StatelessWidget {
                   _kpiTile('판단 정확도', state.avgJudgementScore, Icons.gps_fixed),
                   const SizedBox(height: 8),
                   _kpiTile(
-                    '리스크 관리 점수',
+                    '위험 관리 점수',
                     state.avgRiskManagementScore,
                     Icons.shield,
                   ),
@@ -4881,10 +4881,10 @@ class _WeeklyReportTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text('주간 손익: ${profit >= 0 ? '+' : ''}$profit코인'),
-                    Text('판단 정확도: $judge점 · 리스크 관리: $risk점 · 감정 통제: $emotion점'),
+                    Text('판단 정확도: $judge점 · 위험 관리: $risk점 · 감정 통제: $emotion점'),
                     const SizedBox(height: 6),
                     Text(
-                      '의사결정 해석: ${_decisionInterpretation(judgement: judge, risk: risk, emotion: emotion)}',
+                      '결정 해석: ${_decisionInterpretation(judgement: judge, risk: risk, emotion: emotion)}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -5108,7 +5108,7 @@ class _GuideTab extends StatelessWidget {
                 '학습 목표\n'
                 '• 쉬움: 뉴스-산업 직접 연결 찾기\n'
                 '• 보통: 영향 지속 기간(단기/중기) 판단\n'
-                '• 어려움: 2차 파급 + 분산 전략 설계\n'
+                '• 어려움: 다음 영향까지 생각 + 나눠서 계획 세우기\n'
                 '• 점수형 평가: 하나의 정답이 아니라 선택 조합의 질을 평가',
               ),
             ),
