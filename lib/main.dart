@@ -1819,6 +1819,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   String _mascotSpeech = '뉴스 한 줄! 어디가 움직일까?';
   int _stage = 0;
   final AudioPlayer _sfxPlayer = AudioPlayer();
+  bool _audioUnlocked = false;
+  DateTime? _lastAudioNoticeAt;
 
   static const List<String> _fallbackReasoningChoices = [
     '뉴스와 직접 연결된 산업 먼저 확인',
@@ -1994,12 +1996,77 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     };
   }
 
-  Future<void> _playFeedbackSfx(bool isCorrect) async {
-    if (widget.soundMuted) return;
-    final path = isCorrect ? 'audio/correct_beep.wav' : 'audio/wrong_beep.wav';
+  void _showAudioDebugNotice(String message) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (_lastAudioNoticeAt != null &&
+        now.difference(_lastAudioNoticeAt!) <
+            const Duration(milliseconds: 900)) {
+      return;
+    }
+    _lastAudioNoticeAt = now;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(milliseconds: 1100),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _ensureAudioUnlocked() async {
+    if (_audioUnlocked || widget.soundMuted) return;
     try {
-      await _sfxPlayer.play(AssetSource(path));
-    } catch (_) {}
+      await _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
+      await _sfxPlayer.setVolume(0);
+      await _sfxPlayer.play(AssetSource('audio/correct_beep.wav'));
+      await _sfxPlayer.stop();
+      await _sfxPlayer.setVolume(1);
+      _audioUnlocked = true;
+    } catch (_) {
+      // iOS WebView/Safari 오디오 잠금이 남아있을 수 있어 다음 사용자 제스처에서 재시도.
+    }
+  }
+
+  Future<void> _playFeedbackSfx(bool isCorrect) async {
+    if (widget.soundMuted) {
+      _showAudioDebugNotice('🔇 효과음이 꺼져 있어요');
+      return;
+    }
+
+    await _ensureAudioUnlocked();
+
+    final assetRelativePath = isCorrect
+        ? 'audio/correct_beep.wav'
+        : 'audio/wrong_beep.wav';
+    final assetFullPath = isCorrect
+        ? 'assets/audio/correct_beep.wav'
+        : 'assets/audio/wrong_beep.wav';
+
+    try {
+      await _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
+      await _sfxPlayer.setVolume(1);
+      await _sfxPlayer.play(AssetSource(assetRelativePath));
+      return;
+    } catch (_) {
+      // continue to fallback
+    }
+
+    try {
+      await _sfxPlayer.play(AssetSource(assetFullPath));
+      return;
+    } catch (_) {
+      // continue to fallback
+    }
+
+    try {
+      final webAssetUrl = Uri.base.resolve('assets/$assetFullPath').toString();
+      await _sfxPlayer.play(UrlSource(webAssetUrl));
+      return;
+    } catch (_) {
+      _showAudioDebugNotice('⚠️ 효과음 재생에 실패했어요');
+    }
   }
 
   Widget _stepProgress() {
