@@ -1229,6 +1229,9 @@ class _GameHomePageState extends State<GameHomePage> {
   StoredSession? _session;
   bool _syncing = false;
   String? _syncMessage;
+  int? _previewScenarioIndex;
+
+  bool get _isPreviewingScenario => _previewScenarioIndex != null;
 
   bool get _isLoggedIn => _session != null;
 
@@ -1409,6 +1412,7 @@ class _GameHomePageState extends State<GameHomePage> {
         ),
         results: nextResults,
       );
+      _previewScenarioIndex = null;
       _tabIndex = 0;
     });
     _persist();
@@ -1421,19 +1425,24 @@ class _GameHomePageState extends State<GameHomePage> {
     final total = widget.scenarios.length;
     if (total == 0) return;
 
-    final hasValidCurrent =
-        _state.currentScenario >= 0 && _state.currentScenario < total;
-    final candidates = List<int>.generate(total, (i) => i);
-    if (hasValidCurrent && total > 1) {
-      candidates.remove(_state.currentScenario);
-    }
+    final realChapter = _state.currentScenario.clamp(0, total - 1);
+    final candidates = List<int>.generate(total, (i) => i)
+      ..remove(realChapter);
+    if (candidates.isEmpty) return;
 
     final nextScenario = candidates[Random().nextInt(candidates.length)];
     setState(() {
-      _state = _state.copyWith(currentScenario: nextScenario);
+      _previewScenarioIndex = nextScenario;
       _tabIndex = 0;
     });
-    _persist();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '미리보기 문제 ${nextScenario + 1}번을 열었어요. 실제 챕터 진행은 ${realChapter + 1}번에서 유지돼요.',
+        ),
+      ),
+    );
   }
 
   void _buyAndEquipItem(ShopItem item) {
@@ -1551,11 +1560,24 @@ class _GameHomePageState extends State<GameHomePage> {
       _PlayTab(
         state: _state,
         scenarios: widget.scenarios,
+        previewScenarioIndex: _previewScenarioIndex,
+        isPreviewMode: _isPreviewingScenario,
         onDifficultyChanged: (d) {
           setState(() => _state = _state.copyWith(selectedDifficulty: d));
           _persist();
         },
-        onDone: _applyScenarioResult,
+        onDone: (result) {
+          if (_isPreviewingScenario) {
+            setState(() => _previewScenarioIndex = null);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('미리보기 완료! 실제 챕터 진행에는 반영되지 않았어요.'),
+              ),
+            );
+            return;
+          }
+          _applyScenarioResult(result);
+        },
         onJumpToDifferentScenario: _jumpToDifferentScenarioForTesting,
         onSoundMutedChanged: (muted) {
           setState(() => _state = _state.copyWith(soundMuted: muted));
@@ -1594,7 +1616,7 @@ class _GameHomePageState extends State<GameHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Image.asset(
-          'assets/branding/mascot_icon.png',
+          'assets/branding/mascot_icon_transparent.png',
           height: 42,
           fit: BoxFit.contain,
         ),
@@ -1641,6 +1663,8 @@ class _PlayTab extends StatelessWidget {
   const _PlayTab({
     required this.state,
     required this.scenarios,
+    required this.previewScenarioIndex,
+    required this.isPreviewMode,
     required this.onDone,
     required this.onJumpToDifferentScenario,
     required this.onDifficultyChanged,
@@ -1649,6 +1673,8 @@ class _PlayTab extends StatelessWidget {
 
   final AppState state;
   final List<Scenario> scenarios;
+  final int? previewScenarioIndex;
+  final bool isPreviewMode;
   final ValueChanged<ScenarioResult> onDone;
   final VoidCallback onJumpToDifferentScenario;
   final ValueChanged<DifficultyLevel> onDifficultyChanged;
@@ -1707,11 +1733,14 @@ class _PlayTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final done = state.currentScenario >= scenarios.length;
-    final chapter = done
+    final done = state.currentScenario >= scenarios.length && !isPreviewMode;
+    final realChapter = state.currentScenario >= scenarios.length
         ? scenarios.length
         : (state.currentScenario + 1).clamp(1, scenarios.length);
-    final chapterObjective = _objectiveForChapter(chapter);
+    final playScenarioIndex = isPreviewMode
+        ? (previewScenarioIndex ?? state.currentScenario).clamp(0, scenarios.length - 1)
+        : state.currentScenario.clamp(0, scenarios.length - 1);
+    final chapterObjective = _objectiveForChapter(realChapter);
 
     return Container(
       decoration: const BoxDecoration(
@@ -1729,10 +1758,11 @@ class _PlayTab extends StatelessWidget {
             total: scenarios.length,
             mascotEmoji: state.equippedCharacter.emoji,
             homeEmoji: state.equippedHome.emoji,
+            isPreviewMode: isPreviewMode,
           ),
           const SizedBox(height: 10),
           _ChapterObjectiveBanner(
-            chapter: chapter,
+            chapter: realChapter,
             objective: chapterObjective,
           ),
           const SizedBox(height: 10),
@@ -1776,6 +1806,7 @@ class _PlayTab extends StatelessWidget {
             state: state,
             totalScenarios: scenarios.length,
             homeEmoji: state.equippedHome.emoji,
+            previewScenarioIndex: isPreviewMode ? playScenarioIndex : null,
           ),
           const SizedBox(height: 10),
           Align(
@@ -1791,6 +1822,14 @@ class _PlayTab extends StatelessWidget {
               ),
             ),
           ),
+          if (isPreviewMode)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                '🔍 미리보기 모드: 풀이 결과는 실제 챕터 진행/포인트에 반영되지 않아요.',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
           const SizedBox(height: 12),
           if (done)
             Container(
@@ -1811,9 +1850,9 @@ class _PlayTab extends StatelessWidget {
               height: media.size.height * 0.66,
               child: ScenarioPlayCard(
                 key: ValueKey(
-                  'scenario-${state.currentScenario}-${state.selectedDifficulty.index}',
+                  'scenario-$playScenarioIndex-${state.selectedDifficulty.index}-preview-$isPreviewMode',
                 ),
-                scenario: scenarios[state.currentScenario],
+                scenario: scenarios[playScenarioIndex],
                 cash: state.cash,
                 difficulty: state.selectedDifficulty,
                 learnerAgeBand: state.learnerAgeBand,
@@ -1874,12 +1913,14 @@ class _MascotMapHeader extends StatelessWidget {
     required this.total,
     required this.mascotEmoji,
     required this.homeEmoji,
+    required this.isPreviewMode,
   });
 
   final AppState state;
   final int total;
   final String mascotEmoji;
   final String homeEmoji;
+  final bool isPreviewMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1915,7 +1956,14 @@ class _MascotMapHeader extends StatelessWidget {
               border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
             ),
             child: Center(
-              child: Text(mascotEmoji, style: const TextStyle(fontSize: 29)),
+              child: Image.asset(
+                'assets/branding/mascot_icon_transparent.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => Text(
+                  mascotEmoji,
+                  style: const TextStyle(fontSize: 29),
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -1924,7 +1972,9 @@ class _MascotMapHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '탐험맵 챕터 $chapter / $total',
+                  isPreviewMode
+                      ? '탐험맵 챕터 $chapter / $total · 미리보기 중'
+                      : '탐험맵 챕터 $chapter / $total',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -2034,11 +2084,21 @@ class _AdventureMapCard extends StatelessWidget {
     required this.state,
     required this.totalScenarios,
     required this.homeEmoji,
+    required this.previewScenarioIndex,
   });
 
   final AppState state;
   final int totalScenarios;
   final String homeEmoji;
+  final int? previewScenarioIndex;
+
+  static const List<String> _chapterThemes = [
+    '기회비용 기초',
+    '수혜·피해 찾기',
+    '분산 투자 연습',
+    '리스크 조절',
+    '변동성 대응',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -2047,6 +2107,10 @@ class _AdventureMapCard extends StatelessWidget {
       final y = i < 5 ? 0.25 : 0.75;
       return Offset(i < 5 ? x : 1 - x, y);
     });
+    final completedCount = state.currentScenario.clamp(0, totalScenarios);
+    final remainingCount = (totalScenarios - completedCount).clamp(0, totalScenarios);
+    final currentNodeIndex = previewScenarioIndex ?? state.currentScenario.clamp(0, totalScenarios - 1);
+    final currentTheme = _chapterThemes[currentNodeIndex % _chapterThemes.length];
 
     return Container(
       height: 178,
@@ -2083,7 +2147,7 @@ class _AdventureMapCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      '진행중 $homeEmoji',
+                      '현재 위치 $homeEmoji',
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 11,
@@ -2095,14 +2159,14 @@ class _AdventureMapCard extends StatelessWidget {
                   size: Size(c.maxWidth, c.maxHeight),
                   painter: _MapPathPainter(
                     points: points,
-                    completedCount: state.currentScenario,
+                    completedCount: completedCount,
                   ),
                 ),
                 ...List.generate(points.length, (i) {
                   final p = points[i];
-                  final status = i < state.currentScenario
+                  final status = i < completedCount
                       ? _NodeState.done
-                      : i == state.currentScenario
+                      : i == currentNodeIndex
                       ? _NodeState.current
                       : _NodeState.locked;
                   const zoneIcons = [
@@ -2124,9 +2188,25 @@ class _AdventureMapCard extends StatelessWidget {
                       index: i + 1,
                       state: status,
                       icon: zoneIcons[i % zoneIcons.length],
+                      theme: _chapterThemes[i % _chapterThemes.length],
                     ),
                   );
                 }),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    runSpacing: 6,
+                    spacing: 6,
+                    children: [
+                      _MapInfoPill(label: '완료 $completedCount개', color: const Color(0xFFE7FFF0)),
+                      _MapInfoPill(label: '남음 $remainingCount개', color: const Color(0xFFF2F5FF)),
+                      _MapInfoPill(label: '지금 학습: $currentTheme', color: const Color(0xFFFFF4E3)),
+                    ],
+                  ),
+                ),
               ],
             );
           },
@@ -2143,11 +2223,13 @@ class _MapNode extends StatelessWidget {
     required this.index,
     required this.state,
     required this.icon,
+    required this.theme,
   });
 
   final int index;
   final _NodeState state;
   final String icon;
+  final String theme;
 
   @override
   Widget build(BuildContext context) {
@@ -2157,24 +2239,53 @@ class _MapNode extends StatelessWidget {
       _NodeState.locked => const Color(0xFFC8D4E2),
     };
 
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
+    return Tooltip(
+      message: '챕터 $index · $theme',
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: bg,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: state == _NodeState.current ? const Color(0xFFFFD44A) : Colors.transparent,
+            width: 2,
           ),
-        ],
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 8,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: state == _NodeState.done
+              ? const Icon(Icons.check_rounded, color: Colors.white, size: 19)
+              : Text(icon, style: const TextStyle(fontSize: 15)),
+        ),
       ),
-      child: Center(
-        child: state == _NodeState.done
-            ? const Icon(Icons.check_rounded, color: Colors.white, size: 19)
-            : Text(icon, style: const TextStyle(fontSize: 15)),
+    );
+  }
+}
+
+class _MapInfoPill extends StatelessWidget {
+  const _MapInfoPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
       ),
     );
   }
