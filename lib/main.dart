@@ -144,6 +144,68 @@ extension DifficultyLabel on DifficultyLevel {
   };
 }
 
+class AppDesign {
+  static const Color bgTop = Color(0xFFF3F6FF);
+  static const Color bgBottom = Color(0xFFEDF3FF);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color surfaceSoft = Color(0xFFF6F8FF);
+  static const Color primary = Color(0xFF5B61F6);
+  static const Color primarySoft = Color(0xFFE7E9FF);
+  static const Color accent = Color(0xFF20A772);
+  static const Color warning = Color(0xFFFFB84D);
+  static const Color textStrong = Color(0xFF1F2A44);
+  static const Color textMuted = Color(0xFF66708A);
+  static const Color border = Color(0xFFDCE3F4);
+
+  static const double spaceXs = 6;
+  static const double spaceSm = 10;
+  static const double spaceMd = 14;
+  static const double spaceLg = 18;
+
+  static const BorderRadius cardRadius = BorderRadius.all(Radius.circular(20));
+  static const BorderRadius chipRadius = BorderRadius.all(Radius.circular(14));
+
+  static const List<BoxShadow> cardShadow = [
+    BoxShadow(
+      color: Color(0x120D1632),
+      blurRadius: 18,
+      offset: Offset(0, 8),
+    ),
+  ];
+
+  static TextStyle get title => const TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w900,
+    color: textStrong,
+    height: 1.2,
+  );
+
+  static TextStyle get subtitle => const TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
+    color: textMuted,
+  );
+}
+
+class AppCard extends StatelessWidget {
+  const AppCard({super.key, required this.child, this.padding = const EdgeInsets.all(AppDesign.spaceMd)});
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppDesign.surface,
+        borderRadius: AppDesign.cardRadius,
+        boxShadow: AppDesign.cardShadow,
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
 class KidEconMvpApp extends StatelessWidget {
   const KidEconMvpApp({super.key});
 
@@ -154,9 +216,30 @@ class KidEconMvpApp extends StatelessWidget {
       title: '뉴스 포트폴리오 탐험대',
       theme: ThemeData(
         useMaterial3: true,
+        scaffoldBackgroundColor: AppDesign.bgTop,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C63FF),
+          seedColor: AppDesign.primary,
           brightness: Brightness.light,
+        ),
+        textTheme: ThemeData.light().textTheme.apply(
+          bodyColor: AppDesign.textStrong,
+          displayColor: AppDesign.textStrong,
+        ),
+        cardTheme: const CardThemeData(
+          color: AppDesign.surface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: AppDesign.cardRadius),
+          margin: EdgeInsets.zero,
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppDesign.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
         ),
       ),
       home: const BootstrapPage(),
@@ -1409,9 +1492,16 @@ class _GameHomePageState extends State<GameHomePage> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('뉴스 포트폴리오 탐험대')),
+      appBar: AppBar(
+        title: const Text('뉴스 포트폴리오 탐험대'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+      ),
       body: SafeArea(child: pages[_tabIndex]),
       bottomNavigationBar: NavigationBar(
+        backgroundColor: AppDesign.surface,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: AppDesign.primarySoft,
         selectedIndex: _tabIndex,
         onDestinationSelected: (v) => setState(() => _tabIndex = v),
         destinations: const [
@@ -1506,7 +1596,7 @@ class _PlayTab extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF5F8FF), Color(0xFFEFF6FF), Color(0xFFFFFFFF)],
+          colors: [AppDesign.bgTop, AppDesign.bgBottom, Color(0xFFFFFFFF)],
         ),
       ),
       child: Padding(
@@ -1735,8 +1825,10 @@ class _DifficultySelector extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppDesign.surface,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDesign.border),
+        boxShadow: AppDesign.cardShadow,
       ),
       child: Row(
         children: DifficultyLevel.values
@@ -2257,8 +2349,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppDesign.surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppDesign.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2592,10 +2685,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: selected ? const Color(0xFFEAE8FF) : Colors.white,
+          color: selected ? AppDesign.primarySoft : AppDesign.surface,
           border: Border.all(
-            color: selected ? const Color(0xFF6C63FF) : const Color(0xFFDCE0EA),
+            color: selected ? AppDesign.primary : AppDesign.border,
           ),
+          boxShadow: selected ? AppDesign.cardShadow : null,
         ),
         child: Row(
           children: [
@@ -2972,16 +3066,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   Widget _gameSection({required String title, required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white,
-      ),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(title, style: AppDesign.title.copyWith(fontSize: 16)),
           const SizedBox(height: 6),
           child,
         ],
@@ -3069,11 +3158,16 @@ class _PerformanceResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFFF5F8FF),
-        border: Border.all(color: const Color(0xFFDCE5FF)),
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF6F9FF), Color(0xFFEFF4FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: AppDesign.border),
+        boxShadow: AppDesign.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4160,23 +4254,30 @@ class _ShopTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: ListView(
         children: [
-          Card(
-            color: const Color(0xFFEFF6FF),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFEFF4FF), Color(0xFFE7F7F0)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: AppDesign.cardRadius,
+              boxShadow: AppDesign.cardShadow,
+            ),
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '🛍️ 포인트 상점',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
+                  Text('🛍️ 포인트 상점', style: AppDesign.title),
                   const SizedBox(height: 6),
                   Text(
                     '현재 포인트: ${state.rewardPoints}P · 누적 사용: ${state.totalPointsSpent}P',
+                    style: AppDesign.subtitle,
                   ),
                   Text(
                     '장착 중: ${state.equippedCharacter.name} / ${state.equippedHome.name}',
+                    style: AppDesign.subtitle,
                   ),
                 ],
               ),
@@ -4194,10 +4295,9 @@ class _ShopTab extends StatelessWidget {
   }
 
   Widget _shopSection(String title, List<ShopItem> items) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -4258,7 +4358,6 @@ class _ShopTab extends StatelessWidget {
             }),
           ],
         ),
-      ),
     );
   }
 }
