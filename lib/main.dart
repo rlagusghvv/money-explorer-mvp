@@ -1820,7 +1820,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int _stage = 0;
   final AudioPlayer _sfxPlayer = AudioPlayer();
   bool _audioUnlocked = false;
-  DateTime? _lastAudioNoticeAt;
 
   static const List<String> _fallbackReasoningChoices = [
     '뉴스와 직접 연결된 산업 먼저 확인',
@@ -1996,25 +1995,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     };
   }
 
-  void _showAudioDebugNotice(String message) {
-    if (!mounted) return;
-    final now = DateTime.now();
-    if (_lastAudioNoticeAt != null &&
-        now.difference(_lastAudioNoticeAt!) <
-            const Duration(milliseconds: 900)) {
-      return;
-    }
-    _lastAudioNoticeAt = now;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(milliseconds: 1100),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   Future<void> _ensureAudioUnlocked() async {
     if (_audioUnlocked || widget.soundMuted) return;
     try {
@@ -2029,24 +2009,15 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     }
   }
 
-  Future<void> _playFeedbackSfx(bool isCorrect) async {
-    if (widget.soundMuted) {
-      _showAudioDebugNotice('🔇 효과음이 꺼져 있어요');
-      return;
-    }
+  Future<void> _playSfxAsset(String assetRelativePath, {double volume = 1}) async {
+    if (widget.soundMuted) return;
 
     await _ensureAudioUnlocked();
-
-    final assetRelativePath = isCorrect
-        ? 'audio/correct_beep.wav'
-        : 'audio/wrong_beep.wav';
-    final assetFullPath = isCorrect
-        ? 'assets/audio/correct_beep.wav'
-        : 'assets/audio/wrong_beep.wav';
+    final assetFullPath = 'assets/$assetRelativePath';
 
     try {
       await _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
-      await _sfxPlayer.setVolume(1);
+      await _sfxPlayer.setVolume(volume);
       await _sfxPlayer.play(AssetSource(assetRelativePath));
       return;
     } catch (_) {
@@ -2061,13 +2032,20 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     }
 
     try {
-      final webAssetUrl = Uri.base.resolve('assets/$assetFullPath').toString();
+      final webAssetUrl = Uri.base.resolve(assetFullPath).toString();
       await _sfxPlayer.play(UrlSource(webAssetUrl));
       return;
     } catch (_) {
-      _showAudioDebugNotice('⚠️ 효과음 재생에 실패했어요');
+      // non-blocking UX: ignore playback failures.
     }
   }
+
+  Future<void> _playSelectSfx() =>
+      _playSfxAsset('audio/correct_beep.wav', volume: 0.45);
+
+  Future<void> _playFeedbackSfx(bool isCorrect) => _playSfxAsset(
+    isCorrect ? 'audio/correct_beep.wav' : 'audio/wrong_beep.wav',
+  );
 
   Widget _stepProgress() {
     const totalSteps = 5;
@@ -2103,6 +2081,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ],
       ),
     );
+  }
+
+  void _selectWithSfx(VoidCallback updater) {
+    if (_submitted) return;
+    setState(updater);
+    _playSelectSfx();
   }
 
   Future<void> _confirmCurrentStep() async {
@@ -2447,7 +2431,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
               selected: _quizAnswer == i,
               onTap: _submitted
                   ? null
-                  : () => setState(() {
+                  : () => _selectWithSfx(() {
                       _quizAnswer = i;
                       _mascotSpeech = '좋아! 이제 마지막으로 투자 비중을 선택해보자.';
                     }),
@@ -2479,14 +2463,14 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 selected: _oxAnswer == true,
                 onSelected: _submitted
                     ? null
-                    : (_) => setState(() => _oxAnswer = true),
+                    : (_) => _selectWithSfx(() => _oxAnswer = true),
               ),
               ChoiceChip(
                 label: const Text('❌ X'),
                 selected: _oxAnswer == false,
                 onSelected: _submitted
                     ? null
-                    : (_) => setState(() => _oxAnswer = false),
+                    : (_) => _selectWithSfx(() => _oxAnswer = false),
               ),
             ],
           ),
@@ -2518,7 +2502,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                   IconButton(
                     onPressed: _submitted || position == 0
                         ? null
-                        : () => setState(() {
+                        : () => _selectWithSfx(() {
                             final temp = _orderingIndices[position - 1];
                             _orderingIndices[position - 1] =
                                 _orderingIndices[position];
@@ -2530,7 +2514,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                     onPressed:
                         _submitted || position == _orderingIndices.length - 1
                         ? null
-                        : () => setState(() {
+                        : () => _selectWithSfx(() {
                             final temp = _orderingIndices[position + 1];
                             _orderingIndices[position + 1] =
                                 _orderingIndices[position];
@@ -2578,8 +2562,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                       selected: _matchAnswers[i] == targetIndex,
                       onSelected: _submitted
                           ? null
-                          : (_) =>
-                                setState(() => _matchAnswers[i] = targetIndex),
+                          : (_) => _selectWithSfx(
+                              () => _matchAnswers[i] = targetIndex,
+                            ),
                     );
                   }),
                 ),
@@ -2610,7 +2595,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 selected: _selectedIndustry == i,
                 onTap: _submitted
                     ? null
-                    : () => setState(() => _selectedIndustry = i),
+                    : () => _selectWithSfx(() => _selectedIndustry = i),
               ),
             ),
             const SizedBox(height: 10),
@@ -2636,7 +2621,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 selected: _reasoningAnswer == i,
                 onTap: _submitted
                     ? null
-                    : () => setState(() => _reasoningAnswer = i),
+                    : () => _selectWithSfx(() => _reasoningAnswer = i),
               ),
             ),
             const SizedBox(height: 10),
@@ -2702,7 +2687,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                   selected: selected,
                   onSelected: _submitted
                       ? null
-                      : (_) => setState(() => _allocationPercent = v),
+                      : (_) => _selectWithSfx(() => _allocationPercent = v),
                 );
               }).toList(),
             ),
