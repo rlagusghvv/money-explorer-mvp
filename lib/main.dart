@@ -370,6 +370,73 @@ class _BootstrapPageState extends State<BootstrapPage> {
   }
 }
 
+enum WrongStageType { industry, reasoning, quiz, allocation, finalDecision }
+
+extension WrongStageTypeX on WrongStageType {
+  String get label => switch (this) {
+    WrongStageType.industry => '산업 고르기',
+    WrongStageType.reasoning => '이유 고르기',
+    WrongStageType.quiz => '질문 카드',
+    WrongStageType.allocation => '투자 비중',
+    WrongStageType.finalDecision => '최종 제출',
+  };
+}
+
+class WrongAnswerNote {
+  const WrongAnswerNote({
+    required this.id,
+    required this.scenarioId,
+    required this.scenarioTitle,
+    required this.stageType,
+    required this.wrongAt,
+    this.reviewedAt,
+  });
+
+  final String id;
+  final int scenarioId;
+  final String scenarioTitle;
+  final WrongStageType stageType;
+  final DateTime wrongAt;
+  final DateTime? reviewedAt;
+
+  bool get isCleared => reviewedAt != null;
+
+  WrongAnswerNote copyWith({DateTime? reviewedAt}) {
+    return WrongAnswerNote(
+      id: id,
+      scenarioId: scenarioId,
+      scenarioTitle: scenarioTitle,
+      stageType: stageType,
+      wrongAt: wrongAt,
+      reviewedAt: reviewedAt ?? this.reviewedAt,
+    );
+  }
+
+  factory WrongAnswerNote.fromJson(Map<String, dynamic> json) {
+    return WrongAnswerNote(
+      id: json['id'] as String? ?? '',
+      scenarioId: (json['scenarioId'] as num?)?.round() ?? 0,
+      scenarioTitle: json['scenarioTitle'] as String? ?? '알 수 없는 문제',
+      stageType: WrongStageType.values.firstWhere(
+        (e) => e.name == json['stageType'],
+        orElse: () => WrongStageType.quiz,
+      ),
+      wrongAt:
+          DateTime.tryParse(json['wrongAt'] as String? ?? '') ?? DateTime.now(),
+      reviewedAt: DateTime.tryParse(json['reviewedAt'] as String? ?? ''),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'scenarioId': scenarioId,
+    'scenarioTitle': scenarioTitle,
+    'stageType': stageType.name,
+    'wrongAt': wrongAt.toIso8601String(),
+    'reviewedAt': reviewedAt?.toIso8601String(),
+  };
+}
+
 class ScenarioResult {
   const ScenarioResult({
     required this.scenarioId,
@@ -745,6 +812,7 @@ class AppState {
     required this.homeThemeName,
     required this.totalPointsSpent,
     required this.soundMuted,
+    required this.wrongAnswerNotes,
   });
 
   factory AppState.initial() => const AppState(
@@ -786,6 +854,7 @@ class AppState {
     homeThemeName: '나의 미니룸',
     totalPointsSpent: 0,
     soundMuted: false,
+    wrongAnswerNotes: [],
   );
 
   final String playerName;
@@ -806,6 +875,7 @@ class AppState {
   final String homeThemeName;
   final int totalPointsSpent;
   final bool soundMuted;
+  final List<WrongAnswerNote> wrongAnswerNotes;
 
   ShopItem get equippedCharacter => kShopItems.firstWhere(
     (item) => item.id == equippedCharacterId,
@@ -901,6 +971,10 @@ class AppState {
           (json['totalPointsSpent'] as num?)?.round() ??
           initial.totalPointsSpent,
       soundMuted: json['soundMuted'] == true,
+      wrongAnswerNotes: (json['wrongAnswerNotes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(WrongAnswerNote.fromJson)
+          .toList(),
     );
   }
 
@@ -929,6 +1003,7 @@ class AppState {
     'homeThemeName': homeThemeName,
     'totalPointsSpent': totalPointsSpent,
     'soundMuted': soundMuted,
+    'wrongAnswerNotes': wrongAnswerNotes.map((e) => e.toJson()).toList(),
   };
 
   AppState copyWith({
@@ -950,6 +1025,7 @@ class AppState {
     String? homeThemeName,
     int? totalPointsSpent,
     bool? soundMuted,
+    List<WrongAnswerNote>? wrongAnswerNotes,
   }) {
     return AppState(
       playerName: playerName ?? this.playerName,
@@ -971,6 +1047,7 @@ class AppState {
       homeThemeName: homeThemeName ?? this.homeThemeName,
       totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
       soundMuted: soundMuted ?? this.soundMuted,
+      wrongAnswerNotes: wrongAnswerNotes ?? this.wrongAnswerNotes,
     );
   }
 }
@@ -995,6 +1072,7 @@ class AppStateStore {
   static const _kAuthSession = 'authSession';
   static const _kSoundMuted = 'soundMuted';
   static const _kHomeThemeName = 'homeThemeName';
+  static const _kWrongAnswerNotes = 'wrongAnswerNotes';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1081,6 +1159,19 @@ class AppStateStore {
 
     Map<String, dynamic> adjustmentRaw = const {};
     final adjustmentJson = prefs.getString(_kDecorationAdjustments);
+    var wrongNotes = <WrongAnswerNote>[];
+    final wrongNotesJson = prefs.getString(_kWrongAnswerNotes);
+    if (wrongNotesJson != null && wrongNotesJson.isNotEmpty) {
+      try {
+        final list = jsonDecode(wrongNotesJson) as List<dynamic>;
+        wrongNotes = list
+            .whereType<Map<String, dynamic>>()
+            .map(WrongAnswerNote.fromJson)
+            .toList();
+      } catch (_) {
+        wrongNotes = const [];
+      }
+    }
     if (adjustmentJson != null && adjustmentJson.isNotEmpty) {
       try {
         adjustmentRaw = jsonDecode(adjustmentJson) as Map<String, dynamic>;
@@ -1127,6 +1218,7 @@ class AppStateStore {
       totalPointsSpent:
           prefs.getInt(_kTotalPointsSpent) ?? initial.totalPointsSpent,
       soundMuted: prefs.getBool(_kSoundMuted) ?? initial.soundMuted,
+      wrongAnswerNotes: wrongNotes,
     );
   }
 
@@ -1175,6 +1267,10 @@ class AppStateStore {
     await prefs.setInt(_kTotalPointsSpent, state.totalPointsSpent);
     await prefs.setBool(_kSoundMuted, state.soundMuted);
     await prefs.setString(_kHomeThemeName, state.homeThemeName);
+    await prefs.setString(
+      _kWrongAnswerNotes,
+      jsonEncode(state.wrongAnswerNotes.map((e) => e.toJson()).toList()),
+    );
 
     final encoded = state.results
         .map(
@@ -1244,10 +1340,81 @@ class _GameHomePageState extends State<GameHomePage> {
   String? _syncMessage;
   int? _previewScenarioIndex;
   bool _showPracticeNudge = false;
+  List<WrongAnswerNote> _reviewQueue = const [];
+  int _reviewRoundIndex = 0;
 
   bool get _isPreviewingScenario => _previewScenarioIndex != null;
 
   bool get _isLoggedIn => _session != null;
+  bool get _isReviewMode => _reviewQueue.isNotEmpty;
+
+  void _recordWrongAnswer(Scenario scenario, WrongStageType stageType) {
+    final now = DateTime.now();
+    final note = WrongAnswerNote(
+      id: '${scenario.id}-${stageType.name}-${now.millisecondsSinceEpoch}',
+      scenarioId: scenario.id,
+      scenarioTitle: scenario.title,
+      stageType: stageType,
+      wrongAt: now,
+    );
+    final next = [note, ..._state.wrongAnswerNotes].take(60).toList();
+    setState(() {
+      _state = _state.copyWith(wrongAnswerNotes: next);
+    });
+    _persist();
+  }
+
+  void _startReviewRound() {
+    final targets = _state.wrongAnswerNotes
+        .where((e) => !e.isCleared)
+        .toList()
+      ..sort((a, b) => b.wrongAt.compareTo(a.wrongAt));
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('지금은 복습할 문제가 없어요. 탐험을 먼저 해볼까?')),
+      );
+      return;
+    }
+    setState(() {
+      _reviewQueue = targets.take(3).toList();
+      _reviewRoundIndex = 0;
+      _tabIndex = 0;
+      _previewScenarioIndex = null;
+      _showPracticeNudge = false;
+    });
+  }
+
+  void _endReviewRound({bool completed = true}) {
+    setState(() {
+      _reviewQueue = const [];
+      _reviewRoundIndex = 0;
+    });
+    if (completed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('복습 라운드 완료! 이제 탐험 맵으로 돌아가도 좋아요.')),
+      );
+    }
+  }
+
+  void _handleReviewDone(ScenarioResult result) {
+    final note = _reviewQueue[_reviewRoundIndex];
+    if (result.judgementScore >= 70) {
+      final nextNotes = _state.wrongAnswerNotes.map((e) {
+        if (e.id == note.id && !e.isCleared) {
+          return e.copyWith(reviewedAt: DateTime.now());
+        }
+        return e;
+      }).toList();
+      _state = _state.copyWith(wrongAnswerNotes: nextNotes);
+      _persist();
+    }
+
+    if (_reviewRoundIndex >= _reviewQueue.length - 1) {
+      _endReviewRound();
+      return;
+    }
+    setState(() => _reviewRoundIndex += 1);
+  }
 
   @override
   void initState() {
@@ -1604,12 +1771,19 @@ class _GameHomePageState extends State<GameHomePage> {
         state: _state,
         scenarios: widget.scenarios,
         previewScenarioIndex: _previewScenarioIndex,
+        reviewQueue: _reviewQueue,
+        reviewRoundIndex: _reviewRoundIndex,
+        isReviewMode: _isReviewMode,
         isPreviewMode: _isPreviewingScenario,
         onDifficultyChanged: (d) {
           setState(() => _state = _state.copyWith(selectedDifficulty: d));
           _persist();
         },
         onDone: (result) {
+          if (_isReviewMode) {
+            _handleReviewDone(result);
+            return;
+          }
           if (_isPreviewingScenario) {
             setState(() => _previewScenarioIndex = null);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -1632,6 +1806,8 @@ class _GameHomePageState extends State<GameHomePage> {
             setState(() => _showPracticeNudge = false);
           }
         },
+        onWrongAnswer: _recordWrongAnswer,
+        onStopReview: _endReviewRound,
       ),
       _MyHomeTab(
         state: _state,
@@ -1642,7 +1818,11 @@ class _GameHomePageState extends State<GameHomePage> {
         onThemeNameChanged: _updateHomeThemeName,
       ),
       _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
-      _WeeklyReportTab(state: _state),
+      _WeeklyReportTab(
+        state: _state,
+        onStartReview: _startReviewRound,
+        isReviewRunning: _isReviewMode,
+      ),
       _GuideTab(
         state: _state,
         session: _session,
@@ -1728,6 +1908,9 @@ class _PlayTab extends StatelessWidget {
     required this.state,
     required this.scenarios,
     required this.previewScenarioIndex,
+    required this.reviewQueue,
+    required this.reviewRoundIndex,
+    required this.isReviewMode,
     required this.isPreviewMode,
     required this.onDone,
     required this.onJumpToDifferentScenario,
@@ -1735,11 +1918,16 @@ class _PlayTab extends StatelessWidget {
     required this.onSoundMutedChanged,
     required this.showPracticeNudge,
     required this.onPracticeNudgeDismissed,
+    required this.onWrongAnswer,
+    required this.onStopReview,
   });
 
   final AppState state;
   final List<Scenario> scenarios;
   final int? previewScenarioIndex;
+  final List<WrongAnswerNote> reviewQueue;
+  final int reviewRoundIndex;
+  final bool isReviewMode;
   final bool isPreviewMode;
   final ValueChanged<ScenarioResult> onDone;
   final VoidCallback onJumpToDifferentScenario;
@@ -1747,6 +1935,8 @@ class _PlayTab extends StatelessWidget {
   final ValueChanged<bool> onSoundMutedChanged;
   final bool showPracticeNudge;
   final VoidCallback onPracticeNudgeDismissed;
+  final void Function(Scenario scenario, WrongStageType stageType) onWrongAnswer;
+  final VoidCallback onStopReview;
 
   static const List<String> _chapterObjectives = [
     '기회비용: 여러 선택지 중 가장 좋은 선택을 찾아요.',
@@ -1801,14 +1991,21 @@ class _PlayTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final done = state.currentScenario >= scenarios.length && !isPreviewMode;
+    final done = state.currentScenario >= scenarios.length && !isPreviewMode && !isReviewMode;
     final realChapter = state.currentScenario >= scenarios.length
         ? scenarios.length
         : (state.currentScenario + 1).clamp(1, scenarios.length);
-    final playScenarioIndex = isPreviewMode
+    final reviewScenarioIndex = isReviewMode
+        ? reviewQueue[reviewRoundIndex].scenarioId - 1
+        : null;
+    final playScenarioIndex = isReviewMode
+        ? (reviewScenarioIndex ?? 0).clamp(0, scenarios.length - 1)
+        : isPreviewMode
         ? (previewScenarioIndex ?? state.currentScenario).clamp(0, scenarios.length - 1)
         : state.currentScenario.clamp(0, scenarios.length - 1);
-    final chapterObjective = _objectiveForChapter(realChapter);
+    final chapterObjective = isReviewMode
+        ? '복습 라운드 ${reviewRoundIndex + 1}/${reviewQueue.length}: 틀렸던 부분을 다시 연습해요.'
+        : _objectiveForChapter(realChapter);
 
     return Container(
       decoration: const BoxDecoration(
@@ -1837,6 +2034,21 @@ class _PlayTab extends StatelessWidget {
           if (showPracticeNudge)
             _PracticeStartNudgeBanner(onClose: onPracticeNudgeDismissed),
           if (showPracticeNudge) const SizedBox(height: 10),
+          if (isReviewMode)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '📝 복습 중! 맞히면 오답 노트가 정리돼요.',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
+                  ),
+                  TextButton(onPressed: onStopReview, child: const Text('복습 종료')),
+                ],
+              ),
+            ),
           Row(
             children: [
               Expanded(
@@ -1880,19 +2092,20 @@ class _PlayTab extends StatelessWidget {
             previewScenarioIndex: isPreviewMode ? playScenarioIndex : null,
           ),
           const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: onJumpToDifferentScenario,
-              icon: const Icon(Icons.shuffle_rounded, size: 18),
-              label: const Text('다른 문제 보기'),
-              style: OutlinedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                side: const BorderSide(color: AppDesign.primarySoft),
-                foregroundColor: AppDesign.primaryDeep,
+          if (!isReviewMode)
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: onJumpToDifferentScenario,
+                icon: const Icon(Icons.shuffle_rounded, size: 18),
+                label: const Text('다른 문제 보기'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  side: const BorderSide(color: AppDesign.primarySoft),
+                  foregroundColor: AppDesign.primaryDeep,
+                ),
               ),
             ),
-          ),
           if (isPreviewMode)
             const Padding(
               padding: EdgeInsets.only(top: 6),
@@ -1930,6 +2143,10 @@ class _PlayTab extends StatelessWidget {
                 chapterCondition: _conditionForNextChapter(),
                 soundMuted: state.soundMuted,
                 onDone: onDone,
+                onWrongAnswer: (stage) => onWrongAnswer(
+                  scenarios[playScenarioIndex],
+                  stage,
+                ),
               ),
             ),
         ],
@@ -2612,6 +2829,7 @@ class ScenarioPlayCard extends StatefulWidget {
     required this.chapterCondition,
     required this.soundMuted,
     required this.onDone,
+    required this.onWrongAnswer,
   });
 
   final Scenario scenario;
@@ -2621,6 +2839,7 @@ class ScenarioPlayCard extends StatefulWidget {
   final ChapterCondition chapterCondition;
   final bool soundMuted;
   final ValueChanged<ScenarioResult> onDone;
+  final ValueChanged<WrongStageType> onWrongAnswer;
 
   @override
   State<ScenarioPlayCard> createState() => _ScenarioPlayCardState();
@@ -2961,6 +3180,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       final ok = _industryChoices[_selectedIndustry!].score >= 70;
       await _playFeedbackSfx(ok);
       if (!mounted) return;
+      if (!ok) {
+        widget.onWrongAnswer(WrongStageType.industry);
+      }
       setState(() {
         _stage = 1;
         _mascotSpeech = ok ? '정확해! 이제 이유를 골라보자.' : '괜찮아! 이유를 고르며 다시 정리해보자.';
@@ -2972,6 +3194,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       final ok = _reasoningScore() >= 75;
       await _playFeedbackSfx(ok);
       if (!mounted) return;
+      if (!ok) {
+        widget.onWrongAnswer(WrongStageType.reasoning);
+      }
       setState(() {
         _stage = 2;
         _mascotSpeech = ok ? '좋아! 마지막 질문 카드야.' : '좋은 시도야! 질문 카드에서 만회해보자.';
@@ -2983,6 +3208,9 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       final ok = _quizInteractionScore() >= 70;
       await _playFeedbackSfx(ok);
       if (!mounted) return;
+      if (!ok) {
+        widget.onWrongAnswer(WrongStageType.quiz);
+      }
       setState(() {
         _stage = 3;
         _mascotSpeech = ok ? '굿! 이제 투자 비중을 정해보자.' : '좋아! 이제 투자 비중으로 균형을 맞춰보자.';
@@ -3162,6 +3390,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             .round();
 
     if (judgementScore < 55 && _wrongAttempts == 0) {
+      widget.onWrongAnswer(WrongStageType.finalDecision);
       setState(() {
         _wrongAttempts = 1;
         _hintUnlocked = true;
@@ -4993,9 +5222,15 @@ class _ShopTab extends StatelessWidget {
 }
 
 class _WeeklyReportTab extends StatelessWidget {
-  const _WeeklyReportTab({required this.state});
+  const _WeeklyReportTab({
+    required this.state,
+    required this.onStartReview,
+    required this.isReviewRunning,
+  });
 
   final AppState state;
+  final VoidCallback onStartReview;
+  final bool isReviewRunning;
 
   String _decisionInterpretation({
     required int judgement,
@@ -5044,11 +5279,49 @@ class _WeeklyReportTab extends StatelessWidget {
         ? 0.0
         : (state.totalPointsSpent / totalEarnedPoints) * 100;
     final savingRatio = 100 - spendingRatio;
+    final recentWrong = state.wrongAnswerNotes
+        .toList()
+      ..sort((a, b) => b.wrongAt.compareTo(a.wrongAt));
+    final pendingWrong = recentWrong.where((e) => !e.isCleared).toList();
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
         children: [
+          Card(
+            color: const Color(0xFFFFF7E8),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('📝 오답 노트', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text('남은 복습 ${pendingWrong.length}개 · 최근 기록 ${recentWrong.length}개'),
+                  const SizedBox(height: 8),
+                  if (recentWrong.isEmpty)
+                    const Text('아직 오답 노트가 없어요. 탐험에서 틀린 문제가 여기에 쌓여요!')
+                  else
+                    ...recentWrong.take(6).map(
+                      (note) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '• ${note.scenarioTitle} · ${note.stageType.label} · ${note.isCleared ? '복습 완료' : '복습 필요'}',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: isReviewRunning ? null : onStartReview,
+                    icon: const Icon(Icons.replay_circle_filled_rounded),
+                    label: Text(isReviewRunning ? '복습 진행 중' : '복습 시작 (3문제)'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
