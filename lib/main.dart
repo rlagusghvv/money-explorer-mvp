@@ -18,6 +18,17 @@ enum LearnerAgeBand { younger, middle, older }
 
 enum MarketMood { calm, balanced, wobbly }
 
+enum QuizInteractionType { multipleChoice, ox, ordering, matching }
+
+extension QuizInteractionTypeX on QuizInteractionType {
+  String get label => switch (this) {
+    QuizInteractionType.multipleChoice => '객관식',
+    QuizInteractionType.ox => 'OX',
+    QuizInteractionType.ordering => '순서 배열',
+    QuizInteractionType.matching => '매칭',
+  };
+}
+
 extension MarketMoodX on MarketMood {
   String get label => switch (this) {
     MarketMood.calm => '맑음',
@@ -1752,6 +1763,14 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   int? _selectedIndustry;
   int? _reasoningAnswer;
   int? _quizAnswer;
+  bool? _oxAnswer;
+  late QuizInteractionType _quizType;
+  late bool _oxStatementIsTrue;
+  late String _oxStatement;
+  late List<int> _orderingIndices;
+  late List<String> _matchPrompts;
+  late List<String> _matchTargets;
+  late List<int?> _matchAnswers;
   int? _allocationPercent;
   late List<ScenarioOption> _industryChoices;
   late List<ScenarioOption> _quizChoices;
@@ -1808,6 +1827,25 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       ..shuffle(Random(widget.scenario.id * 997 + DateTime.now().millisecond));
     _quizChoices = [...widget.scenario.quizOptions]
       ..shuffle(Random(widget.scenario.id * 991 + DateTime.now().microsecond));
+
+    _quizType = QuizInteractionType
+        .values[widget.scenario.id % QuizInteractionType.values.length];
+
+    final bestOption = _quizChoices.reduce(
+      (a, b) => a.score >= b.score ? a : b,
+    );
+    _oxStatementIsTrue = widget.scenario.id % 2 == 0;
+    _oxStatement = _oxStatementIsTrue
+        ? '${bestOption.label} 쪽이 이번 뉴스에서 더 유리해요.'
+        : '${bestOption.label} 쪽이 이번 뉴스에서 더 불리해요.';
+
+    _orderingIndices = List<int>.generate(_quizChoices.length, (i) => i);
+    _matchPrompts = const ['수요가 늘기 쉬운 이슈', '주의가 필요한 이슈'];
+    _matchTargets = [
+      widget.scenario.goodIndustries.first,
+      widget.scenario.badIndustries.first,
+    ];
+    _matchAnswers = [null, null];
   }
 
   List<String> get _reasoningChoices {
@@ -1872,10 +1910,57 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
   int? get _allocation => _allocationPercent;
 
+  bool get _isQuizAnswered {
+    return switch (_quizType) {
+      QuizInteractionType.multipleChoice => _quizAnswer != null,
+      QuizInteractionType.ox => _oxAnswer != null,
+      QuizInteractionType.ordering => true,
+      QuizInteractionType.matching => _matchAnswers.every((e) => e != null),
+    };
+  }
+
   bool get _canSelectAllocation =>
-      _selectedIndustry != null &&
-      _reasoningAnswer != null &&
-      _quizAnswer != null;
+      _selectedIndustry != null && _reasoningAnswer != null && _isQuizAnswered;
+
+  int _quizInteractionScore() {
+    switch (_quizType) {
+      case QuizInteractionType.multipleChoice:
+        return _quizAnswer == null ? 0 : _quizChoices[_quizAnswer!].score;
+      case QuizInteractionType.ox:
+        if (_oxAnswer == null) return 0;
+        return _oxAnswer == _oxStatementIsTrue ? 100 : 35;
+      case QuizInteractionType.ordering:
+        final expected = List<int>.generate(_quizChoices.length, (i) => i)
+          ..sort(
+            (a, b) => _quizChoices[b].score.compareTo(_quizChoices[a].score),
+          );
+        var matchCount = 0;
+        for (var i = 0; i < _orderingIndices.length; i++) {
+          if (_orderingIndices[i] == expected[i]) matchCount++;
+        }
+        if (matchCount == _quizChoices.length) return 100;
+        if (matchCount == _quizChoices.length - 1) return 75;
+        if (matchCount == 1) return 55;
+        return 35;
+      case QuizInteractionType.matching:
+        var correct = 0;
+        for (var i = 0; i < _matchAnswers.length; i++) {
+          if (_matchAnswers[i] == i) correct++;
+        }
+        if (correct == _matchAnswers.length) return 100;
+        if (correct == 1) return 60;
+        return 30;
+    }
+  }
+
+  String _quizTypeExplanation() {
+    return switch (_quizType) {
+      QuizInteractionType.multipleChoice => '객관식: 뉴스와 가장 맞는 선택지를 골랐어요.',
+      QuizInteractionType.ox => 'OX: 문장이 맞는지 빠르게 검증했어요.',
+      QuizInteractionType.ordering => '순서 배열: 영향이 큰 순서대로 정리했어요.',
+      QuizInteractionType.matching => '매칭: 이슈와 산업을 짝지어 연결했어요.',
+    };
+  }
 
   int get _investedCoins {
     final a = _allocation;
@@ -2034,7 +2119,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
   void _submit() {
     if (_selectedIndustry == null ||
-        _quizAnswer == null ||
+        !_isQuizAnswered ||
         _reasoningAnswer == null ||
         _allocation == null ||
         _submitted) {
@@ -2042,7 +2127,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     }
 
     final industryScore = _industryChoices[_selectedIndustry!].score;
-    final quizScore = _quizChoices[_quizAnswer!].score;
+    final quizScore = _quizInteractionScore();
     final reasonScore = _reasoningScore();
     final judgementScore =
         ((industryScore * 0.45) + (quizScore * 0.35) + (reasonScore * 0.20))
@@ -2117,6 +2202,8 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         chapterConditionLine: widget.chapterCondition.summary(
           widget.learnerAgeBand,
         ),
+        quizTypeLabel: _quizType.label,
+        quizTypeExplanation: _quizTypeExplanation(),
         goodPoint: scenarioFeedback.goodPoint,
         weakPoint: scenarioFeedback.weakPoint,
         nextAction: scenarioFeedback.nextAction,
@@ -2161,6 +2248,167 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _quizInteractionWidget(Scenario s) {
+    final title = '3) ${_quizType.label}';
+    if (_quizType == QuizInteractionType.multipleChoice) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _bandPrompt('$title · ${s.quizQuestion}'),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          ...List.generate(
+            _quizChoices.length,
+            (i) => _choiceTile(
+              text: _quizChoices[i].label,
+              selected: _quizAnswer == i,
+              onTap: _submitted
+                  ? null
+                  : () => setState(() {
+                      _quizAnswer = i;
+                      _mascotSpeech = '좋아! 이제 마지막으로 투자 비중을 선택해보자.';
+                    }),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_quizType == QuizInteractionType.ox) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _bandPrompt('$title · 문장이 맞으면 O, 아니면 X!'),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _oxStatement,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('⭕ O'),
+                selected: _oxAnswer == true,
+                onSelected: _submitted
+                    ? null
+                    : (_) => setState(() => _oxAnswer = true),
+              ),
+              ChoiceChip(
+                label: const Text('❌ X'),
+                selected: _oxAnswer == false,
+                onSelected: _submitted
+                    ? null
+                    : (_) => setState(() => _oxAnswer = false),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (_quizType == QuizInteractionType.ordering) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _bandPrompt('$title · 영향이 큰 순서로 위에서 아래로 정렬해요.'),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          ...List.generate(_orderingIndices.length, (position) {
+            final optionIndex = _orderingIndices[position];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Text(
+                    '${position + 1}위',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_quizChoices[optionIndex].label)),
+                  IconButton(
+                    onPressed: _submitted || position == 0
+                        ? null
+                        : () => setState(() {
+                            final temp = _orderingIndices[position - 1];
+                            _orderingIndices[position - 1] =
+                                _orderingIndices[position];
+                            _orderingIndices[position] = temp;
+                          }),
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                  ),
+                  IconButton(
+                    onPressed:
+                        _submitted || position == _orderingIndices.length - 1
+                        ? null
+                        : () => setState(() {
+                            final temp = _orderingIndices[position + 1];
+                            _orderingIndices[position + 1] =
+                                _orderingIndices[position];
+                            _orderingIndices[position] = temp;
+                          }),
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _bandPrompt('$title · 이슈와 산업을 연결해요.'),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        ...List.generate(_matchPrompts.length, (i) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F8FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _matchPrompts[i],
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  children: List.generate(_matchTargets.length, (targetIndex) {
+                    return ChoiceChip(
+                      label: Text(_matchTargets[targetIndex]),
+                      selected: _matchAnswers[i] == targetIndex,
+                      onSelected: _submitted
+                          ? null
+                          : (_) =>
+                                setState(() => _matchAnswers[i] = targetIndex),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 
@@ -2216,30 +2464,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
         ),
         const SizedBox(height: 10),
         _gameSection(
-          title: '3) 퀴즈',
+          title: '3) 질문 카드',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _bandPrompt(s.quizQuestion),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-              ...List.generate(
-                _quizChoices.length,
-                (i) => _choiceTile(
-                  text: _quizChoices[i].label,
-                  selected: _quizAnswer == i,
-                  onTap: _submitted
-                      ? null
-                      : () => setState(() {
-                          _quizAnswer = i;
-                          _mascotSpeech = '좋아! 이제 마지막으로 투자 비중을 선택해보자.';
-                        }),
-                ),
-              ),
+              _quizInteractionWidget(s),
               const SizedBox(height: 10),
               if (_hintUnlocked && !_hintUsed)
                 OutlinedButton.icon(
@@ -2514,6 +2743,8 @@ class _PerformanceSnapshot {
     required this.formulaLine,
     required this.coachingLine,
     required this.chapterConditionLine,
+    required this.quizTypeLabel,
+    required this.quizTypeExplanation,
     required this.goodPoint,
     required this.weakPoint,
     required this.nextAction,
@@ -2535,6 +2766,8 @@ class _PerformanceSnapshot {
   final String formulaLine;
   final String coachingLine;
   final String chapterConditionLine;
+  final String quizTypeLabel;
+  final String quizTypeExplanation;
   final String goodPoint;
   final String weakPoint;
   final String nextAction;
@@ -2601,6 +2834,10 @@ class _PerformanceResultCard extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
+          Text(
+            '질문 타입: ${snapshot.quizTypeLabel} · ${snapshot.quizTypeExplanation}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
           Text(
             '코칭: ${snapshot.nextAction}',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
