@@ -1998,7 +1998,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   Future<void> _ensureAudioUnlocked() async {
     if (_audioUnlocked || widget.soundMuted) return;
     try {
-      await _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
       await _sfxPlayer.setVolume(0);
       await _sfxPlayer.play(AssetSource('audio/correct_beep.wav'));
       await _sfxPlayer.stop();
@@ -2015,7 +2014,6 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     await _ensureAudioUnlocked();
 
     try {
-      await _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
       await _sfxPlayer.setVolume(volume);
       await _sfxPlayer.play(AssetSource(assetRelativePath));
       return;
