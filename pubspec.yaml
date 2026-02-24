@@ -67,6 +67,7 @@ flutter:
     - assets/audio/correct_beep.mp3
     - assets/audio/wrong_beep.mp3
     - assets/miniroom/generated/
+    - assets/branding/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

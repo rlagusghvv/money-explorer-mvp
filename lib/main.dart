@@ -145,19 +145,19 @@ extension DifficultyLabel on DifficultyLevel {
 }
 
 class AppDesign {
-  // Kid-friendly palette inspired by cheerful learning apps (Duolingo-like).
-  static const Color bgTop = Color(0xFFF3FFF4);
-  static const Color bgBottom = Color(0xFFEAF6FF);
+  // Mid-balanced vivid+calm palette (Duolingo-inspired, slightly toned down).
+  static const Color bgTop = Color(0xFFF4FAF6);
+  static const Color bgBottom = Color(0xFFE9F4FF);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceSoft = Color(0xFFF6FBFF);
+  static const Color surfaceSoft = Color(0xFFF5FAFF);
 
-  static const Color primary = Color(0xFF58CC02);
-  static const Color primaryDeep = Color(0xFF3E9E1A);
-  static const Color primarySoft = Color(0xFFEAF8DC);
-  static const Color secondary = Color(0xFF1CB0F6);
-  static const Color secondarySoft = Color(0xFFE3F5FF);
-  static const Color accent = Color(0xFFFFC800);
-  static const Color warning = Color(0xFFFF9F43);
+  static const Color primary = Color(0xFF54BF19);
+  static const Color primaryDeep = Color(0xFF3F9A24);
+  static const Color primarySoft = Color(0xFFEAF7DF);
+  static const Color secondary = Color(0xFF2AA8EA);
+  static const Color secondarySoft = Color(0xFFE6F4FF);
+  static const Color accent = Color(0xFFFFC65A);
+  static const Color warning = Color(0xFFFFA45A);
 
   static const Color success = Color(0xFF2BB673);
   static const Color danger = Color(0xFFE1565B);
@@ -179,7 +179,12 @@ class AppDesign {
     BoxShadow(color: Color(0x120D1632), blurRadius: 18, offset: Offset(0, 8)),
   ];
 
+  static const String titleFont = 'Paperlogy';
+  static const String bodyFont = 'Pretendard';
+
   static TextStyle get title => const TextStyle(
+    fontFamily: titleFont,
+    fontFamilyFallback: [bodyFont, 'Noto Sans KR', 'sans-serif'],
     fontSize: 18,
     fontWeight: FontWeight.w900,
     color: textStrong,
@@ -187,6 +192,8 @@ class AppDesign {
   );
 
   static TextStyle get subtitle => const TextStyle(
+    fontFamily: bodyFont,
+    fontFamilyFallback: ['Noto Sans KR', 'sans-serif'],
     fontSize: 13,
     fontWeight: FontWeight.w700,
     color: textMuted,
@@ -223,18 +230,74 @@ class KidEconMvpApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: '뉴스 포트폴리오 탐험대',
+      title: '경제탐험대',
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: AppDesign.bodyFont,
         scaffoldBackgroundColor: AppDesign.bgTop,
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppDesign.primary,
           brightness: Brightness.light,
         ),
-        textTheme: ThemeData.light().textTheme.apply(
-          bodyColor: AppDesign.textStrong,
-          displayColor: AppDesign.textStrong,
-        ),
+        textTheme: ThemeData.light().textTheme
+            .apply(
+              bodyColor: AppDesign.textStrong,
+              displayColor: AppDesign.textStrong,
+            )
+            .copyWith(
+              displayLarge: ThemeData.light().textTheme.displayLarge?.copyWith(
+                fontFamily: AppDesign.titleFont,
+                fontFamilyFallback: const [
+                  AppDesign.bodyFont,
+                  'Noto Sans KR',
+                  'sans-serif',
+                ],
+              ),
+              displayMedium: ThemeData.light().textTheme.displayMedium
+                  ?.copyWith(
+                    fontFamily: AppDesign.titleFont,
+                    fontFamilyFallback: const [
+                      AppDesign.bodyFont,
+                      'Noto Sans KR',
+                      'sans-serif',
+                    ],
+                  ),
+              displaySmall: ThemeData.light().textTheme.displaySmall?.copyWith(
+                fontFamily: AppDesign.titleFont,
+                fontFamilyFallback: const [
+                  AppDesign.bodyFont,
+                  'Noto Sans KR',
+                  'sans-serif',
+                ],
+              ),
+              headlineLarge: ThemeData.light().textTheme.headlineLarge
+                  ?.copyWith(
+                    fontFamily: AppDesign.titleFont,
+                    fontFamilyFallback: const [
+                      AppDesign.bodyFont,
+                      'Noto Sans KR',
+                      'sans-serif',
+                    ],
+                  ),
+              headlineMedium: ThemeData.light().textTheme.headlineMedium
+                  ?.copyWith(
+                    fontFamily: AppDesign.titleFont,
+                    fontFamilyFallback: const [
+                      AppDesign.bodyFont,
+                      'Noto Sans KR',
+                      'sans-serif',
+                    ],
+                  ),
+              headlineSmall: ThemeData.light().textTheme.headlineSmall
+                  ?.copyWith(
+                    fontFamily: AppDesign.titleFont,
+                    fontFamilyFallback: const [
+                      AppDesign.bodyFont,
+                      'Noto Sans KR',
+                      'sans-serif',
+                    ],
+                  ),
+            ),
         cardTheme: const CardThemeData(
           color: AppDesign.surface,
           elevation: 0,
@@ -251,6 +314,11 @@ class KidEconMvpApp extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            textStyle: const TextStyle(
+              fontFamily: AppDesign.bodyFont,
+              fontFamilyFallback: ['Noto Sans KR', 'sans-serif'],
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -1505,9 +1573,10 @@ class _GameHomePageState extends State<GameHomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          '뉴스 포트폴리오 탐험대',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        title: Image.asset(
+          'assets/branding/mascot_icon.png',
+          height: 42,
+          fit: BoxFit.contain,
         ),
         centerTitle: false,
         backgroundColor: Colors.transparent,
@@ -1880,7 +1949,10 @@ class _DifficultySelector extends StatelessWidget {
                       borderRadius: BorderRadius.circular(13),
                       gradient: current == d
                           ? const LinearGradient(
-                              colors: [AppDesign.primaryDeep, AppDesign.secondary],
+                              colors: [
+                                AppDesign.primaryDeep,
+                                AppDesign.secondary,
+                              ],
                             )
                           : null,
                       color: current == d ? null : const Color(0xFFF2F5FB),
