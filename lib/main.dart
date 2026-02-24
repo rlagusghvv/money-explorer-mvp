@@ -10,7 +10,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.24-r1';
+const kAppUiVersion = 'ui-2026.02.24-r2';
 
 void main() {
   runApp(const KidEconMvpApp());
@@ -734,6 +734,7 @@ class AppState {
     required this.results,
     required this.bestStreak,
     required this.onboarded,
+    required this.tutorialCompleted,
     required this.selectedDifficulty,
     required this.learnerAgeBand,
     required this.ownedItemIds,
@@ -754,6 +755,7 @@ class AppState {
     results: [],
     bestStreak: 0,
     onboarded: false,
+    tutorialCompleted: false,
     selectedDifficulty: DifficultyLevel.easy,
     learnerAgeBand: LearnerAgeBand.middle,
     ownedItemIds: {
@@ -793,6 +795,7 @@ class AppState {
   final List<ScenarioResult> results;
   final int bestStreak;
   final bool onboarded;
+  final bool tutorialCompleted;
   final DifficultyLevel selectedDifficulty;
   final LearnerAgeBand learnerAgeBand;
   final Set<String> ownedItemIds;
@@ -865,6 +868,7 @@ class AppState {
           .toList(),
       bestStreak: (json['bestStreak'] as num?)?.round() ?? initial.bestStreak,
       onboarded: json['onboarded'] == true,
+      tutorialCompleted: json['tutorialCompleted'] == true,
       selectedDifficulty: DifficultyLevel.values.firstWhere(
         (d) => d.name == json['selectedDifficulty'],
         orElse: () => initial.selectedDifficulty,
@@ -908,6 +912,7 @@ class AppState {
     'results': results.map((e) => e.toJson()).toList(),
     'bestStreak': bestStreak,
     'onboarded': onboarded,
+    'tutorialCompleted': tutorialCompleted,
     'selectedDifficulty': selectedDifficulty.name,
     'learnerAgeBand': learnerAgeBand.name,
     'ownedItemIds': ownedItemIds.toList(),
@@ -934,6 +939,7 @@ class AppState {
     List<ScenarioResult>? results,
     int? bestStreak,
     bool? onboarded,
+    bool? tutorialCompleted,
     DifficultyLevel? selectedDifficulty,
     LearnerAgeBand? learnerAgeBand,
     Set<String>? ownedItemIds,
@@ -953,6 +959,7 @@ class AppState {
       results: results ?? this.results,
       bestStreak: bestStreak ?? this.bestStreak,
       onboarded: onboarded ?? this.onboarded,
+      tutorialCompleted: tutorialCompleted ?? this.tutorialCompleted,
       selectedDifficulty: selectedDifficulty ?? this.selectedDifficulty,
       learnerAgeBand: learnerAgeBand ?? this.learnerAgeBand,
       ownedItemIds: ownedItemIds ?? this.ownedItemIds,
@@ -975,6 +982,7 @@ class AppStateStore {
   static const _kResults = 'results';
   static const _kBestStreak = 'bestStreak';
   static const _kOnboarded = 'onboarded';
+  static const _kTutorialCompleted = 'tutorialCompleted';
   static const _kDifficulty = 'difficulty';
   static const _kLearnerAgeBand = 'learnerAgeBand';
   static const _kRewardPoints = 'rewardPoints';
@@ -1090,6 +1098,8 @@ class AppStateStore {
       results: parsed,
       bestStreak: prefs.getInt(_kBestStreak) ?? initial.bestStreak,
       onboarded: prefs.getBool(_kOnboarded) ?? initial.onboarded,
+      tutorialCompleted:
+          prefs.getBool(_kTutorialCompleted) ?? initial.tutorialCompleted,
       selectedDifficulty: _difficultyFrom(
         prefs.getString(_kDifficulty) ?? ageBand.defaultDifficulty.name,
       ),
@@ -1142,6 +1152,7 @@ class AppStateStore {
     await prefs.setInt(_kCurrentScenario, state.currentScenario);
     await prefs.setInt(_kBestStreak, state.bestStreak);
     await prefs.setBool(_kOnboarded, state.onboarded);
+    await prefs.setBool(_kTutorialCompleted, state.tutorialCompleted);
     await prefs.setString(_kDifficulty, state.selectedDifficulty.name);
     await prefs.setString(_kLearnerAgeBand, state.learnerAgeBand.name);
     await prefs.setStringList(_kOwnedItemIds, state.ownedItemIds.toList());
@@ -1232,6 +1243,7 @@ class _GameHomePageState extends State<GameHomePage> {
   bool _syncing = false;
   String? _syncMessage;
   int? _previewScenarioIndex;
+  bool _showPracticeNudge = false;
 
   bool get _isPreviewingScenario => _previewScenarioIndex != null;
 
@@ -1242,9 +1254,14 @@ class _GameHomePageState extends State<GameHomePage> {
     super.initState();
     _state = widget.initialState;
     _session = widget.initialSession;
-    if (!_state.onboarded) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showOnboarding());
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!_state.onboarded) {
+        await _showOnboarding();
+      }
+      if (_state.onboarded && !_state.tutorialCompleted && mounted) {
+        await _showGameFlowTutorial();
+      }
+    });
     if (_isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _tryLoadCloudProgress(),
@@ -1332,6 +1349,22 @@ class _GameHomePageState extends State<GameHomePage> {
     );
   }
 
+  Future<void> _showGameFlowTutorial() async {
+    final done = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _GameFlowTutorialDialog(),
+    );
+    if (done == true && mounted) {
+      setState(() {
+        _state = _state.copyWith(tutorialCompleted: true);
+        _tabIndex = 0;
+        _showPracticeNudge = true;
+      });
+      _persist();
+    }
+  }
+
   Future<void> _persist() async {
     await AppStateStore.save(_state);
     final session = _session;
@@ -1416,6 +1449,7 @@ class _GameHomePageState extends State<GameHomePage> {
       );
       _previewScenarioIndex = null;
       _tabIndex = 0;
+      _showPracticeNudge = false;
     });
     _persist();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1548,12 +1582,19 @@ class _GameHomePageState extends State<GameHomePage> {
       _state = AppState.initial().copyWith(
         playerName: _state.playerName,
         onboarded: true,
+        tutorialCompleted: false,
         selectedDifficulty: _state.selectedDifficulty,
         learnerAgeBand: _state.learnerAgeBand,
       );
       _tabIndex = 0;
+      _showPracticeNudge = false;
     });
     _persist();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _showGameFlowTutorial();
+      }
+    });
   }
 
   @override
@@ -1584,6 +1625,12 @@ class _GameHomePageState extends State<GameHomePage> {
         onSoundMutedChanged: (muted) {
           setState(() => _state = _state.copyWith(soundMuted: muted));
           _persist();
+        },
+        showPracticeNudge: _showPracticeNudge,
+        onPracticeNudgeDismissed: () {
+          if (_showPracticeNudge) {
+            setState(() => _showPracticeNudge = false);
+          }
         },
       ),
       _MyHomeTab(
@@ -1686,6 +1733,8 @@ class _PlayTab extends StatelessWidget {
     required this.onJumpToDifferentScenario,
     required this.onDifficultyChanged,
     required this.onSoundMutedChanged,
+    required this.showPracticeNudge,
+    required this.onPracticeNudgeDismissed,
   });
 
   final AppState state;
@@ -1696,6 +1745,8 @@ class _PlayTab extends StatelessWidget {
   final VoidCallback onJumpToDifferentScenario;
   final ValueChanged<DifficultyLevel> onDifficultyChanged;
   final ValueChanged<bool> onSoundMutedChanged;
+  final bool showPracticeNudge;
+  final VoidCallback onPracticeNudgeDismissed;
 
   static const List<String> _chapterObjectives = [
     '기회비용: 여러 선택지 중 가장 좋은 선택을 찾아요.',
@@ -1783,6 +1834,9 @@ class _PlayTab extends StatelessWidget {
             objective: chapterObjective,
           ),
           const SizedBox(height: 10),
+          if (showPracticeNudge)
+            _PracticeStartNudgeBanner(onClose: onPracticeNudgeDismissed),
+          if (showPracticeNudge) const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -1878,6 +1932,113 @@ class _PlayTab extends StatelessWidget {
                 onDone: onDone,
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GameFlowTutorialDialog extends StatefulWidget {
+  const _GameFlowTutorialDialog();
+
+  @override
+  State<_GameFlowTutorialDialog> createState() => _GameFlowTutorialDialogState();
+}
+
+class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
+  int _step = 0;
+
+  static const _steps = [
+    ('1/5', '📰 뉴스 보기', '짧은 뉴스를 읽고 어떤 일이 생겼는지 먼저 파악해요.'),
+    ('2/5', '✅ 정답 고르기', '가장 관련 있는 산업 카드를 하나 골라요.'),
+    ('3/5', '🧠 이유 고르기', '왜 그렇게 생각했는지 근거를 선택해요.'),
+    ('4/5', '💰 투자 비중 정하기', '20~80% 중에서 투자 비중을 정해요. 너무 크게 넣지 않아도 좋아요.'),
+    ('5/5', '🎁 결과/보상 확인', '결과 카드에서 점수와 보상을 보고 다음 챕터로 가요.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final current = _steps[_step];
+    final isLast = _step == _steps.length - 1;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(current.$1, style: const TextStyle(fontWeight: FontWeight.w800, color: AppDesign.textMuted)),
+            const SizedBox(height: 6),
+            Text(current.$2, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+            const SizedBox(height: 8),
+            Text(current.$3, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 7,
+                value: (_step + 1) / _steps.length,
+                backgroundColor: const Color(0xFFE8EEFB),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              '처음 한 번만 보여요. 바로 시작하고 싶으면 건너뛰기를 눌러도 돼요.',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('건너뛰기'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed: () {
+                    if (isLast) {
+                      Navigator.pop(context, true);
+                      return;
+                    }
+                    setState(() => _step += 1);
+                  },
+                  child: Text(isLast ? '연습 시작' : '다음'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PracticeStartNudgeBanner extends StatelessWidget {
+  const _PracticeStartNudgeBanner({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5D6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFDF8A)),
+      ),
+      child: Row(
+        children: [
+          const Text('👉', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              '여기서 첫 연습문제를 시작해요! 아래 카드에서 차근차근 풀어보세요.',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+            ),
+          ),
+          IconButton(onPressed: onClose, icon: const Icon(Icons.close, size: 18)),
         ],
       ),
     );
