@@ -2013,27 +2013,11 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     if (widget.soundMuted) return;
 
     await _ensureAudioUnlocked();
-    final assetFullPath = 'assets/$assetRelativePath';
 
     try {
       await _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
       await _sfxPlayer.setVolume(volume);
       await _sfxPlayer.play(AssetSource(assetRelativePath));
-      return;
-    } catch (_) {
-      // continue to fallback
-    }
-
-    try {
-      await _sfxPlayer.play(AssetSource(assetFullPath));
-      return;
-    } catch (_) {
-      // continue to fallback
-    }
-
-    try {
-      final webAssetUrl = Uri.base.resolve(assetFullPath).toString();
-      await _sfxPlayer.play(UrlSource(webAssetUrl));
       return;
     } catch (_) {
       // non-blocking UX: ignore playback failures.
