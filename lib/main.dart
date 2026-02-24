@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -1999,7 +2000,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     if (_audioUnlocked || widget.soundMuted) return;
     try {
       await _sfxPlayer.setVolume(0);
-      await _sfxPlayer.play(AssetSource('audio/correct_beep.wav'));
+      if (kIsWeb) {
+        final webAssetUrl = Uri.base.resolve('assets/assets/audio/correct_beep.wav').toString();
+        await _sfxPlayer.play(UrlSource(webAssetUrl));
+      } else {
+        await _sfxPlayer.play(AssetSource('audio/correct_beep.wav'));
+      }
       await _sfxPlayer.stop();
       await _sfxPlayer.setVolume(1);
       _audioUnlocked = true;
@@ -2015,7 +2021,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
 
     try {
       await _sfxPlayer.setVolume(volume);
-      await _sfxPlayer.play(AssetSource(assetRelativePath));
+      if (kIsWeb) {
+        final webAssetUrl = Uri.base.resolve('assets/assets/$assetRelativePath').toString();
+        await _sfxPlayer.play(UrlSource(webAssetUrl));
+      } else {
+        await _sfxPlayer.play(AssetSource(assetRelativePath));
+      }
       return;
     } catch (_) {
       // non-blocking UX: ignore playback failures.
