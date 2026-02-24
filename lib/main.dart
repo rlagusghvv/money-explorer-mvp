@@ -2025,7 +2025,14 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   Future<void> _playSfxAsset(String assetRelativePath, {double volume = 1}) async {
-    if (widget.soundMuted) return;
+    if (widget.soundMuted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🔇 효과음이 꺼져 있어요 (우상단 스피커 버튼)')),
+        );
+      }
+      return;
+    }
 
     await _ensureAudioUnlocked();
 
@@ -2033,18 +2040,29 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       await _sfxPlayer.setVolume(volume);
       if (kIsWeb) {
         for (final path in _webAudioCandidates(assetRelativePath)) {
-          try {
-            final webAssetUrl = Uri.base.resolve('assets/assets/$path').toString();
-            await _sfxPlayer.play(UrlSource(webAssetUrl));
-            return;
-          } catch (_) {}
+          for (final prefix in const ['assets/assets/', 'assets/']) {
+            try {
+              final webAssetUrl = Uri.base.resolve('$prefix$path').toString();
+              await _sfxPlayer.play(UrlSource(webAssetUrl));
+              return;
+            } catch (_) {}
+          }
         }
       } else {
-        await _sfxPlayer.play(AssetSource(assetRelativePath));
-        return;
+        try {
+          await _sfxPlayer.play(AssetSource(assetRelativePath));
+          return;
+        } catch (_) {
+          await _sfxPlayer.play(AssetSource('assets/$assetRelativePath'));
+          return;
+        }
       }
     } catch (_) {
-      // non-blocking UX: ignore playback failures.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ 효과음 재생 실패 (기기 무음/브라우저 정책 확인)')),
+        );
+      }
     }
   }
 
