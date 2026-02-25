@@ -5759,8 +5759,22 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                 borderRadius: BorderRadius.circular(18),
                 child: LayoutBuilder(
                   builder: (context, c) {
+                    final homeVisual = _miniroomSpecForItem(
+                      widget.state.equippedHome,
+                    );
                     return Stack(
                       children: [
+                        if (homeVisual.assetPath != null)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Image.asset(
+                                homeVisual.assetPath!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox.shrink(),
+                              ),
+                            ),
+                          ),
                         Positioned.fill(
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
@@ -5772,9 +5786,11 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                               if (_isManipulating || _isSelectionLocked) return;
                               setState(() => _selectedZone = null);
                             },
-                            child: CustomPaint(
-                              painter: const _MiniRoomShellPainter(),
-                            ),
+                            child: homeVisual.assetPath == null
+                                ? CustomPaint(
+                                    painter: const _MiniRoomShellPainter(),
+                                  )
+                                : const SizedBox.expand(),
                           ),
                         ),
                         ...items
