@@ -11,7 +11,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r20';
+const kAppUiVersion = 'ui-2026.02.25-r21';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5257,8 +5257,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
 
   static const double _minScale = 0.72;
   static const double _maxScale = 1.38;
-  static const double _hitSlop = 18;
-  static const _characterAnchor = _RoomAnchor(Alignment(0.03, 0.52), Size(110, 110), 4);
+  static const double _hitSlop = 6;
+  static const _characterAnchor = _RoomAnchor(
+    Alignment(0.03, 0.52),
+    Size(110, 110),
+    4,
+  );
 
   bool get _isSelectionLocked {
     final lock = _selectionLockUntil;
@@ -5292,7 +5296,9 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
             item: item,
             anchor: anchor,
             zone: zone,
-            adjustment: widget.state.decorationAdjustments[zone] ?? RoomItemAdjustment.defaults,
+            adjustment:
+                widget.state.decorationAdjustments[zone] ??
+                RoomItemAdjustment.defaults,
           );
         })
         .whereType<_RoomPlacedItem>()
@@ -5303,18 +5309,28 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   @override
   void didUpdateWidget(covariant _MyHomeRoomCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_selectedZone != null && widget.state.equippedDecorations[_selectedZone] == null) {
+    if (_selectedZone != null &&
+        widget.state.equippedDecorations[_selectedZone] == null) {
       _selectedZone = null;
     }
   }
 
+  void _debugTouchLog(String message) {
+    if (!kDebugMode) return;
+    debugPrint('[MiniRoomTouch] $message');
+  }
+
   void _beginManipulation({DecorationZone? zone, bool character = false}) {
-    if (_selectedZone != zone || _isCharacterSelected != character || !_isManipulating) {
+    if (_selectedZone != zone ||
+        _isCharacterSelected != character ||
+        !_isManipulating) {
       setState(() {
         _selectedZone = zone;
         _isCharacterSelected = character;
         _isManipulating = true;
-        _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 450));
+        _selectionLockUntil = DateTime.now().add(
+          const Duration(milliseconds: 450),
+        );
       });
     }
     widget.onGestureActiveChanged(true);
@@ -5325,6 +5341,21 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     _suppressBackgroundTap = true;
     _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 220));
     widget.onGestureActiveChanged(false);
+  }
+
+  Rect _visualRectFromAdjustment({
+    required _RoomAnchor anchor,
+    required RoomItemAdjustment adjustment,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    final width = anchor.size.width * adjustment.scale;
+    final height = anchor.size.height * adjustment.scale;
+    final left = (maxWidth - width) * ((anchor.alignment.x + 1) / 2) +
+        adjustment.offsetX;
+    final top = (maxHeight - height) * ((anchor.alignment.y + 1) / 2) +
+        adjustment.offsetY;
+    return Rect.fromLTWH(left, top, width, height);
   }
 
   RoomItemAdjustment _adjustmentFromRect({
@@ -5370,6 +5401,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   }
 
   Widget _buildGestureItem({
+    required String debugLabel,
     required _RoomAnchor anchor,
     required RoomItemAdjustment adjustment,
     required Widget child,
@@ -5379,67 +5411,155 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     required double maxWidth,
     required double maxHeight,
   }) {
-    final width = anchor.size.width * adjustment.scale;
-    final height = anchor.size.height * adjustment.scale;
-    final left = (maxWidth - width) * ((anchor.alignment.x + 1) / 2) + adjustment.offsetX;
-    final top = (maxHeight - height) * ((anchor.alignment.y + 1) / 2) + adjustment.offsetY;
+    final visualRect = _visualRectFromAdjustment(
+      anchor: anchor,
+      adjustment: adjustment,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+    );
 
-    var workingLeft = left;
-    var workingTop = top;
-    var workingWidth = width;
-    var lastScale = 1.0;
+    var gestureRect = visualRect;
+    Offset? lastFocal;
+    Offset? gestureStartFocal;
+    int pointerMode = 0;
+    double baseWidth = visualRect.width;
+    double baseLeft = visualRect.left;
+    double baseTop = visualRect.top;
 
     return Positioned(
-      left: left - _hitSlop,
-      top: top - _hitSlop,
-      width: width + (_hitSlop * 2),
-      height: height + (_hitSlop * 2),
+      left: visualRect.left - _hitSlop,
+      top: visualRect.top - _hitSlop,
+      width: visualRect.width + (_hitSlop * 2),
+      height: visualRect.height + (_hitSlop * 2),
       child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onSelect,
-        onScaleStart: (_) {
-          lastScale = 1.0;
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          if (_isManipulating || _isSelectionLocked) return;
           onSelect();
+          _debugTouchLog('$debugLabel tap-select bounds=$visualRect');
+        },
+        onScaleStart: (details) {
+          onSelect();
+          _beginManipulation(
+            zone: _selectedZone,
+            character: _isCharacterSelected,
+          );
+          gestureRect = visualRect;
+          baseWidth = gestureRect.width;
+          baseLeft = gestureRect.left;
+          baseTop = gestureRect.top;
+          lastFocal = details.focalPoint;
+          gestureStartFocal = details.focalPoint;
+          pointerMode = details.pointerCount >= 2 ? 2 : 1;
+          _debugTouchLog(
+            '$debugLabel start pointers=$pointerMode rect=$gestureRect',
+          );
         },
         onScaleUpdate: (details) {
           onSelect();
-          final scaleFactor = details.scale / lastScale;
-          lastScale = details.scale;
-          workingLeft += details.focalPointDelta.dx;
-          workingTop += details.focalPointDelta.dy;
-          workingWidth = (workingWidth * scaleFactor)
-              .clamp(anchor.size.width * _minScale, anchor.size.width * _maxScale);
+          final currentMode = details.pointerCount >= 2 ? 2 : 1;
+          if (pointerMode != currentMode) {
+            pointerMode = currentMode;
+            baseWidth = gestureRect.width;
+            baseLeft = gestureRect.left;
+            baseTop = gestureRect.top;
+            gestureStartFocal = details.focalPoint;
+            lastFocal = details.focalPoint;
+            _debugTouchLog('$debugLabel mode-switch -> $pointerMode');
+          }
+
+          if (pointerMode == 1) {
+            final delta = details.focalPoint - (lastFocal ?? details.focalPoint);
+            gestureRect = Rect.fromLTWH(
+              gestureRect.left + delta.dx,
+              gestureRect.top + delta.dy,
+              gestureRect.width,
+              gestureRect.height,
+            );
+          } else {
+            final candidateWidth =
+                (baseWidth * details.scale).clamp(
+                      anchor.size.width * _minScale,
+                      anchor.size.width * _maxScale,
+                    );
+            final widthDelta = candidateWidth - gestureRect.width;
+            final focalDelta = details.focalPoint - (gestureStartFocal ?? details.focalPoint);
+            gestureRect = Rect.fromLTWH(
+              baseLeft + focalDelta.dx - (widthDelta / 2),
+              baseTop + focalDelta.dy -
+                  ((anchor.size.height / anchor.size.width) * widthDelta / 2),
+              candidateWidth,
+              candidateWidth * (anchor.size.height / anchor.size.width),
+            );
+          }
+
           final next = _adjustmentFromRect(
             anchor: anchor,
             current: adjustment,
-            left: workingLeft,
-            top: workingTop,
-            width: workingWidth,
+            left: gestureRect.left,
+            top: gestureRect.top,
+            width: gestureRect.width,
             maxWidth: maxWidth,
             maxHeight: maxHeight,
           );
           onChanged(next);
+          lastFocal = details.focalPoint;
         },
         onScaleEnd: (_) {
           final next = _adjustmentFromRect(
             anchor: anchor,
             current: adjustment,
-            left: workingLeft,
-            top: workingTop,
-            width: workingWidth,
+            left: gestureRect.left,
+            top: gestureRect.top,
+            width: gestureRect.width,
             maxWidth: maxWidth,
             maxHeight: maxHeight,
             snapToGrid: true,
           );
           onChanged(next);
+          _debugTouchLog('$debugLabel end rect=$gestureRect');
           _endManipulation();
         },
         child: Padding(
           padding: const EdgeInsets.all(_hitSlop),
-          child: _SelectionGlow(
-            selected: selected,
-            pulse: _selectionPulseController,
-            child: child,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _SelectionGlow(
+                selected: selected,
+                pulse: _selectionPulseController,
+                child: child,
+              ),
+              if (kDebugMode && selected)
+                IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFFFF2D55),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        color: const Color(0xAAFF2D55),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        child: Text(
+                          pointerMode >= 2 ? '2F pinch' : '1F drag',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -5448,6 +5568,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
 
   Widget _buildPlacedItem(_RoomPlacedItem placed, double maxWidth, double maxHeight) {
     return _buildGestureItem(
+      debugLabel: 'deco:${placed.zone.name}',
       anchor: placed.anchor,
       adjustment: placed.adjustment,
       selected: _selectedZone == placed.zone && !_isCharacterSelected,
@@ -5461,6 +5582,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
 
   Widget _buildCharacter(double maxWidth, double maxHeight) {
     return _buildGestureItem(
+      debugLabel: 'character',
       anchor: _characterAnchor,
       adjustment: widget.state.characterAdjustment,
       selected: _isCharacterSelected,
