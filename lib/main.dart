@@ -10,7 +10,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r4';
+const kAppUiVersion = 'ui-2026.02.25-r3';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
