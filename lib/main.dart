@@ -10,7 +10,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r3';
+const kAppUiVersion = 'ui-2026.02.25-r4';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5896,46 +5896,55 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
       return const _MiniroomVisualSpec(
         icon: Icons.cloud,
         gradient: [Color(0xFFE5F0FF), Color(0xFFC8E0FF)],
+        assetPath: 'assets/miniroom/generated/item_window_sun_rain_mobile.png',
       );
     case 'deco_wall_planboard':
       return const _MiniroomVisualSpec(
         icon: Icons.checklist_rounded,
         gradient: [Color(0xFFFFF0D3), Color(0xFFFFDFB0)],
+        assetPath: 'assets/miniroom/generated/item_wall_mission_board.png',
       );
     case 'deco_wall_medal':
       return const _MiniroomVisualSpec(
         icon: Icons.workspace_premium_rounded,
         gradient: [Color(0xFFFFEBC1), Color(0xFFFFD78F)],
+        assetPath: 'assets/miniroom/generated/item_wall_explorer_medal.png',
       );
     case 'deco_floor_cushion':
       return const _MiniroomVisualSpec(
         icon: Icons.weekend_rounded,
         gradient: [Color(0xFFE8E7FF), Color(0xFFD0CEFF)],
+        assetPath: 'assets/miniroom/generated/item_floor_safe_invest_cushion.png',
       );
     case 'deco_floor_train':
       return const _MiniroomVisualSpec(
         icon: Icons.train_rounded,
         gradient: [Color(0xFFD9F3FF), Color(0xFFBCE7FF)],
+        assetPath: 'assets/miniroom/generated/item_floor_econ_toy_train.png',
       );
     case 'deco_desk_calculator':
       return const _MiniroomVisualSpec(
         icon: Icons.calculate_rounded,
         gradient: [Color(0xFFE8F0FF), Color(0xFFC7D9FF)],
+        assetPath: 'assets/miniroom/generated/item_desk_calculator.png',
       );
     case 'deco_desk_lamp':
       return const _MiniroomVisualSpec(
         icon: Icons.lightbulb_rounded,
         gradient: [Color(0xFFFFF3C9), Color(0xFFFFE39E)],
+        assetPath: 'assets/miniroom/generated/item_desk_focus_lamp.png',
       );
     case 'deco_shelf_clock':
       return const _MiniroomVisualSpec(
         icon: Icons.schedule_rounded,
         gradient: [Color(0xFFEDEDF8), Color(0xFFD5D8EB)],
+        assetPath: 'assets/miniroom/generated/item_wall_clock.png',
       );
     case 'deco_window_sunrain':
       return const _MiniroomVisualSpec(
         icon: Icons.wb_cloudy_rounded,
         gradient: [Color(0xFFE4F5FF), Color(0xFFCBEAFF)],
+        assetPath: 'assets/miniroom/generated/item_window_sun_rain_mobile.png',
       );
     default:
       return const _MiniroomVisualSpec(
@@ -5960,13 +5969,13 @@ class _DecorationObject extends StatelessWidget {
               fit: BoxFit.contain,
               errorBuilder: (_, error, stackTrace) => Icon(
                 visual.icon,
-                size: 34,
+                size: 42,
                 color: visual.iconColor ?? const Color(0xFF34415F),
               ),
             )
           : Icon(
               visual.icon,
-              size: 34,
+              size: 42,
               color: visual.iconColor ?? const Color(0xFF34415F),
             ),
     );
@@ -5982,7 +5991,7 @@ class _ItemThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = _miniroomSpecForItem(item);
-    final size = compact ? 52.0 : 96.0;
+    final size = compact ? 60.0 : 112.0;
 
     return SizedBox(
       width: size,
@@ -5993,13 +6002,13 @@ class _ItemThumbnail extends StatelessWidget {
               fit: BoxFit.contain,
               errorBuilder: (_, error, stackTrace) => Icon(
                 visual.icon,
-                size: compact ? 24 : 40,
+                size: compact ? 30 : 48,
                 color: visual.iconColor ?? const Color(0xFF34415F),
               ),
             )
           : Icon(
               visual.icon,
-              size: compact ? 24 : 40,
+              size: compact ? 30 : 48,
               color: visual.iconColor ?? const Color(0xFF34415F),
             ),
     );
