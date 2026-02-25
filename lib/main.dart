@@ -10,7 +10,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r10';
+const kAppUiVersion = 'ui-2026.02.25-r11';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5779,52 +5779,62 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
       return const _MiniroomVisualSpec(
         icon: Icons.pets,
         gradient: [Color(0xFFFFE0BF), Color(0xFFFFC58F)],
+        assetPath: 'assets/miniroom/generated/item_pet_cat_small.png',
       );
     case 'char_penguin':
       return const _MiniroomVisualSpec(
         icon: Icons.flutter_dash,
         gradient: [Color(0xFFDDEAFF), Color(0xFFBAD2FF)],
+        assetPath: 'assets/miniroom/generated/item_piggy_bank_blue.png',
       );
     case 'char_tiger':
       return const _MiniroomVisualSpec(
         icon: Icons.cruelty_free,
         gradient: [Color(0xFFFFD6B3), Color(0xFFFFB27A)],
+        assetPath: 'assets/miniroom/generated/item_kid_avatar.png',
       );
     case 'char_robot':
       return const _MiniroomVisualSpec(
         icon: Icons.smart_toy,
         gradient: [Color(0xFFE2E7F0), Color(0xFFB7C2D4)],
+        assetPath: 'assets/branding/mascot_icon_selected.png',
       );
     case 'char_unicorn':
       return const _MiniroomVisualSpec(
         icon: Icons.auto_awesome,
         gradient: [Color(0xFFF3DCFF), Color(0xFFD7BEFF)],
+        assetPath: 'assets/branding/mascot_icon.png',
       );
     case 'home_forest':
       return const _MiniroomVisualSpec(
         icon: Icons.park,
         gradient: [Color(0xFFDEF5D9), Color(0xFFBDE6AE)],
+        assetPath: 'assets/miniroom/generated/room_bg_white_3d.png',
       );
     case 'home_city':
       return const _MiniroomVisualSpec(
         icon: Icons.location_city,
         gradient: [Color(0xFFDDE8FF), Color(0xFFB6C8F2)],
+        assetPath: 'assets/miniroom/generated/room_bg_isometric.png',
       );
     case 'home_ocean':
       return const _MiniroomVisualSpec(
         icon: Icons.water,
         gradient: [Color(0xFFD2F6FF), Color(0xFF9FE8FF)],
+        assetPath: 'assets/miniroom/generated/room_bg_white_3d.png',
       );
     case 'home_space':
       return const _MiniroomVisualSpec(
         icon: Icons.rocket_launch,
         gradient: [Color(0xFF2E2254), Color(0xFF503C96)],
         iconColor: Colors.white,
+        assetPath: 'assets/miniroom/generated/room_bg_isometric.png',
       );
     case 'home_castle':
       return const _MiniroomVisualSpec(
         icon: Icons.castle,
         gradient: [Color(0xFFE7DFFF), Color(0xFFCCB8FF)],
+        assetPath: 'assets/miniroom/generated/room_bg_white_3d.png',
       );
     case 'deco_wall_chart':
       return const _MiniroomVisualSpec(
