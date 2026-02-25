@@ -11,7 +11,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r21';
+const kAppUiVersion = 'ui-2026.02.25-r24';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5296,7 +5296,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
 
   static const double _minScale = RoomItemAdjustment.minScale;
   static const double _maxScale = RoomItemAdjustment.maxScale;
-  static const double _hitSlop = 4;
+  static const double _hitSlop = 0.8;
   static const _characterAnchor = _RoomAnchor(
     Alignment(0.03, 0.52),
     Size(110, 110),
@@ -5454,21 +5454,61 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   }
 
   Rect _hitRectFromVisualRect(Rect visualRect, ShopItem? item) {
-    final inset = item == null
+    final baseInset = item == null
         ? EdgeInsets.zero
         : _miniroomSpecForItem(item).hitTestInsetFraction;
+    final tunedInset = item == null
+        ? EdgeInsets.zero
+        : _dynamicHitInsetForItem(item.id);
+
+    double clampInset(double v) => v.clamp(0.0, 0.44).toDouble();
+
+    final inset = EdgeInsets.fromLTRB(
+      clampInset(baseInset.left + tunedInset.left),
+      clampInset(baseInset.top + tunedInset.top),
+      clampInset(baseInset.right + tunedInset.right),
+      clampInset(baseInset.bottom + tunedInset.bottom),
+    );
+
     final left = visualRect.left + (visualRect.width * inset.left);
     final top = visualRect.top + (visualRect.height * inset.top);
     final right = visualRect.right - (visualRect.width * inset.right);
     final bottom = visualRect.bottom - (visualRect.height * inset.bottom);
-    final safeRect = Rect.fromLTRB(left, top, right, bottom);
+
+    final safeLeft = min(left, right);
+    final safeTop = min(top, bottom);
+    final safeRight = max(left, right);
+    final safeBottom = max(top, bottom);
+
     final normalized = Rect.fromLTWH(
-      safeRect.left,
-      safeRect.top,
-      safeRect.width.clamp(16, 9999).toDouble(),
-      safeRect.height.clamp(16, 9999).toDouble(),
+      safeLeft,
+      safeTop,
+      (safeRight - safeLeft).clamp(8, 9999).toDouble(),
+      (safeBottom - safeTop).clamp(8, 9999).toDouble(),
     );
     return normalized.inflate(_hitSlop);
+  }
+
+  EdgeInsets _dynamicHitInsetForItem(String itemId) {
+    if (itemId.startsWith('char_')) {
+      return const EdgeInsets.fromLTRB(0.08, 0.08, 0.08, 0.06);
+    }
+    if (itemId.startsWith('deco_wall_')) {
+      return const EdgeInsets.fromLTRB(0.08, 0.10, 0.08, 0.10);
+    }
+    if (itemId.startsWith('deco_window_')) {
+      return const EdgeInsets.fromLTRB(0.10, 0.08, 0.10, 0.10);
+    }
+    if (itemId.startsWith('deco_floor_')) {
+      return const EdgeInsets.fromLTRB(0.10, 0.14, 0.10, 0.10);
+    }
+    if (itemId.startsWith('deco_desk_')) {
+      return const EdgeInsets.fromLTRB(0.10, 0.10, 0.10, 0.12);
+    }
+    if (itemId.startsWith('deco_shelf_')) {
+      return const EdgeInsets.fromLTRB(0.10, 0.10, 0.10, 0.10);
+    }
+    return EdgeInsets.zero;
   }
 
   Rect _rectForTarget(_RoomTarget target, double maxWidth, double maxHeight) {
@@ -5945,22 +5985,43 @@ class _SelectionGlow extends StatelessWidget {
       child: child,
       builder: (context, childWidget) {
         final t = pulse.value;
-        final glow = 0.18 + (0.14 * t);
-        final scale = 1 + (0.014 * t);
+        final scale = 1 + (0.010 * t);
+        final halo = 0.20 + (0.10 * t);
+        final brighten = 1.10 + (0.06 * t);
+
+        final matrix = <double>[
+          brighten, 0, 0, 0, 6,
+          0, brighten, 0, 0, 6,
+          0, 0, brighten, 0, 6,
+          0, 0, 0, 1, 0,
+        ];
+
         return Transform.scale(
           scale: scale,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFFD86B).withValues(alpha: glow),
-                  blurRadius: 14 + (6 * t),
-                  spreadRadius: 0.4 + (0.9 * t),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ColorFiltered(
+                colorFilter: ColorFilter.matrix(matrix),
+                child: childWidget,
+              ),
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0, -0.05),
+                      radius: 0.88,
+                      colors: [
+                        const Color(0xFFFFE27B).withValues(alpha: halo),
+                        const Color(0xFFFFE27B).withValues(alpha: halo * 0.42),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
+                    ),
+                  ),
                 ),
-              ],
-            ),
-            child: childWidget,
+              ),
+            ],
           ),
         );
       },
@@ -6040,10 +6101,10 @@ class _MiniroomVisualSpec {
     this.iconColor,
     this.assetPath,
     this.hitTestInsetFraction = const EdgeInsets.fromLTRB(
-      0.12,
-      0.12,
-      0.12,
-      0.12,
+      0.18,
+      0.18,
+      0.18,
+      0.18,
     ),
     this.maxScale = RoomItemAdjustment.maxScale,
   });
