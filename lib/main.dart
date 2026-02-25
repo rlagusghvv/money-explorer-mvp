@@ -2353,6 +2353,7 @@ class _GameHomePageState extends State<GameHomePage> {
         onPlaceDecoration: _placeDecoration,
         onDecorationAdjusted: _updateDecorationAdjustment,
         onThemeNameChanged: _updateHomeThemeName,
+        onEquipHome: _equipItem,
       ),
       _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
       _WeeklyReportTab(
@@ -4830,6 +4831,7 @@ class _MyHomeTab extends StatefulWidget {
     required this.onPlaceDecoration,
     required this.onDecorationAdjusted,
     required this.onThemeNameChanged,
+    required this.onEquipHome,
   });
 
   final AppState state;
@@ -4839,6 +4841,7 @@ class _MyHomeTab extends StatefulWidget {
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
   final ValueChanged<String> onThemeNameChanged;
+  final ValueChanged<ShopItem> onEquipHome;
 
   @override
   State<_MyHomeTab> createState() => _MyHomeTabState();
@@ -4956,6 +4959,42 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             onDecorationAdjusted: widget.onDecorationAdjusted,
           ),
           const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '베이스 빠른 장착',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: kShopItems
+                        .where(
+                          (item) =>
+                              item.type == CosmeticType.home &&
+                              state.ownedItemIds.contains(item.id),
+                        )
+                        .map((item) {
+                          final selected = state.equippedHomeId == item.id;
+                          return ChoiceChip(
+                            label: Text('${item.emoji} ${item.name}'),
+                            selected: selected,
+                            onSelected: (_) {
+                              if (!selected) widget.onEquipHome(item);
+                            },
+                          );
+                        })
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 10),
           Card(
             child: Padding(
@@ -6956,6 +6995,20 @@ class _AuthCardState extends State<_AuthCard> {
   bool _loading = false;
   String? _message;
 
+  String _friendlyAuthError(Object error) {
+    final raw = error.toString().toLowerCase();
+    if (raw.contains('invalid_credentials')) {
+      return '이메일 또는 비밀번호가 맞지 않아요. 기존 계정이면 로그인, 처음이면 회원가입을 눌러줘.';
+    }
+    if (raw.contains('user_exists') || raw.contains('already')) {
+      return '이미 가입된 이메일이야. 로그인으로 진행해줘.';
+    }
+    if (raw.contains('network') || raw.contains('socket')) {
+      return '네트워크 연결이 불안정해. 잠시 후 다시 시도해줘.';
+    }
+    return '인증에 실패했어. 잠시 후 다시 시도해줘.';
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -6997,7 +7050,7 @@ class _AuthCardState extends State<_AuthCard> {
         setState(() => _message = signup ? '회원가입 완료!' : '로그인 성공!');
       }
     } catch (e) {
-      if (mounted) setState(() => _message = '인증 실패: $e');
+      if (mounted) setState(() => _message = _friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
