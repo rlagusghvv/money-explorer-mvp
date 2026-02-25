@@ -11,7 +11,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r18';
+const kAppUiVersion = 'ui-2026.02.25-r19';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -977,6 +977,7 @@ class AppState {
     required this.equippedHomeId,
     required this.equippedDecorations,
     required this.decorationAdjustments,
+    required this.characterAdjustment,
     required this.homeThemeName,
     required this.totalPointsSpent,
     required this.soundMuted,
@@ -1026,6 +1027,7 @@ class AppState {
       DecorationZone.shelf: RoomItemAdjustment.defaults,
       DecorationZone.window: RoomItemAdjustment.defaults,
     },
+    characterAdjustment: RoomItemAdjustment.defaults,
     homeThemeName: '나의 미니룸',
     totalPointsSpent: 0,
     soundMuted: false,
@@ -1054,6 +1056,7 @@ class AppState {
   final String equippedHomeId;
   final Map<DecorationZone, String?> equippedDecorations;
   final Map<DecorationZone, RoomItemAdjustment> decorationAdjustments;
+  final RoomItemAdjustment characterAdjustment;
   final String homeThemeName;
   final int totalPointsSpent;
   final bool soundMuted;
@@ -1156,6 +1159,7 @@ class AppState {
         for (final zone in DecorationZone.values)
           zone: RoomItemAdjustment.fromJson(rawAdjustments[zone.key]),
       },
+      characterAdjustment: RoomItemAdjustment.fromJson(json['characterAdjustment']),
       homeThemeName:
           (json['homeThemeName'] as String?)?.trim().isNotEmpty == true
           ? (json['homeThemeName'] as String).trim()
@@ -1207,6 +1211,7 @@ class AppState {
       for (final entry in decorationAdjustments.entries)
         entry.key.key: entry.value.toJson(),
     },
+    'characterAdjustment': characterAdjustment.toJson(),
     'homeThemeName': homeThemeName,
     'totalPointsSpent': totalPointsSpent,
     'soundMuted': soundMuted,
@@ -1236,6 +1241,7 @@ class AppState {
     String? equippedHomeId,
     Map<DecorationZone, String?>? equippedDecorations,
     Map<DecorationZone, RoomItemAdjustment>? decorationAdjustments,
+    RoomItemAdjustment? characterAdjustment,
     String? homeThemeName,
     int? totalPointsSpent,
     bool? soundMuted,
@@ -1265,6 +1271,7 @@ class AppState {
       equippedDecorations: equippedDecorations ?? this.equippedDecorations,
       decorationAdjustments:
           decorationAdjustments ?? this.decorationAdjustments,
+      characterAdjustment: characterAdjustment ?? this.characterAdjustment,
       homeThemeName: homeThemeName ?? this.homeThemeName,
       totalPointsSpent: totalPointsSpent ?? this.totalPointsSpent,
       soundMuted: soundMuted ?? this.soundMuted,
@@ -1299,6 +1306,7 @@ class AppStateStore {
   static const _kEquippedHomeId = 'equippedHomeId';
   static const _kEquippedDecorations = 'equippedDecorations';
   static const _kDecorationAdjustments = 'decorationAdjustments';
+  static const _kCharacterAdjustment = 'characterAdjustment';
   static const _kTotalPointsSpent = 'totalPointsSpent';
   static const _kAuthSession = 'authSession';
   static const _kSoundMuted = 'soundMuted';
@@ -1397,6 +1405,8 @@ class AppStateStore {
 
     Map<String, dynamic> adjustmentRaw = const {};
     final adjustmentJson = prefs.getString(_kDecorationAdjustments);
+    Map<String, dynamic> characterAdjustmentRaw = const {};
+    final characterAdjustmentJson = prefs.getString(_kCharacterAdjustment);
     var wrongNotes = <WrongAnswerNote>[];
     final wrongNotesJson = prefs.getString(_kWrongAnswerNotes);
     if (wrongNotesJson != null && wrongNotesJson.isNotEmpty) {
@@ -1408,6 +1418,14 @@ class AppStateStore {
             .toList();
       } catch (_) {
         wrongNotes = const [];
+      }
+    }
+    if (characterAdjustmentJson != null && characterAdjustmentJson.isNotEmpty) {
+      try {
+        characterAdjustmentRaw =
+            jsonDecode(characterAdjustmentJson) as Map<String, dynamic>;
+      } catch (_) {
+        characterAdjustmentRaw = const {};
       }
     }
     if (adjustmentJson != null && adjustmentJson.isNotEmpty) {
@@ -1450,6 +1468,7 @@ class AppStateStore {
         for (final zone in DecorationZone.values)
           zone: RoomItemAdjustment.fromJson(adjustmentRaw[zone.key]),
       },
+      characterAdjustment: RoomItemAdjustment.fromJson(characterAdjustmentRaw),
       homeThemeName: (prefs.getString(_kHomeThemeName) ?? '').trim().isNotEmpty
           ? (prefs.getString(_kHomeThemeName) ?? '').trim()
           : initial.homeThemeName,
@@ -1513,6 +1532,10 @@ class AppStateStore {
         for (final entry in state.decorationAdjustments.entries)
           entry.key.key: entry.value.toJson(),
       }),
+    );
+    await prefs.setString(
+      _kCharacterAdjustment,
+      jsonEncode(state.characterAdjustment.toJson()),
     );
     await prefs.setInt(_kTotalPointsSpent, state.totalPointsSpent);
     await prefs.setBool(_kSoundMuted, state.soundMuted);
@@ -2256,6 +2279,13 @@ class _GameHomePageState extends State<GameHomePage> {
     _persist();
   }
 
+  void _updateCharacterAdjustment(RoomItemAdjustment adjustment) {
+    setState(() {
+      _state = _state.copyWith(characterAdjustment: adjustment);
+    });
+    _persist();
+  }
+
   void _updateHomeThemeName(String value) {
     final normalized = value.trim();
     final next = normalized.isEmpty ? '나의 미니룸' : normalized;
@@ -2352,6 +2382,7 @@ class _GameHomePageState extends State<GameHomePage> {
         session: _session,
         onPlaceDecoration: _placeDecoration,
         onDecorationAdjusted: _updateDecorationAdjustment,
+        onCharacterAdjusted: _updateCharacterAdjustment,
         onThemeNameChanged: _updateHomeThemeName,
         onEquipHome: _equipItem,
       ),
@@ -4830,6 +4861,7 @@ class _MyHomeTab extends StatefulWidget {
     required this.session,
     required this.onPlaceDecoration,
     required this.onDecorationAdjusted,
+    required this.onCharacterAdjusted,
     required this.onThemeNameChanged,
     required this.onEquipHome,
   });
@@ -4840,6 +4872,7 @@ class _MyHomeTab extends StatefulWidget {
   final void Function(DecorationZone zone, String? itemId) onPlaceDecoration;
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
+  final ValueChanged<RoomItemAdjustment> onCharacterAdjusted;
   final ValueChanged<String> onThemeNameChanged;
   final ValueChanged<ShopItem> onEquipHome;
 
@@ -4957,6 +4990,7 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             showEquipFx: _showEquipFx,
             equipFxLabel: _equipFxLabel,
             onDecorationAdjusted: widget.onDecorationAdjusted,
+            onCharacterAdjusted: widget.onCharacterAdjusted,
           ),
           const SizedBox(height: 10),
           Card(
@@ -5160,18 +5194,6 @@ class _RoomPlacedItem {
   final RoomItemAdjustment adjustment;
 }
 
-class _LiveManipulationRect {
-  const _LiveManipulationRect({
-    required this.left,
-    required this.top,
-    required this.width,
-  });
-
-  final double left;
-  final double top;
-  final double width;
-}
-
 class _MyHomeRoomCard extends StatefulWidget {
   const _MyHomeRoomCard({
     required this.state,
@@ -5179,6 +5201,7 @@ class _MyHomeRoomCard extends StatefulWidget {
     required this.showEquipFx,
     required this.equipFxLabel,
     required this.onDecorationAdjusted,
+    required this.onCharacterAdjusted,
   });
 
   final AppState state;
@@ -5187,6 +5210,7 @@ class _MyHomeRoomCard extends StatefulWidget {
   final String equipFxLabel;
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
+  final ValueChanged<RoomItemAdjustment> onCharacterAdjusted;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(138, 88), 1),
@@ -5214,15 +5238,14 @@ class _MyHomeRoomCard extends StatefulWidget {
 
 class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   DecorationZone? _selectedZone;
-  int? _activePointer;
+  bool _isCharacterSelected = false;
   bool _isManipulating = false;
   bool _suppressBackgroundTap = false;
   DateTime? _selectionLockUntil;
-  final Map<DecorationZone, _LiveManipulationRect> _liveRects = {};
-  Timer? _scaleHoldTimer;
 
   static const double _minScale = 0.72;
   static const double _maxScale = 1.38;
+  static const _characterAnchor = _RoomAnchor(Alignment(0.03, 0.52), Size(110, 110), 4);
 
   bool get _isSelectionLocked {
     final lock = _selectionLockUntil;
@@ -5240,9 +5263,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
             item: item,
             anchor: anchor,
             zone: zone,
-            adjustment:
-                widget.state.decorationAdjustments[zone] ??
-                RoomItemAdjustment.defaults,
+            adjustment: widget.state.decorationAdjustments[zone] ?? RoomItemAdjustment.defaults,
           );
         })
         .whereType<_RoomPlacedItem>()
@@ -5253,88 +5274,43 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   @override
   void didUpdateWidget(covariant _MyHomeRoomCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_selectedZone == null) return;
-    if (widget.state.equippedDecorations[_selectedZone] == null) {
+    if (_selectedZone != null && widget.state.equippedDecorations[_selectedZone] == null) {
       _selectedZone = null;
     }
   }
 
-  @override
-  void dispose() {
-    _scaleHoldTimer?.cancel();
-    super.dispose();
-  }
-
-  void _beginManipulation(DecorationZone zone, {int? pointer}) {
-    if (_activePointer != null &&
-        pointer != null &&
-        _activePointer != pointer &&
-        _selectedZone == zone) {
-      return;
-    }
-    if (_selectedZone != zone ||
-        !_isManipulating ||
-        _activePointer != pointer) {
+  void _beginManipulation({DecorationZone? zone, bool character = false}) {
+    if (_selectedZone != zone || _isCharacterSelected != character || !_isManipulating) {
       setState(() {
         _selectedZone = zone;
+        _isCharacterSelected = character;
         _isManipulating = true;
-        _activePointer = pointer;
-        _selectionLockUntil = DateTime.now().add(
-          const Duration(milliseconds: 450),
-        );
+        _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 450));
       });
     }
   }
 
-  void _finalizeManipulationSnap(
-    DecorationZone zone,
-    _RoomPlacedItem placed,
-    double maxWidth,
-    double maxHeight,
-  ) {
-    final live = _liveRects.remove(zone);
-    if (live == null) return;
-    _updateFromRect(
-      placed: placed,
-      left: live.left,
-      top: live.top,
-      width: live.width,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-      snapToGrid: true,
-      rememberLiveRect: false,
-    );
-  }
-
-  void _endManipulation({int? pointer}) {
-    if (pointer != null &&
-        _activePointer != null &&
-        pointer != _activePointer) {
-      return;
-    }
-    _activePointer = null;
+  void _endManipulation() {
     _isManipulating = false;
     _suppressBackgroundTap = true;
     _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 220));
   }
 
-  void _updateFromRect({
-    required _RoomPlacedItem placed,
+  RoomItemAdjustment _adjustmentFromRect({
+    required _RoomAnchor anchor,
+    required RoomItemAdjustment current,
     required double left,
     required double top,
     required double width,
     required double maxWidth,
     required double maxHeight,
     bool snapToGrid = false,
-    bool rememberLiveRect = true,
   }) {
-    final baseWidth = placed.anchor.size.width;
-    final baseHeight = placed.anchor.size.height;
-    final baseLeft =
-        (maxWidth - baseWidth) * ((placed.anchor.alignment.x + 1) / 2);
-    final baseTop =
-        (maxHeight - baseHeight) * ((placed.anchor.alignment.y + 1) / 2);
-    final scale = (width / baseWidth).clamp(0.72, 1.38);
+    final baseWidth = anchor.size.width;
+    final baseHeight = anchor.size.height;
+    final baseLeft = (maxWidth - baseWidth) * ((anchor.alignment.x + 1) / 2);
+    final baseTop = (maxHeight - baseHeight) * ((anchor.alignment.y + 1) / 2);
+    final scale = (width / baseWidth).clamp(_minScale, _maxScale);
     final scaledHeight = baseHeight * scale;
 
     final minLeft = -width * 0.6;
@@ -5342,398 +5318,125 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     final minTop = -scaledHeight * 0.6;
     final maxTop = maxHeight - scaledHeight * 0.3;
 
-    double snappedLeft = left.clamp(minLeft, maxLeft);
-    double snappedTop = top.clamp(minTop, maxTop);
-    const grid = 8.0;
+    var snappedLeft = left.clamp(minLeft, maxLeft);
+    var snappedTop = top.clamp(minTop, maxTop);
 
     if (snapToGrid) {
+      const grid = 8.0;
       final snappedOffsetX = ((snappedLeft - baseLeft) / grid).round() * grid;
       final snappedOffsetY = ((snappedTop - baseTop) / grid).round() * grid;
       snappedLeft = baseLeft + snappedOffsetX;
       snappedTop = baseTop + snappedOffsetY;
-
-      if ((snappedOffsetX).abs() <= 10) snappedLeft = baseLeft;
-      if ((snappedOffsetY).abs() <= 10) snappedTop = baseTop;
+      if (snappedOffsetX.abs() <= 10) snappedLeft = baseLeft;
+      if (snappedOffsetY.abs() <= 10) snappedTop = baseTop;
     }
 
-    if (rememberLiveRect) {
-      _liveRects[placed.zone] = _LiveManipulationRect(
-        left: snappedLeft,
-        top: snappedTop,
-        width: width,
-      );
-    }
-
-    widget.onDecorationAdjusted(
-      placed.zone,
-      RoomItemAdjustment(
-        offsetX: (snappedLeft - baseLeft).clamp(-90, 90),
-        offsetY: (snappedTop - baseTop).clamp(-90, 90),
-        scale: scale,
-      ),
+    return current.copyWith(
+      offsetX: (snappedLeft - baseLeft).clamp(-90, 90),
+      offsetY: (snappedTop - baseTop).clamp(-90, 90),
+      scale: scale,
     );
   }
 
-  void _changeScaleByStep(
-    _RoomPlacedItem placed,
-    double maxWidth,
-    double maxHeight,
-    double delta,
-  ) {
-    final width = placed.anchor.size.width * placed.adjustment.scale;
-    final height = placed.anchor.size.height * placed.adjustment.scale;
-    final left =
-        (maxWidth - width) * ((placed.anchor.alignment.x + 1) / 2) +
-        placed.adjustment.offsetX;
-    final top =
-        (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
-        placed.adjustment.offsetY;
-    final nextWidth = (width + placed.anchor.size.width * delta).clamp(
-      placed.anchor.size.width * _minScale,
-      placed.anchor.size.width * _maxScale,
-    );
-    _updateFromRect(
-      placed: placed,
-      left: left,
-      top: top,
-      width: nextWidth,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-      snapToGrid: true,
-      rememberLiveRect: false,
-    );
-  }
+  Widget _buildGestureItem({
+    required _RoomAnchor anchor,
+    required RoomItemAdjustment adjustment,
+    required Widget child,
+    required bool selected,
+    required VoidCallback onSelect,
+    required ValueChanged<RoomItemAdjustment> onChanged,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    final width = anchor.size.width * adjustment.scale;
+    final height = anchor.size.height * adjustment.scale;
+    final left = (maxWidth - width) * ((anchor.alignment.x + 1) / 2) + adjustment.offsetX;
+    final top = (maxHeight - height) * ((anchor.alignment.y + 1) / 2) + adjustment.offsetY;
 
-  void _setScaleRatio(
-    _RoomPlacedItem placed,
-    double maxWidth,
-    double maxHeight,
-    double ratio,
-  ) {
-    final clampedRatio = ratio.clamp(_minScale, _maxScale);
-    final width = placed.anchor.size.width * placed.adjustment.scale;
-    final height = placed.anchor.size.height * placed.adjustment.scale;
-    final left =
-        (maxWidth - width) * ((placed.anchor.alignment.x + 1) / 2) +
-        placed.adjustment.offsetX;
-    final top =
-        (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
-        placed.adjustment.offsetY;
-    final nextWidth = placed.anchor.size.width * clampedRatio;
-    _updateFromRect(
-      placed: placed,
-      left: left,
-      top: top,
-      width: nextWidth,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-      snapToGrid: true,
-      rememberLiveRect: false,
-    );
-  }
-
-  void _setScalePreset(
-    _RoomPlacedItem placed,
-    double maxWidth,
-    double maxHeight,
-    double multiplier,
-  ) {
-    _setScaleRatio(
-      placed,
-      maxWidth,
-      maxHeight,
-      (placed.adjustment.scale * multiplier).clamp(_minScale, _maxScale),
-    );
-  }
-
-  void _startScaleHold(
-    _RoomPlacedItem placed,
-    double maxWidth,
-    double maxHeight,
-    double delta,
-  ) {
-    _scaleHoldTimer?.cancel();
-    _changeScaleByStep(placed, maxWidth, maxHeight, delta);
-    _scaleHoldTimer = Timer.periodic(const Duration(milliseconds: 90), (_) {
-      if (!mounted || _selectedZone != placed.zone) {
-        _scaleHoldTimer?.cancel();
-        return;
-      }
-      _changeScaleByStep(placed, maxWidth, maxHeight, delta);
-    });
-  }
-
-  void _stopScaleHold() {
-    _scaleHoldTimer?.cancel();
-    _scaleHoldTimer = null;
-  }
-
-  Widget _buildPlacedItem(
-    _RoomPlacedItem placed,
-    double maxWidth,
-    double maxHeight,
-  ) {
-    final selected = _selectedZone == placed.zone;
-    final width = placed.anchor.size.width * placed.adjustment.scale;
-    final height = placed.anchor.size.height * placed.adjustment.scale;
-    final left =
-        (maxWidth - width) * ((placed.anchor.alignment.x + 1) / 2) +
-        placed.adjustment.offsetX;
-    final top =
-        (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
-        placed.adjustment.offsetY;
-    const hitPadding = 22.0;
-    const controlWidth = 168.0;
-    final controlLeft = ((width - controlWidth) / 2 + hitPadding).clamp(
-      4.0,
-      width + hitPadding * 2 - (controlWidth + 4),
-    );
+    var workingLeft = left;
+    var workingTop = top;
+    var workingWidth = width;
+    var lastScale = 1.0;
 
     return Positioned(
-      left: left - hitPadding,
-      top: top - hitPadding,
-      width: width + hitPadding * 2,
-      height: height + hitPadding * 2,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: (event) {
-                _beginManipulation(placed.zone, pointer: event.pointer);
-              },
-              onPointerUp: (event) => _endManipulation(pointer: event.pointer),
-              onPointerCancel: (event) =>
-                  _endManipulation(pointer: event.pointer),
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: () => _beginManipulation(placed.zone),
-                onPanStart: (_) => _beginManipulation(placed.zone),
-                onPanUpdate: (details) {
-                  _beginManipulation(placed.zone);
-                  final nextLeft = left + details.delta.dx;
-                  final nextTop = top + details.delta.dy;
-                  _updateFromRect(
-                    placed: placed,
-                    left: nextLeft,
-                    top: nextTop,
-                    width: width,
-                    maxWidth: maxWidth,
-                    maxHeight: maxHeight,
-                    snapToGrid: false,
-                  );
-                },
-                onPanEnd: (_) {
-                  _finalizeManipulationSnap(
-                    placed.zone,
-                    placed,
-                    maxWidth,
-                    maxHeight,
-                  );
-                  _endManipulation();
-                },
-                onPanCancel: () {
-                  _finalizeManipulationSnap(
-                    placed.zone,
-                    placed,
-                    maxWidth,
-                    maxHeight,
-                  );
-                  _endManipulation();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(hitPadding),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: selected
-                          ? Border.all(color: AppDesign.secondary, width: 2)
-                          : null,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: _DecorationObject(item: placed.item),
-                  ),
-                ),
-              ),
-            ),
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: onSelect,
+        onScaleStart: (_) {
+          lastScale = 1.0;
+          onSelect();
+        },
+        onScaleUpdate: (details) {
+          onSelect();
+          final scaleFactor = details.scale / lastScale;
+          lastScale = details.scale;
+          workingLeft += details.focalPointDelta.dx;
+          workingTop += details.focalPointDelta.dy;
+          workingWidth = (workingWidth * scaleFactor)
+              .clamp(anchor.size.width * _minScale, anchor.size.width * _maxScale);
+          final next = _adjustmentFromRect(
+            anchor: anchor,
+            current: adjustment,
+            left: workingLeft,
+            top: workingTop,
+            width: workingWidth,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight,
+          );
+          onChanged(next);
+        },
+        onScaleEnd: (_) {
+          final next = _adjustmentFromRect(
+            anchor: anchor,
+            current: adjustment,
+            left: workingLeft,
+            top: workingTop,
+            width: workingWidth,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight,
+            snapToGrid: true,
+          );
+          onChanged(next);
+          _endManipulation();
+        },
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: selected ? Border.all(color: AppDesign.secondary, width: 2) : null,
+            borderRadius: BorderRadius.circular(8),
           ),
-          if (selected)
-            Positioned(
-              right: -18,
-              bottom: -18,
-              child: Listener(
-                onPointerDown: (event) =>
-                    _beginManipulation(placed.zone, pointer: event.pointer),
-                onPointerUp: (event) =>
-                    _endManipulation(pointer: event.pointer),
-                onPointerCancel: (event) =>
-                    _endManipulation(pointer: event.pointer),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onPanStart: (_) => _beginManipulation(placed.zone),
-                  onPanUpdate: (details) {
-                    final nextWidth = (width + details.delta.dx).clamp(
-                      placed.anchor.size.width * 0.72,
-                      placed.anchor.size.width * 1.38,
-                    );
-                    _updateFromRect(
-                      placed: placed,
-                      left: left,
-                      top: top,
-                      width: nextWidth,
-                      maxWidth: maxWidth,
-                      maxHeight: maxHeight,
-                      snapToGrid: false,
-                    );
-                  },
-                  onPanEnd: (_) {
-                    _finalizeManipulationSnap(
-                      placed.zone,
-                      placed,
-                      maxWidth,
-                      maxHeight,
-                    );
-                    _endManipulation();
-                  },
-                  onPanCancel: () {
-                    _finalizeManipulationSnap(
-                      placed.zone,
-                      placed,
-                      maxWidth,
-                      maxHeight,
-                    );
-                    _endManipulation();
-                  },
-                  child: Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: AppDesign.secondary,
-                      borderRadius: BorderRadius.circular(23),
-                      border: Border.all(color: Colors.white, width: 2),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 6,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.open_in_full_rounded,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          if (selected)
-            Positioned(
-              left: controlLeft,
-              bottom: -22,
-              child: Container(
-                width: controlWidth,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE0E5EF)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x1F000000),
-                      blurRadius: 6,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => _changeScaleByStep(
-                            placed,
-                            maxWidth,
-                            maxHeight,
-                            -0.08,
-                          ),
-                          onLongPressStart: (_) => _startScaleHold(
-                            placed,
-                            maxWidth,
-                            maxHeight,
-                            -0.04,
-                          ),
-                          onLongPressEnd: (_) => _stopScaleHold(),
-                          onLongPressCancel: _stopScaleHold,
-                          child: const Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Icon(Icons.remove_circle_outline, size: 18),
-                          ),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: placed.adjustment.scale,
-                            min: _minScale,
-                            max: _maxScale,
-                            divisions: 22,
-                            onChanged: (value) => _setScaleRatio(
-                              placed,
-                              maxWidth,
-                              maxHeight,
-                              value,
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => _changeScaleByStep(
-                            placed,
-                            maxWidth,
-                            maxHeight,
-                            0.08,
-                          ),
-                          onLongPressStart: (_) => _startScaleHold(
-                            placed,
-                            maxWidth,
-                            maxHeight,
-                            0.04,
-                          ),
-                          onLongPressEnd: (_) => _stopScaleHold(),
-                          onLongPressCancel: _stopScaleHold,
-                          child: const Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Icon(Icons.add_circle_outline, size: 18),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _ScalePresetButton(
-                          label: '-10%',
-                          onTap: () =>
-                              _setScalePreset(placed, maxWidth, maxHeight, 0.9),
-                        ),
-                        _ScalePresetButton(
-                          label: '기본',
-                          onTap: () =>
-                              _setScaleRatio(placed, maxWidth, maxHeight, 1.0),
-                        ),
-                        _ScalePresetButton(
-                          label: '+10%',
-                          onTap: () =>
-                              _setScalePreset(placed, maxWidth, maxHeight, 1.1),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
+          child: child,
+        ),
       ),
+    );
+  }
+
+  Widget _buildPlacedItem(_RoomPlacedItem placed, double maxWidth, double maxHeight) {
+    return _buildGestureItem(
+      anchor: placed.anchor,
+      adjustment: placed.adjustment,
+      selected: _selectedZone == placed.zone && !_isCharacterSelected,
+      onSelect: () => _beginManipulation(zone: placed.zone),
+      onChanged: (next) => widget.onDecorationAdjusted(placed.zone, next),
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      child: _DecorationObject(item: placed.item),
+    );
+  }
+
+  Widget _buildCharacter(double maxWidth, double maxHeight) {
+    return _buildGestureItem(
+      anchor: _characterAnchor,
+      adjustment: widget.state.characterAdjustment,
+      selected: _isCharacterSelected,
+      onSelect: () => _beginManipulation(character: true),
+      onChanged: widget.onCharacterAdjusted,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      child: _ItemThumbnail(item: widget.state.equippedCharacter, compact: false),
     );
   }
 
@@ -5748,10 +5451,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${widget.state.homeThemeName} · ${theme.name}',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
+            Text('${widget.state.homeThemeName} · ${theme.name}', style: const TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             AspectRatio(
               aspectRatio: 1.32,
@@ -5759,17 +5459,11 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                 borderRadius: BorderRadius.circular(18),
                 child: LayoutBuilder(
                   builder: (context, c) {
-                    final homeVisual = _miniroomSpecForItem(
-                      widget.state.equippedHome,
-                    );
+                    final homeVisual = _miniroomSpecForItem(widget.state.equippedHome);
                     return Stack(
                       children: [
                         const Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              painter: _MiniRoomShellPainter(),
-                            ),
-                          ),
+                          child: IgnorePointer(child: CustomPaint(painter: _MiniRoomShellPainter())),
                         ),
                         if (homeVisual.assetPath != null)
                           Positioned.fill(
@@ -5777,15 +5471,17 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                               child: Image.asset(
                                 homeVisual.assetPath!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (
-                                  context,
-                                  error,
-                                  stackTrace,
-                                ) {
-                                  debugPrint(
-                                    '[MiniRoom] Failed to load base background asset: ${homeVisual.assetPath}',
+                                errorBuilder: (context, error, stackTrace) {
+                                  debugPrint('[MiniRoom] base asset fallback: ${homeVisual.assetPath}');
+                                  return DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [theme.wallGradient.first, theme.floorGradient.last],
+                                      ),
+                                    ),
                                   );
-                                  return const SizedBox.shrink();
                                 },
                               ),
                             ),
@@ -5799,72 +5495,33 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                                 return;
                               }
                               if (_isManipulating || _isSelectionLocked) return;
-                              setState(() => _selectedZone = null);
+                              setState(() {
+                                _selectedZone = null;
+                                _isCharacterSelected = false;
+                              });
                             },
                             child: const SizedBox.expand(),
                           ),
                         ),
                         ...items
-                            .where(
-                              (e) =>
-                                  e.zone == DecorationZone.wall ||
-                                  e.zone == DecorationZone.window ||
-                                  e.zone == DecorationZone.shelf,
-                            )
-                            .map(
-                              (placed) => _buildPlacedItem(
-                                placed,
-                                c.maxWidth,
-                                c.maxHeight,
-                              ),
-                            ),
-                        Align(
-                          alignment: const Alignment(0.03, 0.52),
-                          child: SizedBox(
-                            width: 110,
-                            height: 110,
-                            child: _ItemThumbnail(
-                              item: widget.state.equippedCharacter,
-                              compact: false,
-                            ),
-                          ),
-                        ),
+                            .where((e) => e.zone == DecorationZone.wall || e.zone == DecorationZone.window || e.zone == DecorationZone.shelf)
+                            .map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
+                        _buildCharacter(c.maxWidth, c.maxHeight),
                         ...items
-                            .where(
-                              (e) =>
-                                  e.zone == DecorationZone.desk ||
-                                  e.zone == DecorationZone.floor,
-                            )
-                            .map(
-                              (placed) => _buildPlacedItem(
-                                placed,
-                                c.maxWidth,
-                                c.maxHeight,
-                              ),
-                            ),
+                            .where((e) => e.zone == DecorationZone.desk || e.zone == DecorationZone.floor)
+                            .map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
                         AnimatedOpacity(
                           duration: const Duration(milliseconds: 220),
                           opacity: widget.showEquipFx ? 1 : 0,
                           child: Center(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFFFCE1),
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: const Color(0xFFFFE083),
-                                ),
+                                border: Border.all(color: const Color(0xFFFFE083)),
                               ),
-                              child: Text(
-                                '✨ ${widget.equipFxLabel}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
+                              child: Text('✨ ${widget.equipFxLabel}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
                             ),
                           ),
                         ),
@@ -5876,16 +5533,15 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              _selectedZone == null
-                  ? '아이템을 탭하면 바로 편집 시작! 드래그로 이동하고 핸들·+/-로 크기 조절해요.'
-                  : '${_selectedZone!.label} 편집 중 · 드래그 이동 / 핸들·+/- 크기 조절',
+              _isCharacterSelected
+                  ? '캐릭터 편집 중 · 드래그 이동 / 핀치 크기 조절'
+                  : _selectedZone == null
+                      ? '드래그로 이동, 핀치로 크기 조절 (캐릭터 포함)'
+                      : '${_selectedZone!.label} 편집 중 · 드래그 이동 / 핀치 크기 조절',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
-            Text(
-              '현재 홈 테마: ${widget.state.equippedHome.name}',
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
+            Text('현재 홈 테마: ${widget.state.equippedHome.name}', style: const TextStyle(fontWeight: FontWeight.w700)),
           ],
         ),
       ),
@@ -6282,33 +5938,6 @@ class _SlotPreviewChip extends StatelessWidget {
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ScalePresetButton extends StatelessWidget {
-  const _ScalePresetButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF4F7FF),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFFDDE5F6)),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
         ),
       ),
     );
