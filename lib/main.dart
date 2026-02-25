@@ -611,6 +611,9 @@ class RoomItemAdjustment {
     this.scale = 1,
   });
 
+  static const double minScale = 0.72;
+  static const double maxScale = 2.0;
+
   final double offsetX;
   final double offsetY;
   final double scale;
@@ -644,7 +647,7 @@ class RoomItemAdjustment {
     return RoomItemAdjustment(
       offsetX: offsetX.clamp(-90, 90),
       offsetY: offsetY.clamp(-90, 90),
-      scale: scale.clamp(0.72, 1.38),
+      scale: scale.clamp(minScale, maxScale),
     );
   }
 }
@@ -5291,9 +5294,9 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   late final AnimationController _selectionPulseController;
   _RoomGestureSession? _gestureSession;
 
-  static const double _minScale = 0.72;
-  static const double _maxScale = 1.38;
-  static const double _hitSlop = 6;
+  static const double _minScale = RoomItemAdjustment.minScale;
+  static const double _maxScale = RoomItemAdjustment.maxScale;
+  static const double _hitSlop = 4;
   static const _characterAnchor = _RoomAnchor(
     Alignment(0.03, 0.52),
     Size(110, 110),
@@ -5403,13 +5406,14 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     required double width,
     required double maxWidth,
     required double maxHeight,
+    required double maxScale,
     bool snapToGrid = false,
   }) {
     final baseWidth = anchor.size.width;
     final baseHeight = anchor.size.height;
     final baseLeft = (maxWidth - baseWidth) * ((anchor.alignment.x + 1) / 2);
     final baseTop = (maxHeight - baseHeight) * ((anchor.alignment.y + 1) / 2);
-    final scale = (width / baseWidth).clamp(_minScale, _maxScale);
+    final scale = (width / baseWidth).clamp(_minScale, maxScale);
     final scaledHeight = baseHeight * scale;
 
     final minLeft = -width * 0.6;
@@ -5437,6 +5441,36 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     );
   }
 
+  ShopItem? _itemForTarget(_RoomTarget target) {
+    if (target.isCharacter) return widget.state.equippedCharacter;
+    final id = widget.state.equippedDecorations[target.zone];
+    return id == null ? null : widget.itemById(id);
+  }
+
+  double _maxScaleForTarget(_RoomTarget target) {
+    final item = _itemForTarget(target);
+    if (item == null) return _maxScale;
+    return _miniroomSpecForItem(item).maxScale.clamp(_minScale, _maxScale);
+  }
+
+  Rect _hitRectFromVisualRect(Rect visualRect, ShopItem? item) {
+    final inset = item == null
+        ? EdgeInsets.zero
+        : _miniroomSpecForItem(item).hitTestInsetFraction;
+    final left = visualRect.left + (visualRect.width * inset.left);
+    final top = visualRect.top + (visualRect.height * inset.top);
+    final right = visualRect.right - (visualRect.width * inset.right);
+    final bottom = visualRect.bottom - (visualRect.height * inset.bottom);
+    final safeRect = Rect.fromLTRB(left, top, right, bottom);
+    final normalized = Rect.fromLTWH(
+      safeRect.left,
+      safeRect.top,
+      safeRect.width.clamp(16, 9999).toDouble(),
+      safeRect.height.clamp(16, 9999).toDouble(),
+    );
+    return normalized.inflate(_hitSlop);
+  }
+
   Rect _rectForTarget(_RoomTarget target, double maxWidth, double maxHeight) {
     final anchor = target.isCharacter
         ? _characterAnchor
@@ -5461,20 +5495,25 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   ) {
     final hitRects = <_RoomTarget>[];
     for (final placed in items) {
-      final rect = _visualRectFromAdjustment(
+      final visualRect = _visualRectFromAdjustment(
         anchor: placed.anchor,
         adjustment: placed.adjustment,
         maxWidth: maxWidth,
         maxHeight: maxHeight,
-      ).inflate(_hitSlop);
+      );
+      final rect = _hitRectFromVisualRect(visualRect, placed.item);
       hitRects.add(_RoomTarget.decoration(placed.zone).withRect(rect));
     }
-    final charRect = _visualRectFromAdjustment(
+    final charVisualRect = _visualRectFromAdjustment(
       anchor: _characterAnchor,
       adjustment: widget.state.characterAdjustment,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
-    ).inflate(_hitSlop);
+    );
+    final charRect = _hitRectFromVisualRect(
+      charVisualRect,
+      widget.state.equippedCharacter,
+    );
     hitRects.add(_RoomTarget.character().withRect(charRect));
 
     for (var i = hitRects.length - 1; i >= 0; i--) {
@@ -5525,6 +5564,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       width: session.currentRect.width,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
+      maxScale: _maxScaleForTarget(target),
       snapToGrid: snapToGrid,
     );
 
@@ -5739,7 +5779,8 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                           final width = (baselineRect.width * scaleFactor)
                               .clamp(
                                 targetAnchor.size.width * _minScale,
-                                targetAnchor.size.width * _maxScale,
+                                targetAnchor.size.width *
+                                    _maxScaleForTarget(session.target),
                               );
                           final height = width * ratio;
                           session.currentRect = Rect.fromLTWH(
@@ -5998,12 +6039,21 @@ class _MiniroomVisualSpec {
     required this.gradient,
     this.iconColor,
     this.assetPath,
+    this.hitTestInsetFraction = const EdgeInsets.fromLTRB(
+      0.12,
+      0.12,
+      0.12,
+      0.12,
+    ),
+    this.maxScale = RoomItemAdjustment.maxScale,
   });
 
   final IconData icon;
   final List<Color> gradient;
   final Color? iconColor;
   final String? assetPath;
+  final EdgeInsets hitTestInsetFraction;
+  final double maxScale;
 }
 
 _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
@@ -6013,6 +6063,7 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         icon: Icons.pets,
         gradient: [Color(0xFFFFE6C9), Color(0xFFFFCFA1)],
         assetPath: 'assets/miniroom/generated/item_teddy_bear.png',
+        hitTestInsetFraction: EdgeInsets.fromLTRB(0.14, 0.12, 0.14, 0.08),
       );
     case 'char_fox':
       return const _MiniroomVisualSpec(
@@ -6037,6 +6088,7 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         icon: Icons.smart_toy,
         gradient: [Color(0xFFE2E7F0), Color(0xFFB7C2D4)],
         assetPath: 'assets/miniroom/generated/item_char_robot.png',
+        hitTestInsetFraction: EdgeInsets.fromLTRB(0.16, 0.10, 0.16, 0.08),
       );
     case 'char_unicorn':
       return const _MiniroomVisualSpec(
@@ -6092,6 +6144,7 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         icon: Icons.star_border,
         gradient: [Color(0xFFFFF2C7), Color(0xFFFFE6A1)],
         assetPath: 'assets/miniroom/generated/item_wall_star_sticker.png',
+        hitTestInsetFraction: EdgeInsets.fromLTRB(0.22, 0.18, 0.22, 0.18),
       );
     case 'deco_wall_frame':
       return const _MiniroomVisualSpec(
@@ -6104,6 +6157,8 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         icon: Icons.texture,
         gradient: [Color(0xFFE9E3F9), Color(0xFFD8CFF2)],
         assetPath: 'assets/miniroom/generated/item_round_rug.png',
+        hitTestInsetFraction: EdgeInsets.fromLTRB(0.14, 0.28, 0.14, 0.10),
+        maxScale: 1.9,
       );
     case 'deco_floor_coinbox':
       return const _MiniroomVisualSpec(
@@ -6146,6 +6201,7 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         icon: Icons.blinds,
         gradient: [Color(0xFFE8EEFF), Color(0xFFC9D6FF)],
         assetPath: 'assets/miniroom/generated/item_window_curtain.png',
+        hitTestInsetFraction: EdgeInsets.fromLTRB(0.18, 0.08, 0.18, 0.14),
       );
     case 'deco_window_cloud':
       return const _MiniroomVisualSpec(
