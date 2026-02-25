@@ -10,7 +10,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r12';
+const kAppUiVersion = 'ui-2026.02.25-r13';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5779,31 +5779,31 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
       return const _MiniroomVisualSpec(
         icon: Icons.pets,
         gradient: [Color(0xFFFFE0BF), Color(0xFFFFC58F)],
-        assetPath: 'assets/miniroom/generated/item_pet_cat_small.png',
+        assetPath: 'assets/miniroom/generated/item_char_fox.png',
       );
     case 'char_penguin':
       return const _MiniroomVisualSpec(
         icon: Icons.flutter_dash,
         gradient: [Color(0xFFDDEAFF), Color(0xFFBAD2FF)],
-        assetPath: 'assets/miniroom/generated/item_piggy_bank_blue.png',
+        assetPath: 'assets/miniroom/generated/item_char_penguin.png',
       );
     case 'char_tiger':
       return const _MiniroomVisualSpec(
         icon: Icons.cruelty_free,
         gradient: [Color(0xFFFFD6B3), Color(0xFFFFB27A)],
-        assetPath: 'assets/miniroom/generated/item_kid_avatar.png',
+        assetPath: 'assets/miniroom/generated/item_char_tiger.png',
       );
     case 'char_robot':
       return const _MiniroomVisualSpec(
         icon: Icons.smart_toy,
         gradient: [Color(0xFFE2E7F0), Color(0xFFB7C2D4)],
-        assetPath: 'assets/branding/mascot_icon_selected.png',
+        assetPath: 'assets/miniroom/generated/item_char_robot.png',
       );
     case 'char_unicorn':
       return const _MiniroomVisualSpec(
         icon: Icons.auto_awesome,
         gradient: [Color(0xFFF3DCFF), Color(0xFFD7BEFF)],
-        assetPath: 'assets/branding/mascot_icon.png',
+        assetPath: 'assets/miniroom/generated/item_char_dream_boy.png',
       );
     case 'home_base_default':
       return const _MiniroomVisualSpec(
