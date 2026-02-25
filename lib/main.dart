@@ -10,7 +10,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r9';
+const kAppUiVersion = 'ui-2026.02.25-r10';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5830,13 +5830,13 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
       return const _MiniroomVisualSpec(
         icon: Icons.show_chart,
         gradient: [Color(0xFFE0EBFF), Color(0xFFC7D8FF)],
-        assetPath: 'assets/miniroom/generated/item_wall_frame.png',
+        assetPath: 'assets/miniroom/generated/item_wall_chart_poster.png',
       );
     case 'deco_wall_star':
       return const _MiniroomVisualSpec(
         icon: Icons.star_border,
         gradient: [Color(0xFFFFF2C7), Color(0xFFFFE6A1)],
-        assetPath: 'assets/miniroom/generated/item_wall_clock.png',
+        assetPath: 'assets/miniroom/generated/item_wall_star_sticker.png',
       );
     case 'deco_wall_frame':
       return const _MiniroomVisualSpec(
