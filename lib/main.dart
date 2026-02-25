@@ -13,6 +13,8 @@ import 'models/scenario.dart';
 const kAppUiVersion = 'ui-2026.02.24-r2';
 
 const _kSeoulOffset = Duration(hours: 9);
+const _kReviewRoundRewardCoins = 45;
+const _kReviewRoundRewardPoints = 18;
 
 enum DailyMissionType { solveFive, accuracy70, reviewOne }
 
@@ -32,15 +34,15 @@ extension DailyMissionTypeX on DailyMissionType {
   };
 
   int get rewardCoins => switch (this) {
-    DailyMissionType.solveFive => 120,
-    DailyMissionType.accuracy70 => 90,
-    DailyMissionType.reviewOne => 60,
+    DailyMissionType.solveFive => 150,
+    DailyMissionType.accuracy70 => 110,
+    DailyMissionType.reviewOne => 80,
   };
 
   int get rewardPoints => switch (this) {
-    DailyMissionType.solveFive => 45,
-    DailyMissionType.accuracy70 => 35,
-    DailyMissionType.reviewOne => 25,
+    DailyMissionType.solveFive => 52,
+    DailyMissionType.accuracy70 => 38,
+    DailyMissionType.reviewOne => 30,
   };
 }
 
@@ -578,8 +580,8 @@ class RoomItemAdjustment {
     final offsetY = (map['offsetY'] as num?)?.toDouble() ?? 0;
     final scale = (map['scale'] as num?)?.toDouble() ?? 1;
     return RoomItemAdjustment(
-      offsetX: offsetX.clamp(-40, 40),
-      offsetY: offsetY.clamp(-40, 40),
+      offsetX: offsetX.clamp(-90, 90),
+      offsetY: offsetY.clamp(-90, 90),
       scale: scale.clamp(0.72, 1.38),
     );
   }
@@ -1465,17 +1467,65 @@ class _GameHomePageState extends State<GameHomePage> {
     };
   }
 
+  void _showRewardSnackBar({
+    required String title,
+    required String message,
+    Color color = const Color(0xFF0EA35A),
+    IconData icon = Icons.celebration_rounded,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: color,
+          duration: const Duration(seconds: 3),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(message, style: const TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+
   void _claimDailyMission(DailyMissionType type) {
     if (_state.dailyClaimedMissionIds.contains(type.key)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('이미 오늘 보상을 받았어요!')));
+      _showRewardSnackBar(
+        title: '이미 수령 완료!',
+        message: '이 미션 보상은 오늘 이미 받았어. 정말 잘했어! 👏',
+        color: const Color(0xFF5A6575),
+        icon: Icons.check_circle_rounded,
+      );
       return;
     }
     if (!_isMissionComplete(type)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('미션 조건을 먼저 달성해보자!')));
+      _showRewardSnackBar(
+        title: '조금만 더 하면 돼!',
+        message: '미션 조건을 먼저 채우면 반짝 보상을 받을 수 있어 ✨',
+        color: const Color(0xFF3A7BDA),
+        icon: Icons.flag_rounded,
+      );
       return;
     }
 
@@ -1488,12 +1538,9 @@ class _GameHomePageState extends State<GameHomePage> {
       );
     });
     _persist();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '🎉 ${type.title} 보상 획득! +${type.rewardCoins}코인, +${type.rewardPoints}P',
-        ),
-      ),
+    _showRewardSnackBar(
+      title: '데일리 미션 성공!',
+      message: '${type.title} 완료! +${type.rewardCoins}코인 · +${type.rewardPoints}P 획득!',
     );
   }
 
@@ -1539,14 +1586,20 @@ class _GameHomePageState extends State<GameHomePage> {
       _reviewRoundIndex = 0;
       if (completed) {
         _state = _state.copyWith(
+          cash: _state.cash + _kReviewRoundRewardCoins,
+          rewardPoints: _state.rewardPoints + _kReviewRoundRewardPoints,
           dailyReviewCompletedCount: _state.dailyReviewCompletedCount + 1,
         );
       }
     });
     if (completed) {
       _persist();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('복습 라운드 완료! 데일리 미션도 확인해보세요 🎯')),
+      _showRewardSnackBar(
+        title: '복습 미션 클리어!',
+        message:
+            '집중 복습 완료! +$_kReviewRoundRewardCoins코인 · +${_kReviewRoundRewardPoints}P 받았어. 계속 가보자 🚀',
+        color: const Color(0xFF6A4DFF),
+        icon: Icons.auto_awesome_rounded,
       );
     }
   }
@@ -4782,6 +4835,9 @@ class _MyHomeRoomCard extends StatefulWidget {
 
 class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   DecorationZone? _selectedZone;
+  int? _activePointer;
+  bool _isManipulating = false;
+  bool _suppressBackgroundTap = false;
 
   List<_RoomPlacedItem> _buildItems() {
     return DecorationZone.values
@@ -4814,6 +4870,26 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     if (widget.state.equippedDecorations[_selectedZone] == null) {
       _selectedZone = null;
     }
+  }
+
+  void _beginManipulation(DecorationZone zone, {int? pointer}) {
+    if (!widget.isEditMode) return;
+    if (_selectedZone != zone || !_isManipulating || _activePointer != pointer) {
+      setState(() {
+        _selectedZone = zone;
+        _isManipulating = true;
+        _activePointer = pointer;
+      });
+    }
+  }
+
+  void _endManipulation({int? pointer}) {
+    if (pointer != null && _activePointer != null && pointer != _activePointer) {
+      return;
+    }
+    _activePointer = null;
+    _isManipulating = false;
+    _suppressBackgroundTap = true;
   }
 
   void _updateFromRect({
@@ -4915,112 +4991,149 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: GestureDetector(
+            child: Listener(
               behavior: HitTestBehavior.translucent,
-              onTap: widget.isEditMode
-                  ? () => setState(() => _selectedZone = placed.zone)
-                  : null,
-              onPanStart: widget.isEditMode
-                  ? (_) => setState(() => _selectedZone = placed.zone)
-                  : null,
-              onPanUpdate: widget.isEditMode
-                  ? (details) {
-                      final nextLeft = left + details.delta.dx;
-                      final nextTop = top + details.delta.dy;
-                      _updateFromRect(
-                        placed: placed,
-                        left: nextLeft,
-                        top: nextTop,
-                        width: width,
-                        maxWidth: maxWidth,
-                        maxHeight: maxHeight,
-                      );
+              onPointerDown: widget.isEditMode
+                  ? (event) {
+                      _beginManipulation(placed.zone, pointer: event.pointer);
                     }
                   : null,
-              child: Padding(
-                padding: const EdgeInsets.all(hitPadding),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: widget.isEditMode && selected
-                        ? Border.all(color: AppDesign.secondary, width: 2)
-                        : null,
-                    borderRadius: BorderRadius.circular(8),
+              onPointerUp: widget.isEditMode
+                  ? (event) => _endManipulation(pointer: event.pointer)
+                  : null,
+              onPointerCancel: widget.isEditMode
+                  ? (event) => _endManipulation(pointer: event.pointer)
+                  : null,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: widget.isEditMode
+                    ? () => _beginManipulation(placed.zone)
+                    : null,
+                onPanStart: widget.isEditMode
+                    ? (_) => _beginManipulation(placed.zone)
+                    : null,
+                onPanUpdate: widget.isEditMode
+                    ? (details) {
+                        _beginManipulation(placed.zone);
+                        final nextLeft = left + details.delta.dx;
+                        final nextTop = top + details.delta.dy;
+                        _updateFromRect(
+                          placed: placed,
+                          left: nextLeft,
+                          top: nextTop,
+                          width: width,
+                          maxWidth: maxWidth,
+                          maxHeight: maxHeight,
+                        );
+                      }
+                    : null,
+                onPanEnd: widget.isEditMode ? (_) => _endManipulation() : null,
+                onPanCancel: widget.isEditMode ? _endManipulation : null,
+                child: Padding(
+                  padding: const EdgeInsets.all(hitPadding),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: widget.isEditMode && selected
+                          ? Border.all(color: AppDesign.secondary, width: 2)
+                          : null,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _DecorationObject(item: placed.item),
                   ),
-                  child: _DecorationObject(item: placed.item),
                 ),
               ),
             ),
           ),
           if (widget.isEditMode && selected)
             Positioned(
-              right: -14,
-              bottom: -14,
-              child: GestureDetector(
-                onPanUpdate: (details) {
-                  final nextWidth = (width + details.delta.dx).clamp(
-                    placed.anchor.size.width * 0.72,
-                    placed.anchor.size.width * 1.38,
-                  );
-                  _updateFromRect(
-                    placed: placed,
-                    left: left,
-                    top: top,
-                    width: nextWidth,
-                    maxWidth: maxWidth,
-                    maxHeight: maxHeight,
-                  );
-                },
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: AppDesign.secondary,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x33000000),
-                        blurRadius: 6,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.open_in_full_rounded,
-                    size: 16,
-                    color: Colors.white,
+              right: -18,
+              bottom: -18,
+              child: Listener(
+                onPointerDown: (event) =>
+                    _beginManipulation(placed.zone, pointer: event.pointer),
+                onPointerUp: (event) => _endManipulation(pointer: event.pointer),
+                onPointerCancel: (event) =>
+                    _endManipulation(pointer: event.pointer),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanStart: (_) => _beginManipulation(placed.zone),
+                  onPanUpdate: (details) {
+                    final nextWidth = (width + details.delta.dx).clamp(
+                      placed.anchor.size.width * 0.72,
+                      placed.anchor.size.width * 1.38,
+                    );
+                    _updateFromRect(
+                      placed: placed,
+                      left: left,
+                      top: top,
+                      width: nextWidth,
+                      maxWidth: maxWidth,
+                      maxHeight: maxHeight,
+                    );
+                  },
+                  onPanEnd: (_) => _endManipulation(),
+                  onPanCancel: _endManipulation,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppDesign.secondary,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 6,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.open_in_full_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
             ),
           if (widget.isEditMode && selected)
             Positioned(
-              top: -12,
-              right: -4,
+              left: (width - 88) / 2 + hitPadding,
+              bottom: -18,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: const Color(0xFFE0E5EF)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1F000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     InkWell(
+                      borderRadius: BorderRadius.circular(999),
                       onTap: () =>
                           _changeScaleByStep(placed, maxWidth, maxHeight, -0.08),
                       child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.remove, size: 14),
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.remove, size: 18),
                       ),
                     ),
                     InkWell(
+                      borderRadius: BorderRadius.circular(999),
                       onTap: () =>
                           _changeScaleByStep(placed, maxWidth, maxHeight, 0.08),
                       child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.add, size: 14),
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.add, size: 18),
                       ),
                     ),
                   ],
@@ -5059,7 +5172,15 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                         Positioned.fill(
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
-                            onTap: () => setState(() => _selectedZone = null),
+                            onTap: () {
+                              if (!widget.isEditMode) return;
+                              if (_suppressBackgroundTap) {
+                                _suppressBackgroundTap = false;
+                                return;
+                              }
+                              if (_isManipulating) return;
+                              setState(() => _selectedZone = null);
+                            },
                             child: CustomPaint(
                               painter: _MiniRoomShellPainter(theme: theme),
                             ),
@@ -5196,21 +5317,23 @@ class _MiniRoomShellPainter extends CustomPainter {
       zoneHintPaint,
     ); // window zone
 
-    final furniturePaint = Paint()..color = const Color(0x66FFFFFF);
+    // 배치 충돌을 줄이기 위해 배경에 가구 실루엣은 그리지 않는다.
+    // 대신 장식이 자연스럽게 놓일 수 있는 깨끗한 존만 아주 약하게 표시.
+    final cleanZonePaint = Paint()..color = Colors.white.withValues(alpha: 0.10);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.60, size.height * 0.58, size.width * 0.22, size.height * 0.10),
-        const Radius.circular(10),
+        Rect.fromLTWH(size.width * 0.50, size.height * 0.54, size.width * 0.32, size.height * 0.13),
+        const Radius.circular(12),
       ),
-      furniturePaint,
-    ); // desk area hint
+      cleanZonePaint,
+    ); // desk clean zone
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.08, size.height * 0.48, size.width * 0.20, size.height * 0.15),
-        const Radius.circular(10),
+        Rect.fromLTWH(size.width * 0.06, size.height * 0.45, size.width * 0.25, size.height * 0.20),
+        const Radius.circular(12),
       ),
-      furniturePaint,
-    ); // shelf area hint
+      cleanZonePaint,
+    ); // shelf clean zone
   }
 
   @override
