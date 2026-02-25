@@ -5764,14 +5764,29 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                     );
                     return Stack(
                       children: [
+                        const Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: _MiniRoomShellPainter(),
+                            ),
+                          ),
+                        ),
                         if (homeVisual.assetPath != null)
                           Positioned.fill(
                             child: IgnorePointer(
                               child: Image.asset(
                                 homeVisual.assetPath!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const SizedBox.shrink(),
+                                errorBuilder: (
+                                  context,
+                                  error,
+                                  stackTrace,
+                                ) {
+                                  debugPrint(
+                                    '[MiniRoom] Failed to load base background asset: ${homeVisual.assetPath}',
+                                  );
+                                  return const SizedBox.shrink();
+                                },
                               ),
                             ),
                           ),
@@ -5786,11 +5801,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                               if (_isManipulating || _isSelectionLocked) return;
                               setState(() => _selectedZone = null);
                             },
-                            child: homeVisual.assetPath == null
-                                ? CustomPaint(
-                                    painter: const _MiniRoomShellPainter(),
-                                  )
-                                : const SizedBox.expand(),
+                            child: const SizedBox.expand(),
                           ),
                         ),
                         ...items
