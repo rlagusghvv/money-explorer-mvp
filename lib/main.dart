@@ -10,7 +10,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.24-r2';
+const kAppUiVersion = 'ui-2026.02.25-r3';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -880,6 +880,8 @@ class AppState {
     required this.dailyMissionDateKey,
     required this.dailyClaimedMissionIds,
     required this.dailyReviewCompletedCount,
+    required this.mapExpanded,
+    required this.scenarioOrder,
   });
 
   factory AppState.initial() => const AppState(
@@ -925,6 +927,8 @@ class AppState {
     dailyMissionDateKey: '',
     dailyClaimedMissionIds: {},
     dailyReviewCompletedCount: 0,
+    mapExpanded: true,
+    scenarioOrder: [],
   );
 
   final String playerName;
@@ -949,6 +953,8 @@ class AppState {
   final String dailyMissionDateKey;
   final Set<String> dailyClaimedMissionIds;
   final int dailyReviewCompletedCount;
+  final bool mapExpanded;
+  final List<int> scenarioOrder;
 
   ShopItem get equippedCharacter => kShopItems.firstWhere(
     (item) => item.id == equippedCharacterId,
@@ -997,6 +1003,10 @@ class AppState {
     };
     final rawAdjustments =
         json['decorationAdjustments'] as Map<String, dynamic>? ?? const {};
+    final scenarioOrder = (json['scenarioOrder'] as List<dynamic>? ?? const [])
+        .map((e) => (e as num?)?.round())
+        .whereType<int>()
+        .toList();
 
     return AppState(
       playerName: json['playerName'] as String? ?? initial.playerName,
@@ -1055,6 +1065,8 @@ class AppState {
               .toSet(),
       dailyReviewCompletedCount:
           (json['dailyReviewCompletedCount'] as num?)?.round() ?? 0,
+      mapExpanded: json['mapExpanded'] != false,
+      scenarioOrder: scenarioOrder,
     );
   }
 
@@ -1087,6 +1099,8 @@ class AppState {
     'dailyMissionDateKey': dailyMissionDateKey,
     'dailyClaimedMissionIds': dailyClaimedMissionIds.toList(),
     'dailyReviewCompletedCount': dailyReviewCompletedCount,
+    'mapExpanded': mapExpanded,
+    'scenarioOrder': scenarioOrder,
   };
 
   AppState copyWith({
@@ -1112,6 +1126,8 @@ class AppState {
     String? dailyMissionDateKey,
     Set<String>? dailyClaimedMissionIds,
     int? dailyReviewCompletedCount,
+    bool? mapExpanded,
+    List<int>? scenarioOrder,
   }) {
     return AppState(
       playerName: playerName ?? this.playerName,
@@ -1139,6 +1155,8 @@ class AppState {
           dailyClaimedMissionIds ?? this.dailyClaimedMissionIds,
       dailyReviewCompletedCount:
           dailyReviewCompletedCount ?? this.dailyReviewCompletedCount,
+      mapExpanded: mapExpanded ?? this.mapExpanded,
+      scenarioOrder: scenarioOrder ?? this.scenarioOrder,
     );
   }
 }
@@ -1167,6 +1185,8 @@ class AppStateStore {
   static const _kDailyMissionDateKey = 'dailyMissionDateKey';
   static const _kDailyClaimedMissionIds = 'dailyClaimedMissionIds';
   static const _kDailyReviewCompletedCount = 'dailyReviewCompletedCount';
+  static const _kMapExpanded = 'mapExpanded';
+  static const _kScenarioOrder = 'scenarioOrder';
 
   static Future<AppState> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1317,6 +1337,11 @@ class AppStateStore {
       dailyClaimedMissionIds:
           (prefs.getStringList(_kDailyClaimedMissionIds) ?? const []).toSet(),
       dailyReviewCompletedCount: prefs.getInt(_kDailyReviewCompletedCount) ?? 0,
+      mapExpanded: prefs.getBool(_kMapExpanded) ?? true,
+      scenarioOrder: (prefs.getStringList(_kScenarioOrder) ?? const [])
+          .map((e) => int.tryParse(e))
+          .whereType<int>()
+          .toList(),
     );
   }
 
@@ -1377,6 +1402,11 @@ class AppStateStore {
     await prefs.setInt(
       _kDailyReviewCompletedCount,
       state.dailyReviewCompletedCount,
+    );
+    await prefs.setBool(_kMapExpanded, state.mapExpanded);
+    await prefs.setStringList(
+      _kScenarioOrder,
+      state.scenarioOrder.map((e) => '$e').toList(),
     );
 
     final encoded = state.results
@@ -1451,6 +1481,34 @@ class _GameHomePageState extends State<GameHomePage> {
   bool _showPracticeNudge = false;
   List<WrongAnswerNote> _reviewQueue = const [];
   int _reviewRoundIndex = 0;
+
+  List<int> _normalizedScenarioOrder({required AppState baseState}) {
+    final ids = widget.scenarios.map((e) => e.id).toList();
+    if (ids.isEmpty) return const [];
+    final current = baseState.scenarioOrder;
+    if (current.length == ids.length && current.toSet().containsAll(ids)) {
+      return current;
+    }
+    final shuffled = [...ids]..shuffle();
+    return shuffled;
+  }
+
+  int _scenarioIndexByChapter(int chapterIndex) {
+    final order = _state.scenarioOrder;
+    if (widget.scenarios.isEmpty) return 0;
+    if (order.isEmpty) {
+      return chapterIndex.clamp(0, widget.scenarios.length - 1);
+    }
+    final clamped = chapterIndex.clamp(0, order.length - 1);
+    final scenarioId = order[clamped];
+    final index = widget.scenarios.indexWhere((e) => e.id == scenarioId);
+    return index >= 0 ? index : clamped.clamp(0, widget.scenarios.length - 1);
+  }
+
+  int _scenarioIndexById(int scenarioId) {
+    final index = widget.scenarios.indexWhere((e) => e.id == scenarioId);
+    return index >= 0 ? index : 0;
+  }
 
   bool get _isPreviewingScenario => _previewScenarioIndex != null;
 
@@ -1663,8 +1721,14 @@ class _GameHomePageState extends State<GameHomePage> {
   void initState() {
     super.initState();
     _state = _stateWithDailyResetIfNeeded(widget.initialState);
+    final normalizedOrder = _normalizedScenarioOrder(baseState: _state);
+    final orderChanged = !listEquals(normalizedOrder, _state.scenarioOrder);
+    if (orderChanged) {
+      _state = _state.copyWith(scenarioOrder: normalizedOrder);
+    }
     _session = widget.initialSession;
-    if (_state.dailyMissionDateKey != widget.initialState.dailyMissionDateKey) {
+    if (_state.dailyMissionDateKey != widget.initialState.dailyMissionDateKey ||
+        orderChanged) {
       _persist();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1807,7 +1871,11 @@ class _GameHomePageState extends State<GameHomePage> {
     try {
       final cloud = await widget.authService.loadProgress(token: session.token);
       if (cloud != null) {
-        _state = _stateWithDailyResetIfNeeded(AppState.fromJson(cloud));
+        var loaded = _stateWithDailyResetIfNeeded(AppState.fromJson(cloud));
+        loaded = loaded.copyWith(
+          scenarioOrder: _normalizedScenarioOrder(baseState: loaded),
+        );
+        _state = loaded;
         await AppStateStore.save(_state);
       } else {
         await widget.authService.saveProgress(
@@ -1874,8 +1942,9 @@ class _GameHomePageState extends State<GameHomePage> {
     final total = widget.scenarios.length;
     if (total == 0) return;
 
-    final realChapter = _state.currentScenario.clamp(0, total - 1);
-    final candidates = List<int>.generate(total, (i) => i)..remove(realChapter);
+    final currentPlayIndex = _scenarioIndexByChapter(_state.currentScenario);
+    final candidates = List<int>.generate(total, (i) => i)
+      ..remove(currentPlayIndex);
     if (candidates.isEmpty) return;
 
     final nextScenario = candidates[Random().nextInt(candidates.length)];
@@ -1887,7 +1956,7 @@ class _GameHomePageState extends State<GameHomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '미리보기 문제 ${nextScenario + 1}번을 열었어요. 실제 챕터 진행은 ${realChapter + 1}번에서 유지돼요.',
+          '미리보기 문제 ${nextScenario + 1}번을 열었어요. 실제 챕터 진행은 ${_state.currentScenario + 1}번에서 유지돼요.',
         ),
       ),
     );
@@ -1997,6 +2066,8 @@ class _GameHomePageState extends State<GameHomePage> {
         tutorialCompleted: false,
         selectedDifficulty: _state.selectedDifficulty,
         learnerAgeBand: _state.learnerAgeBand,
+        mapExpanded: _state.mapExpanded,
+        scenarioOrder: _normalizedScenarioOrder(baseState: _state),
       );
       _tabIndex = 0;
       _showPracticeNudge = false;
@@ -2024,6 +2095,8 @@ class _GameHomePageState extends State<GameHomePage> {
       _PlayTab(
         state: _state,
         scenarios: widget.scenarios,
+        scenarioIndexByChapter: _scenarioIndexByChapter,
+        scenarioIndexById: _scenarioIndexById,
         previewScenarioIndex: _previewScenarioIndex,
         reviewQueue: _reviewQueue,
         reviewRoundIndex: _reviewRoundIndex,
@@ -2050,6 +2123,10 @@ class _GameHomePageState extends State<GameHomePage> {
         onJumpToDifferentScenario: _jumpToDifferentScenarioForTesting,
         onSoundMutedChanged: (muted) {
           setState(() => _state = _state.copyWith(soundMuted: muted));
+          _persist();
+        },
+        onMapExpandedChanged: (expanded) {
+          setState(() => _state = _state.copyWith(mapExpanded: expanded));
           _persist();
         },
         showPracticeNudge: _showPracticeNudge,
@@ -2162,6 +2239,8 @@ class _PlayTab extends StatelessWidget {
   const _PlayTab({
     required this.state,
     required this.scenarios,
+    required this.scenarioIndexByChapter,
+    required this.scenarioIndexById,
     required this.previewScenarioIndex,
     required this.reviewQueue,
     required this.reviewRoundIndex,
@@ -2171,6 +2250,7 @@ class _PlayTab extends StatelessWidget {
     required this.onJumpToDifferentScenario,
     required this.onDifficultyChanged,
     required this.onSoundMutedChanged,
+    required this.onMapExpandedChanged,
     required this.showPracticeNudge,
     required this.onPracticeNudgeDismissed,
     required this.onWrongAnswer,
@@ -2179,6 +2259,8 @@ class _PlayTab extends StatelessWidget {
 
   final AppState state;
   final List<Scenario> scenarios;
+  final int Function(int chapterIndex) scenarioIndexByChapter;
+  final int Function(int scenarioId) scenarioIndexById;
   final int? previewScenarioIndex;
   final List<WrongAnswerNote> reviewQueue;
   final int reviewRoundIndex;
@@ -2188,6 +2270,7 @@ class _PlayTab extends StatelessWidget {
   final VoidCallback onJumpToDifferentScenario;
   final ValueChanged<DifficultyLevel> onDifficultyChanged;
   final ValueChanged<bool> onSoundMutedChanged;
+  final ValueChanged<bool> onMapExpandedChanged;
   final bool showPracticeNudge;
   final VoidCallback onPracticeNudgeDismissed;
   final void Function(Scenario scenario, WrongStageType stageType)
@@ -2255,16 +2338,15 @@ class _PlayTab extends StatelessWidget {
         ? scenarios.length
         : (state.currentScenario + 1).clamp(1, scenarios.length);
     final reviewScenarioIndex = isReviewMode
-        ? reviewQueue[reviewRoundIndex].scenarioId - 1
+        ? scenarioIndexById(reviewQueue[reviewRoundIndex].scenarioId)
         : null;
     final playScenarioIndex = isReviewMode
         ? (reviewScenarioIndex ?? 0).clamp(0, scenarios.length - 1)
         : isPreviewMode
-        ? (previewScenarioIndex ?? state.currentScenario).clamp(
-            0,
-            scenarios.length - 1,
-          )
-        : state.currentScenario.clamp(0, scenarios.length - 1);
+        ? (previewScenarioIndex ??
+                  scenarioIndexByChapter(state.currentScenario))
+              .clamp(0, scenarios.length - 1)
+        : scenarioIndexByChapter(state.currentScenario);
     final chapterObjective = isReviewMode
         ? '복습 라운드 ${reviewRoundIndex + 1}/${reviewQueue.length}: 틀렸던 부분을 다시 연습해요.'
         : _objectiveForChapter(realChapter);
@@ -2353,11 +2435,48 @@ class _PlayTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          _AdventureMapCard(
-            state: state,
-            totalScenarios: scenarios.length,
-            homeEmoji: state.equippedHome.emoji,
-            previewScenarioIndex: isPreviewMode ? playScenarioIndex : null,
+          Row(
+            children: [
+              const Text(
+                '탐험 지도',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => onMapExpandedChanged(!state.mapExpanded),
+                icon: Icon(
+                  state.mapExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                ),
+                label: Text(state.mapExpanded ? '지도 접기' : '지도 펼치기'),
+              ),
+            ],
+          ),
+          AnimatedCrossFade(
+            firstChild: _AdventureMapCard(
+              state: state,
+              totalScenarios: scenarios.length,
+              homeEmoji: state.equippedHome.emoji,
+              previewScenarioIndex: isPreviewMode ? playScenarioIndex : null,
+            ),
+            secondChild: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFDDE5F6)),
+              ),
+              child: const Text(
+                '지도를 접었어요. 문제 카드에 집중해볼까? 🧠',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+            ),
+            crossFadeState: state.mapExpanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            duration: const Duration(milliseconds: 180),
           ),
           const SizedBox(height: 10),
           if (!isReviewMode)
@@ -4518,7 +4637,6 @@ class _MyHomeTab extends StatefulWidget {
 
 class _MyHomeTabState extends State<_MyHomeTab> {
   bool _showEquipFx = false;
-  bool _isEditMode = false;
   String _equipFxLabel = '장착 완료!';
   late final TextEditingController _themeNameController;
 
@@ -4579,116 +4697,6 @@ class _MyHomeTabState extends State<_MyHomeTab> {
     });
   }
 
-  void _applyLayoutPreset(_RoomLayoutPreset preset) {
-    for (final entry in preset.slots.entries) {
-      final slot = entry.value;
-      if (slot.itemId == null ||
-          widget.state.ownedItemIds.contains(slot.itemId)) {
-        widget.onPlaceDecoration(entry.key, slot.itemId);
-      }
-      widget.onDecorationAdjusted(entry.key, slot.adjustment);
-    }
-    _triggerEquipFx('${preset.name} 적용!');
-  }
-
-  List<_RoomLayoutPreset> _presetsForState(AppState state) {
-    final wall = state.ownedItemIds.contains('deco_wall_frame')
-        ? 'deco_wall_frame'
-        : state.ownedItemIds.contains('deco_wall_chart')
-        ? 'deco_wall_chart'
-        : state.equippedDecorations[DecorationZone.wall];
-    final floor = state.ownedItemIds.contains('deco_floor_rug')
-        ? 'deco_floor_rug'
-        : state.equippedDecorations[DecorationZone.floor];
-    final desk = state.ownedItemIds.contains('deco_desk_globe')
-        ? 'deco_desk_globe'
-        : state.equippedDecorations[DecorationZone.desk];
-    final shelf = state.ownedItemIds.contains('deco_shelf_books')
-        ? 'deco_shelf_books'
-        : state.equippedDecorations[DecorationZone.shelf];
-    final window = state.ownedItemIds.contains('deco_window_curtain')
-        ? 'deco_window_curtain'
-        : state.equippedDecorations[DecorationZone.window];
-
-    return [
-      _RoomLayoutPreset(
-        name: '아늑한 공부방',
-        slots: {
-          DecorationZone.wall: _PresetSlot(
-            wall,
-            const RoomItemAdjustment(offsetX: -10, offsetY: -12, scale: 1.0),
-          ),
-          DecorationZone.window: _PresetSlot(
-            window,
-            const RoomItemAdjustment(offsetX: -6, offsetY: -4, scale: 1.0),
-          ),
-          DecorationZone.shelf: _PresetSlot(
-            shelf,
-            const RoomItemAdjustment(offsetX: -8, offsetY: 2, scale: 0.98),
-          ),
-          DecorationZone.desk: _PresetSlot(
-            desk,
-            const RoomItemAdjustment(offsetX: 4, offsetY: 6, scale: 1.02),
-          ),
-          DecorationZone.floor: _PresetSlot(
-            floor,
-            const RoomItemAdjustment(offsetX: -14, offsetY: 18, scale: 1.04),
-          ),
-        },
-      ),
-      _RoomLayoutPreset(
-        name: '햇살 포근방',
-        slots: {
-          DecorationZone.wall: _PresetSlot(
-            wall,
-            const RoomItemAdjustment(offsetX: 8, offsetY: -6, scale: 0.95),
-          ),
-          DecorationZone.window: _PresetSlot(
-            window,
-            const RoomItemAdjustment(offsetX: 8, offsetY: -8, scale: 1.06),
-          ),
-          DecorationZone.shelf: _PresetSlot(
-            shelf,
-            const RoomItemAdjustment(offsetX: -2, offsetY: 6, scale: 1.02),
-          ),
-          DecorationZone.desk: _PresetSlot(
-            desk,
-            const RoomItemAdjustment(offsetX: 8, offsetY: 10, scale: 1.04),
-          ),
-          DecorationZone.floor: _PresetSlot(
-            floor,
-            const RoomItemAdjustment(offsetX: -4, offsetY: 22, scale: 1.08),
-          ),
-        },
-      ),
-      _RoomLayoutPreset(
-        name: '정돈된 갤러리',
-        slots: {
-          DecorationZone.wall: _PresetSlot(
-            wall,
-            const RoomItemAdjustment(offsetX: 0, offsetY: -16, scale: 0.92),
-          ),
-          DecorationZone.window: _PresetSlot(
-            window,
-            const RoomItemAdjustment(offsetX: 12, offsetY: -2, scale: 0.98),
-          ),
-          DecorationZone.shelf: _PresetSlot(
-            shelf,
-            const RoomItemAdjustment(offsetX: -12, offsetY: -2, scale: 0.94),
-          ),
-          DecorationZone.desk: _PresetSlot(
-            desk,
-            const RoomItemAdjustment(offsetX: 0, offsetY: 0, scale: 0.94),
-          ),
-          DecorationZone.floor: _PresetSlot(
-            floor,
-            const RoomItemAdjustment(offsetX: -10, offsetY: 12, scale: 0.98),
-          ),
-        },
-      ),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
@@ -4697,8 +4705,6 @@ class _MyHomeTabState extends State<_MyHomeTab> {
     final chapterProgress = ((state.currentScenario / 10) * 100)
         .clamp(0, 100)
         .round();
-
-    final presets = _presetsForState(state);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -4719,16 +4725,9 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                   Text('계정: ${widget.session?.email ?? '게스트'}'),
                   Text('동기화 상태: ${widget.syncMessage ?? '로컬 저장 중'}'),
                   const SizedBox(height: 10),
-                  SegmentedButton<bool>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment<bool>(value: false, label: Text('보기 모드')),
-                      ButtonSegment<bool>(value: true, label: Text('꾸미기 모드')),
-                    ],
-                    selected: {_isEditMode},
-                    onSelectionChanged: (next) {
-                      setState(() => _isEditMode = next.first);
-                    },
+                  const Text(
+                    '아이템을 탭하면 바로 편집할 수 있어요.',
+                    style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -4740,37 +4739,9 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             itemById: _itemById,
             showEquipFx: _showEquipFx,
             equipFxLabel: _equipFxLabel,
-            isEditMode: _isEditMode,
             onDecorationAdjusted: widget.onDecorationAdjusted,
           ),
           const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '빠른 배치 프리셋',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: presets
-                        .map(
-                          (preset) => FilledButton.tonal(
-                            onPressed: () => _applyLayoutPreset(preset),
-                            child: Text(preset.name),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              ),
-            ),
-          ),
           const SizedBox(height: 10),
           Card(
             child: Padding(
@@ -4914,20 +4885,6 @@ class _MyHomeTabState extends State<_MyHomeTab> {
   }
 }
 
-class _PresetSlot {
-  const _PresetSlot(this.itemId, this.adjustment);
-
-  final String? itemId;
-  final RoomItemAdjustment adjustment;
-}
-
-class _RoomLayoutPreset {
-  const _RoomLayoutPreset({required this.name, required this.slots});
-
-  final String name;
-  final Map<DecorationZone, _PresetSlot> slots;
-}
-
 class _RoomAnchor {
   const _RoomAnchor(this.alignment, this.size, this.depth);
 
@@ -4968,7 +4925,6 @@ class _MyHomeRoomCard extends StatefulWidget {
     required this.itemById,
     required this.showEquipFx,
     required this.equipFxLabel,
-    required this.isEditMode,
     required this.onDecorationAdjusted,
   });
 
@@ -4976,7 +4932,6 @@ class _MyHomeRoomCard extends StatefulWidget {
   final ShopItem? Function(String? id) itemById;
   final bool showEquipFx;
   final String equipFxLabel;
-  final bool isEditMode;
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
 
@@ -5041,10 +4996,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   @override
   void didUpdateWidget(covariant _MyHomeRoomCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.isEditMode && _selectedZone != null) {
-      _selectedZone = null;
-      return;
-    }
     if (_selectedZone == null) return;
     if (widget.state.equippedDecorations[_selectedZone] == null) {
       _selectedZone = null;
@@ -5052,7 +5003,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   }
 
   void _beginManipulation(DecorationZone zone, {int? pointer}) {
-    if (!widget.isEditMode) return;
     if (_activePointer != null &&
         pointer != null &&
         _activePointer != pointer &&
@@ -5133,7 +5083,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     double snappedTop = top.clamp(minTop, maxTop);
     const grid = 8.0;
 
-    if (widget.isEditMode && snapToGrid) {
+    if (snapToGrid) {
       final snappedOffsetX = ((snappedLeft - baseLeft) / grid).round() * grid;
       final snappedOffsetY = ((snappedTop - baseTop) / grid).round() * grid;
       snappedLeft = baseLeft + snappedOffsetX;
@@ -5222,68 +5172,53 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
           Positioned.fill(
             child: Listener(
               behavior: HitTestBehavior.translucent,
-              onPointerDown: widget.isEditMode
-                  ? (event) {
-                      _beginManipulation(placed.zone, pointer: event.pointer);
-                    }
-                  : null,
-              onPointerUp: widget.isEditMode
-                  ? (event) => _endManipulation(pointer: event.pointer)
-                  : null,
-              onPointerCancel: widget.isEditMode
-                  ? (event) => _endManipulation(pointer: event.pointer)
-                  : null,
+              onPointerDown: (event) {
+                _beginManipulation(placed.zone, pointer: event.pointer);
+              },
+              onPointerUp: (event) => _endManipulation(pointer: event.pointer),
+              onPointerCancel: (event) =>
+                  _endManipulation(pointer: event.pointer),
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onTap: widget.isEditMode
-                    ? () => _beginManipulation(placed.zone)
-                    : null,
-                onPanStart: widget.isEditMode
-                    ? (_) => _beginManipulation(placed.zone)
-                    : null,
-                onPanUpdate: widget.isEditMode
-                    ? (details) {
-                        _beginManipulation(placed.zone);
-                        final nextLeft = left + details.delta.dx;
-                        final nextTop = top + details.delta.dy;
-                        _updateFromRect(
-                          placed: placed,
-                          left: nextLeft,
-                          top: nextTop,
-                          width: width,
-                          maxWidth: maxWidth,
-                          maxHeight: maxHeight,
-                          snapToGrid: false,
-                        );
-                      }
-                    : null,
-                onPanEnd: widget.isEditMode
-                    ? (_) {
-                        _finalizeManipulationSnap(
-                          placed.zone,
-                          placed,
-                          maxWidth,
-                          maxHeight,
-                        );
-                        _endManipulation();
-                      }
-                    : null,
-                onPanCancel: widget.isEditMode
-                    ? () {
-                        _finalizeManipulationSnap(
-                          placed.zone,
-                          placed,
-                          maxWidth,
-                          maxHeight,
-                        );
-                        _endManipulation();
-                      }
-                    : null,
+                onTap: () => _beginManipulation(placed.zone),
+                onPanStart: (_) => _beginManipulation(placed.zone),
+                onPanUpdate: (details) {
+                  _beginManipulation(placed.zone);
+                  final nextLeft = left + details.delta.dx;
+                  final nextTop = top + details.delta.dy;
+                  _updateFromRect(
+                    placed: placed,
+                    left: nextLeft,
+                    top: nextTop,
+                    width: width,
+                    maxWidth: maxWidth,
+                    maxHeight: maxHeight,
+                    snapToGrid: false,
+                  );
+                },
+                onPanEnd: (_) {
+                  _finalizeManipulationSnap(
+                    placed.zone,
+                    placed,
+                    maxWidth,
+                    maxHeight,
+                  );
+                  _endManipulation();
+                },
+                onPanCancel: () {
+                  _finalizeManipulationSnap(
+                    placed.zone,
+                    placed,
+                    maxWidth,
+                    maxHeight,
+                  );
+                  _endManipulation();
+                },
                 child: Padding(
                   padding: const EdgeInsets.all(hitPadding),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      border: widget.isEditMode && selected
+                      border: selected
                           ? Border.all(color: AppDesign.secondary, width: 2)
                           : null,
                       borderRadius: BorderRadius.circular(8),
@@ -5294,7 +5229,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
               ),
             ),
           ),
-          if (widget.isEditMode && selected)
+          if (selected)
             Positioned(
               right: -18,
               bottom: -18,
@@ -5365,7 +5300,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                 ),
               ),
             ),
-          if (widget.isEditMode && selected)
+          if (selected)
             Positioned(
               left: controlLeft,
               bottom: -18,
@@ -5445,7 +5380,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: () {
-                              if (!widget.isEditMode) return;
                               if (_suppressBackgroundTap) {
                                 _suppressBackgroundTap = false;
                                 return;
@@ -5454,7 +5388,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                               setState(() => _selectedZone = null);
                             },
                             child: CustomPaint(
-                              painter: _MiniRoomShellPainter(theme: theme),
+                              painter: const _MiniRoomShellPainter(),
                             ),
                           ),
                         ),
@@ -5530,11 +5464,9 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              !widget.isEditMode
-                  ? '보기 모드: 아이템 배치가 잠겨 있어요. 꾸미기 모드에서만 편집할 수 있어요.'
-                  : (_selectedZone == null
-                        ? '꾸미기 모드: 아이템을 탭한 뒤 드래그 이동, 핸들 또는 +/-로 크기 조절'
-                        : '${_selectedZone!.label} 선택됨 · 드래그 이동 / 핸들·+/- 크기 조절'),
+              _selectedZone == null
+                  ? '아이템을 탭하면 바로 편집 시작! 드래그로 이동하고 핸들·+/-로 크기 조절해요.'
+                  : '${_selectedZone!.label} 편집 중 · 드래그 이동 / 핸들·+/- 크기 조절',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
@@ -5550,20 +5482,33 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
 }
 
 class _MiniRoomShellPainter extends CustomPainter {
-  const _MiniRoomShellPainter({required this.theme});
-
-  final _HomeThemePreset theme;
+  const _MiniRoomShellPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
     final wallRect = Rect.fromLTWH(0, 0, size.width, size.height * 0.62);
     final wallPaint = Paint()
-      ..shader = LinearGradient(
+      ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: theme.wallGradient,
+        colors: [Color(0xFFFFFFFF), Color(0xFFF6F8FC)],
       ).createShader(wallRect);
     canvas.drawRect(wallRect, wallPaint);
+
+    final sideShadow = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          const Color(0xFFDDE4EF).withValues(alpha: 0.55),
+          Colors.transparent,
+          const Color(0xFFDDE4EF).withValues(alpha: 0.42),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height * 0.62));
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height * 0.62),
+      sideShadow,
+    );
 
     final floorPath = Path()
       ..moveTo(size.width * 0.08, size.height * 0.62)
@@ -5573,10 +5518,10 @@ class _MiniRoomShellPainter extends CustomPainter {
       ..close();
     final floorPaint = Paint()
       ..shader =
-          LinearGradient(
+          const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: theme.floorGradient,
+            colors: [Color(0xFFF0F3F8), Color(0xFFE2E7EF)],
           ).createShader(
             Rect.fromLTWH(
               0,
@@ -5588,75 +5533,17 @@ class _MiniRoomShellPainter extends CustomPainter {
     canvas.drawPath(floorPath, floorPaint);
 
     final seamPaint = Paint()
-      ..color = theme.accent.withValues(alpha: 0.24)
-      ..strokeWidth = 2.4;
+      ..color = const Color(0xFFCFD7E3)
+      ..strokeWidth = 2.0;
     canvas.drawLine(
       Offset(size.width * 0.08, size.height * 0.62),
       Offset(size.width * 0.92, size.height * 0.62),
       seamPaint,
     );
-
-    final zoneHintPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.20)
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * 0.12,
-          size.height * 0.10,
-          size.width * 0.30,
-          size.height * 0.18,
-        ),
-        const Radius.circular(12),
-      ),
-      zoneHintPaint,
-    ); // wall zone
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * 0.59,
-          size.height * 0.18,
-          size.width * 0.24,
-          size.height * 0.20,
-        ),
-        const Radius.circular(14),
-      ),
-      zoneHintPaint,
-    ); // window zone
-
-    // 배치 충돌을 줄이기 위해 배경에 가구 실루엣은 그리지 않는다.
-    // 대신 장식이 자연스럽게 놓일 수 있는 깨끗한 존만 아주 약하게 표시.
-    final cleanZonePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.10);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * 0.50,
-          size.height * 0.54,
-          size.width * 0.32,
-          size.height * 0.13,
-        ),
-        const Radius.circular(12),
-      ),
-      cleanZonePaint,
-    ); // desk clean zone
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * 0.06,
-          size.height * 0.45,
-          size.width * 0.25,
-          size.height * 0.20,
-        ),
-        const Radius.circular(12),
-      ),
-      cleanZonePaint,
-    ); // shelf clean zone
   }
 
   @override
-  bool shouldRepaint(covariant _MiniRoomShellPainter oldDelegate) =>
-      oldDelegate.theme.name != theme.name;
+  bool shouldRepaint(covariant _MiniRoomShellPainter oldDelegate) => false;
 }
 
 class _MiniroomVisualSpec {
