@@ -10,11 +10,19 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r3';
+const kAppUiVersion = 'ui-2026.02.25-r4';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
 const _kReviewRoundRewardPoints = 18;
+
+String buildSeoulWeekKey(DateTime dateTime) {
+  final nowKst = dateTime.toUtc().add(_kSeoulOffset);
+  final monday = nowKst.subtract(Duration(days: nowKst.weekday - 1));
+  final month = monday.month.toString().padLeft(2, '0');
+  final day = monday.day.toString().padLeft(2, '0');
+  return '${monday.year}-W$month$day';
+}
 
 String buildSeoulDateKey(DateTime dateTime) {
   final nowKst = dateTime.toUtc().add(_kSeoulOffset);
@@ -43,6 +51,7 @@ bool isDailyMissionResetRequired({
 }
 
 enum DailyMissionType { solveFive, accuracy70, reviewOne }
+enum WeeklyMissionType { balancedInvestor }
 
 extension DailyMissionTypeX on DailyMissionType {
   String get key => name;
@@ -69,6 +78,27 @@ extension DailyMissionTypeX on DailyMissionType {
     DailyMissionType.solveFive => 52,
     DailyMissionType.accuracy70 => 38,
     DailyMissionType.reviewOne => 30,
+  };
+}
+
+extension WeeklyMissionTypeX on WeeklyMissionType {
+  String get key => name;
+
+  String get title => switch (this) {
+    WeeklyMissionType.balancedInvestor => '균형 투자 주간 챌린지',
+  };
+
+  String get subtitle => switch (this) {
+    WeeklyMissionType.balancedInvestor =>
+      '이번 주 6문제 이상 풀고 평균 위험 관리 72점+ 달성! (근거와 비중 균형 미션)',
+  };
+
+  int get rewardCoins => switch (this) {
+    WeeklyMissionType.balancedInvestor => 320,
+  };
+
+  int get rewardPoints => switch (this) {
+    WeeklyMissionType.balancedInvestor => 140,
   };
 }
 
@@ -854,6 +884,78 @@ const List<ShopItem> kShopItems = [
     emoji: '☁️',
     description: '창가에 달아두는 가벼운 모빌!',
   ),
+  ShopItem(
+    id: 'deco_wall_planboard',
+    name: '미션 계획 보드',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.wall,
+    price: 125,
+    emoji: '📌',
+    description: '주간 목표를 적어두는 알림 보드!',
+  ),
+  ShopItem(
+    id: 'deco_wall_medal',
+    name: '탐험 메달 배지',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.wall,
+    price: 135,
+    emoji: '🥇',
+    description: '챕터 완주 메달을 벽에 반짝!',
+  ),
+  ShopItem(
+    id: 'deco_floor_cushion',
+    name: '안전 투자 쿠션',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.floor,
+    price: 110,
+    emoji: '🛋️',
+    description: '차분하게 생각할 때 딱 좋은 쿠션!',
+  ),
+  ShopItem(
+    id: 'deco_floor_train',
+    name: '경제 기차 장난감',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.floor,
+    price: 145,
+    emoji: '🚂',
+    description: '수요와 공급을 싣고 달리는 장난감!',
+  ),
+  ShopItem(
+    id: 'deco_desk_calculator',
+    name: '꼼꼼 계산기',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.desk,
+    price: 130,
+    emoji: '🧮',
+    description: '비중 계산할 때 쓰는 책상 친구!',
+  ),
+  ShopItem(
+    id: 'deco_desk_lamp',
+    name: '집중 스탠드',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.desk,
+    price: 118,
+    emoji: '💡',
+    description: '뉴스 읽을 때 반짝 집중등!',
+  ),
+  ShopItem(
+    id: 'deco_shelf_clock',
+    name: '루틴 타이머 시계',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.shelf,
+    price: 126,
+    emoji: '⏰',
+    description: '매일 학습 시간을 지켜주는 시계!',
+  ),
+  ShopItem(
+    id: 'deco_window_sunrain',
+    name: '해·비 날씨 모빌',
+    type: CosmeticType.decoration,
+    zone: DecorationZone.window,
+    price: 132,
+    emoji: '🌤️',
+    description: '시장 날씨를 기억하는 창가 장식!',
+  ),
 ];
 
 class AppState {
@@ -880,6 +982,8 @@ class AppState {
     required this.dailyMissionDateKey,
     required this.dailyClaimedMissionIds,
     required this.dailyReviewCompletedCount,
+    required this.weeklyMissionWeekKey,
+    required this.weeklyClaimedMissionIds,
     required this.mapExpanded,
     required this.scenarioOrder,
   });
@@ -927,6 +1031,8 @@ class AppState {
     dailyMissionDateKey: '',
     dailyClaimedMissionIds: {},
     dailyReviewCompletedCount: 0,
+    weeklyMissionWeekKey: '',
+    weeklyClaimedMissionIds: {},
     mapExpanded: true,
     scenarioOrder: [],
   );
@@ -953,6 +1059,8 @@ class AppState {
   final String dailyMissionDateKey;
   final Set<String> dailyClaimedMissionIds;
   final int dailyReviewCompletedCount;
+  final String weeklyMissionWeekKey;
+  final Set<String> weeklyClaimedMissionIds;
   final bool mapExpanded;
   final List<int> scenarioOrder;
 
@@ -1065,6 +1173,11 @@ class AppState {
               .toSet(),
       dailyReviewCompletedCount:
           (json['dailyReviewCompletedCount'] as num?)?.round() ?? 0,
+      weeklyMissionWeekKey: json['weeklyMissionWeekKey'] as String? ?? '',
+      weeklyClaimedMissionIds:
+          (json['weeklyClaimedMissionIds'] as List<dynamic>? ?? const [])
+              .whereType<String>()
+              .toSet(),
       mapExpanded: json['mapExpanded'] != false,
       scenarioOrder: scenarioOrder,
     );
@@ -1099,6 +1212,8 @@ class AppState {
     'dailyMissionDateKey': dailyMissionDateKey,
     'dailyClaimedMissionIds': dailyClaimedMissionIds.toList(),
     'dailyReviewCompletedCount': dailyReviewCompletedCount,
+    'weeklyMissionWeekKey': weeklyMissionWeekKey,
+    'weeklyClaimedMissionIds': weeklyClaimedMissionIds.toList(),
     'mapExpanded': mapExpanded,
     'scenarioOrder': scenarioOrder,
   };
@@ -1126,6 +1241,8 @@ class AppState {
     String? dailyMissionDateKey,
     Set<String>? dailyClaimedMissionIds,
     int? dailyReviewCompletedCount,
+    String? weeklyMissionWeekKey,
+    Set<String>? weeklyClaimedMissionIds,
     bool? mapExpanded,
     List<int>? scenarioOrder,
   }) {
@@ -1155,6 +1272,9 @@ class AppState {
           dailyClaimedMissionIds ?? this.dailyClaimedMissionIds,
       dailyReviewCompletedCount:
           dailyReviewCompletedCount ?? this.dailyReviewCompletedCount,
+      weeklyMissionWeekKey: weeklyMissionWeekKey ?? this.weeklyMissionWeekKey,
+      weeklyClaimedMissionIds:
+          weeklyClaimedMissionIds ?? this.weeklyClaimedMissionIds,
       mapExpanded: mapExpanded ?? this.mapExpanded,
       scenarioOrder: scenarioOrder ?? this.scenarioOrder,
     );
@@ -1185,6 +1305,8 @@ class AppStateStore {
   static const _kDailyMissionDateKey = 'dailyMissionDateKey';
   static const _kDailyClaimedMissionIds = 'dailyClaimedMissionIds';
   static const _kDailyReviewCompletedCount = 'dailyReviewCompletedCount';
+  static const _kWeeklyMissionWeekKey = 'weeklyMissionWeekKey';
+  static const _kWeeklyClaimedMissionIds = 'weeklyClaimedMissionIds';
   static const _kMapExpanded = 'mapExpanded';
   static const _kScenarioOrder = 'scenarioOrder';
 
@@ -1337,6 +1459,9 @@ class AppStateStore {
       dailyClaimedMissionIds:
           (prefs.getStringList(_kDailyClaimedMissionIds) ?? const []).toSet(),
       dailyReviewCompletedCount: prefs.getInt(_kDailyReviewCompletedCount) ?? 0,
+      weeklyMissionWeekKey: prefs.getString(_kWeeklyMissionWeekKey) ?? '',
+      weeklyClaimedMissionIds:
+          (prefs.getStringList(_kWeeklyClaimedMissionIds) ?? const []).toSet(),
       mapExpanded: prefs.getBool(_kMapExpanded) ?? true,
       scenarioOrder: (prefs.getStringList(_kScenarioOrder) ?? const [])
           .map((e) => int.tryParse(e))
@@ -1402,6 +1527,11 @@ class AppStateStore {
     await prefs.setInt(
       _kDailyReviewCompletedCount,
       state.dailyReviewCompletedCount,
+    );
+    await prefs.setString(_kWeeklyMissionWeekKey, state.weeklyMissionWeekKey);
+    await prefs.setStringList(
+      _kWeeklyClaimedMissionIds,
+      state.weeklyClaimedMissionIds.toList(),
     );
     await prefs.setBool(_kMapExpanded, state.mapExpanded);
     await prefs.setStringList(
@@ -1521,17 +1651,28 @@ class _GameHomePageState extends State<GameHomePage> {
 
   AppState _stateWithDailyResetIfNeeded(AppState source) {
     final now = DateTime.now();
-    if (!isDailyMissionResetRequired(
+    var next = source;
+
+    if (isDailyMissionResetRequired(
       currentDateKey: source.dailyMissionDateKey,
       now: now,
     )) {
-      return source;
+      next = next.copyWith(
+        dailyMissionDateKey: buildSeoulDateKey(now),
+        dailyClaimedMissionIds: <String>{},
+        dailyReviewCompletedCount: 0,
+      );
     }
-    return source.copyWith(
-      dailyMissionDateKey: buildSeoulDateKey(now),
-      dailyClaimedMissionIds: <String>{},
-      dailyReviewCompletedCount: 0,
-    );
+
+    final currentWeek = buildSeoulWeekKey(now);
+    if (next.weeklyMissionWeekKey != currentWeek) {
+      next = next.copyWith(
+        weeklyMissionWeekKey: currentWeek,
+        weeklyClaimedMissionIds: <String>{},
+      );
+    }
+
+    return next;
   }
 
   ({int solved, int correct, int reviewDone}) _todayMissionProgress() {
@@ -1557,6 +1698,33 @@ class _GameHomePageState extends State<GameHomePage> {
         progress.solved > 0 &&
             ((progress.correct / progress.solved) * 100) >= 70,
       DailyMissionType.reviewOne => progress.reviewDone >= 1,
+    };
+  }
+
+  ({int solved, int avgRisk, int balancedCount}) _thisWeekMissionProgress() {
+    final currentWeek = buildSeoulWeekKey(DateTime.now());
+    final weekResults = _state.results
+        .where((e) => buildSeoulWeekKey(e.timestamp) == currentWeek)
+        .toList();
+    final solved = weekResults.length;
+    final avgRisk = solved == 0
+        ? 0
+        : (weekResults.fold<int>(0, (sum, e) => sum + e.riskManagementScore) /
+                  solved)
+              .round();
+    final balancedCount = weekResults
+        .where((e) => e.allocationPercent >= 35 && e.allocationPercent <= 65)
+        .length;
+    return (solved: solved, avgRisk: avgRisk, balancedCount: balancedCount);
+  }
+
+  bool _isWeeklyMissionComplete(WeeklyMissionType type) {
+    final progress = _thisWeekMissionProgress();
+    return switch (type) {
+      WeeklyMissionType.balancedInvestor =>
+        progress.solved >= 6 &&
+            progress.avgRisk >= 72 &&
+            progress.balancedCount >= 4,
     };
   }
 
@@ -1635,6 +1803,44 @@ class _GameHomePageState extends State<GameHomePage> {
       title: '데일리 미션 성공!',
       message:
           '${type.title} 완료! +${type.rewardCoins}코인 · +${type.rewardPoints}P 획득!',
+    );
+  }
+
+  void _claimWeeklyMission(WeeklyMissionType type) {
+    if (_state.weeklyClaimedMissionIds.contains(type.key)) {
+      _showRewardSnackBar(
+        title: '주간 보상 수령 완료!',
+        message: '이번 주 미션 보상은 이미 받았어. 정말 대단해! 🌈',
+        color: const Color(0xFF5A6575),
+        icon: Icons.check_circle_rounded,
+      );
+      return;
+    }
+    if (!_isWeeklyMissionComplete(type)) {
+      _showRewardSnackBar(
+        title: '주간 미션 진행 중!',
+        message: '이번 주 목표를 조금만 더 채우면 특별 보상을 받을 수 있어 ✨',
+        color: const Color(0xFF3A7BDA),
+        icon: Icons.event_note_rounded,
+      );
+      return;
+    }
+
+    final nextClaims = {..._state.weeklyClaimedMissionIds, type.key};
+    setState(() {
+      _state = _state.copyWith(
+        cash: _state.cash + type.rewardCoins,
+        rewardPoints: _state.rewardPoints + type.rewardPoints,
+        weeklyClaimedMissionIds: nextClaims,
+      );
+    });
+    _persist();
+    _showRewardSnackBar(
+      title: '주간 미션 성공!',
+      message:
+          '${type.title} 달성! +${type.rewardCoins}코인 · +${type.rewardPoints}P 획득!',
+      color: const Color(0xFF6A4DFF),
+      icon: Icons.workspace_premium_rounded,
     );
   }
 
@@ -2152,6 +2358,7 @@ class _GameHomePageState extends State<GameHomePage> {
         onStartReview: _startReviewRound,
         isReviewRunning: _isReviewMode,
         onClaimMission: _claimDailyMission,
+        onClaimWeeklyMission: _claimWeeklyMission,
         seoulDateKey: _seoulDateKey(),
         skippedMalformedScenarioCount: widget.skippedMalformedScenarioCount,
       ),
@@ -2226,7 +2433,7 @@ class _GameHomePageState extends State<GameHomePage> {
             NavigationDestination(icon: Icon(Icons.explore), label: '탐험 맵'),
             NavigationDestination(icon: Icon(Icons.cottage), label: '마이홈'),
             NavigationDestination(icon: Icon(Icons.storefront), label: '상점'),
-            NavigationDestination(icon: Icon(Icons.insights), label: '리포트'),
+            NavigationDestination(icon: Icon(Icons.insights), label: '미션/리포트'),
             NavigationDestination(icon: Icon(Icons.menu_book), label: '가이드'),
           ],
         ),
@@ -5690,6 +5897,46 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         icon: Icons.cloud,
         gradient: [Color(0xFFE5F0FF), Color(0xFFC8E0FF)],
       );
+    case 'deco_wall_planboard':
+      return const _MiniroomVisualSpec(
+        icon: Icons.checklist_rounded,
+        gradient: [Color(0xFFFFF0D3), Color(0xFFFFDFB0)],
+      );
+    case 'deco_wall_medal':
+      return const _MiniroomVisualSpec(
+        icon: Icons.workspace_premium_rounded,
+        gradient: [Color(0xFFFFEBC1), Color(0xFFFFD78F)],
+      );
+    case 'deco_floor_cushion':
+      return const _MiniroomVisualSpec(
+        icon: Icons.weekend_rounded,
+        gradient: [Color(0xFFE8E7FF), Color(0xFFD0CEFF)],
+      );
+    case 'deco_floor_train':
+      return const _MiniroomVisualSpec(
+        icon: Icons.train_rounded,
+        gradient: [Color(0xFFD9F3FF), Color(0xFFBCE7FF)],
+      );
+    case 'deco_desk_calculator':
+      return const _MiniroomVisualSpec(
+        icon: Icons.calculate_rounded,
+        gradient: [Color(0xFFE8F0FF), Color(0xFFC7D9FF)],
+      );
+    case 'deco_desk_lamp':
+      return const _MiniroomVisualSpec(
+        icon: Icons.lightbulb_rounded,
+        gradient: [Color(0xFFFFF3C9), Color(0xFFFFE39E)],
+      );
+    case 'deco_shelf_clock':
+      return const _MiniroomVisualSpec(
+        icon: Icons.schedule_rounded,
+        gradient: [Color(0xFFEDEDF8), Color(0xFFD5D8EB)],
+      );
+    case 'deco_window_sunrain':
+      return const _MiniroomVisualSpec(
+        icon: Icons.wb_cloudy_rounded,
+        gradient: [Color(0xFFE4F5FF), Color(0xFFCBEAFF)],
+      );
     default:
       return const _MiniroomVisualSpec(
         icon: Icons.home_filled,
@@ -5946,6 +6193,7 @@ class _WeeklyReportTab extends StatelessWidget {
     required this.onStartReview,
     required this.isReviewRunning,
     required this.onClaimMission,
+    required this.onClaimWeeklyMission,
     required this.seoulDateKey,
     required this.skippedMalformedScenarioCount,
   });
@@ -5954,6 +6202,7 @@ class _WeeklyReportTab extends StatelessWidget {
   final VoidCallback onStartReview;
   final bool isReviewRunning;
   final ValueChanged<DailyMissionType> onClaimMission;
+  final ValueChanged<WeeklyMissionType> onClaimWeeklyMission;
   final String seoulDateKey;
   final int skippedMalformedScenarioCount;
 
@@ -5972,6 +6221,29 @@ class _WeeklyReportTab extends StatelessWidget {
       solved: todayResults.length,
       correct: todayResults.where((e) => e.judgementScore >= 70).length,
       reviewDone: state.dailyReviewCompletedCount,
+    );
+  }
+
+  ({String weekKey, int solved, int avgRisk, int balancedCount})
+  _thisWeekProgress() {
+    final weekKey = buildSeoulWeekKey(DateTime.now());
+    final weekResults = state.results
+        .where((e) => buildSeoulWeekKey(e.timestamp) == weekKey)
+        .toList();
+    final solved = weekResults.length;
+    final avgRisk = solved == 0
+        ? 0
+        : (weekResults.fold<int>(0, (sum, e) => sum + e.riskManagementScore) /
+                  solved)
+              .round();
+    final balancedCount = weekResults
+        .where((e) => e.allocationPercent >= 35 && e.allocationPercent <= 65)
+        .length;
+    return (
+      weekKey: weekKey,
+      solved: solved,
+      avgRisk: avgRisk,
+      balancedCount: balancedCount,
     );
   }
 
@@ -5999,6 +6271,26 @@ class _WeeklyReportTab extends StatelessWidget {
             ? '0% (0/0)'
             : '${((progress.correct / progress.solved) * 100).round()}% (${progress.correct}/${progress.solved})',
       DailyMissionType.reviewOne => '${progress.reviewDone}/1',
+    };
+  }
+
+  bool _isWeeklyComplete(
+    WeeklyMissionType type,
+    ({String weekKey, int solved, int avgRisk, int balancedCount}) progress,
+  ) {
+    return switch (type) {
+      WeeklyMissionType.balancedInvestor =>
+        progress.solved >= 6 && progress.avgRisk >= 72 && progress.balancedCount >= 4,
+    };
+  }
+
+  String _weeklyProgressLabel(
+    WeeklyMissionType type,
+    ({String weekKey, int solved, int avgRisk, int balancedCount}) progress,
+  ) {
+    return switch (type) {
+      WeeklyMissionType.balancedInvestor =>
+        '풀이 ${progress.solved}/6 · 평균 위험관리 ${progress.avgRisk}/72 · 균형 비중 ${progress.balancedCount}/4',
     };
   }
 
@@ -6058,6 +6350,90 @@ class _WeeklyReportTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: ListView(
         children: [
+          Card(
+            color: const Color(0xFFF2EEFF),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Builder(
+                builder: (context) {
+                  final weekly = _thisWeekProgress();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '🗓️ 주간 미션 센터',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('이번 주 코드: ${weekly.weekKey}'),
+                      const SizedBox(height: 8),
+                      ...WeeklyMissionType.values.map((type) {
+                        final completed = _isWeeklyComplete(type, weekly);
+                        final claimed = state.weeklyClaimedMissionIds.contains(
+                          type.key,
+                        );
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFDCD4FF)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                type.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${type.subtitle}\n${_weeklyProgressLabel(type, weekly)}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Text(
+                                    '보상 +${type.rewardCoins}코인 +${type.rewardPoints}P',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  FilledButton.tonal(
+                                    onPressed: claimed || !completed
+                                        ? null
+                                        : () => onClaimWeeklyMission(type),
+                                    child: Text(
+                                      claimed
+                                          ? '수령완료'
+                                          : completed
+                                          ? '보상받기'
+                                          : '진행중',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Card(
             color: const Color(0xFFEFFAF1),
             child: Padding(
