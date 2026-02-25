@@ -11,7 +11,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r19';
+const kAppUiVersion = 'ui-2026.02.25-r20';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -4882,6 +4882,7 @@ class _MyHomeTab extends StatefulWidget {
 
 class _MyHomeTabState extends State<_MyHomeTab> {
   bool _showEquipFx = false;
+  bool _isRoomGestureActive = false;
   String _equipFxLabel = '장착 완료!';
   late final TextEditingController _themeNameController;
 
@@ -4954,6 +4955,9 @@ class _MyHomeTabState extends State<_MyHomeTab> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
+        physics: _isRoomGestureActive
+            ? const NeverScrollableScrollPhysics()
+            : const BouncingScrollPhysics(),
         children: [
           Card(
             color: const Color(0xFFEFF6FF),
@@ -4991,6 +4995,10 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             equipFxLabel: _equipFxLabel,
             onDecorationAdjusted: widget.onDecorationAdjusted,
             onCharacterAdjusted: widget.onCharacterAdjusted,
+            onGestureActiveChanged: (active) {
+              if (_isRoomGestureActive == active) return;
+              setState(() => _isRoomGestureActive = active);
+            },
           ),
           const SizedBox(height: 10),
           Card(
@@ -5202,6 +5210,7 @@ class _MyHomeRoomCard extends StatefulWidget {
     required this.equipFxLabel,
     required this.onDecorationAdjusted,
     required this.onCharacterAdjusted,
+    required this.onGestureActiveChanged,
   });
 
   final AppState state;
@@ -5211,6 +5220,7 @@ class _MyHomeRoomCard extends StatefulWidget {
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
   final ValueChanged<RoomItemAdjustment> onCharacterAdjusted;
+  final ValueChanged<bool> onGestureActiveChanged;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(138, 88), 1),
@@ -5236,21 +5246,40 @@ class _MyHomeRoomCard extends StatefulWidget {
   State<_MyHomeRoomCard> createState() => _MyHomeRoomCardState();
 }
 
-class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
+class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
+    with SingleTickerProviderStateMixin {
   DecorationZone? _selectedZone;
   bool _isCharacterSelected = false;
   bool _isManipulating = false;
   bool _suppressBackgroundTap = false;
   DateTime? _selectionLockUntil;
+  late final AnimationController _selectionPulseController;
 
   static const double _minScale = 0.72;
   static const double _maxScale = 1.38;
+  static const double _hitSlop = 18;
   static const _characterAnchor = _RoomAnchor(Alignment(0.03, 0.52), Size(110, 110), 4);
 
   bool get _isSelectionLocked {
     final lock = _selectionLockUntil;
     if (lock == null) return false;
     return DateTime.now().isBefore(lock);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectionPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 980),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    widget.onGestureActiveChanged(false);
+    _selectionPulseController.dispose();
+    super.dispose();
   }
 
   List<_RoomPlacedItem> _buildItems() {
@@ -5288,12 +5317,14 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
         _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 450));
       });
     }
+    widget.onGestureActiveChanged(true);
   }
 
   void _endManipulation() {
     _isManipulating = false;
     _suppressBackgroundTap = true;
     _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 220));
+    widget.onGestureActiveChanged(false);
   }
 
   RoomItemAdjustment _adjustmentFromRect({
@@ -5359,12 +5390,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     var lastScale = 1.0;
 
     return Positioned(
-      left: left,
-      top: top,
-      width: width,
-      height: height,
+      left: left - _hitSlop,
+      top: top - _hitSlop,
+      width: width + (_hitSlop * 2),
+      height: height + (_hitSlop * 2),
       child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
+        behavior: HitTestBehavior.opaque,
         onTap: onSelect,
         onScaleStart: (_) {
           lastScale = 1.0;
@@ -5403,12 +5434,13 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
           onChanged(next);
           _endManipulation();
         },
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: selected ? Border.all(color: AppDesign.secondary, width: 2) : null,
-            borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(_hitSlop),
+          child: _SelectionGlow(
+            selected: selected,
+            pulse: _selectionPulseController,
+            child: child,
           ),
-          child: child,
         ),
       ),
     );
@@ -5499,6 +5531,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                                 _selectedZone = null;
                                 _isCharacterSelected = false;
                               });
+                              widget.onGestureActiveChanged(false);
                             },
                             child: const SizedBox.expand(),
                           ),
@@ -5545,6 +5578,48 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SelectionGlow extends StatelessWidget {
+  const _SelectionGlow({
+    required this.selected,
+    required this.pulse,
+    required this.child,
+  });
+
+  final bool selected;
+  final Animation<double> pulse;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!selected) return child;
+    return AnimatedBuilder(
+      animation: pulse,
+      child: child,
+      builder: (context, childWidget) {
+        final t = pulse.value;
+        final glow = 0.18 + (0.14 * t);
+        final scale = 1 + (0.014 * t);
+        return Transform.scale(
+          scale: scale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFD86B).withValues(alpha: glow),
+                  blurRadius: 14 + (6 * t),
+                  spreadRadius: 0.4 + (0.9 * t),
+                ),
+              ],
+            ),
+            child: childWidget,
+          ),
+        );
+      },
     );
   }
 }
