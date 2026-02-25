@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -10,7 +11,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r16';
+const kAppUiVersion = 'ui-2026.02.25-r17';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -51,6 +52,7 @@ bool isDailyMissionResetRequired({
 }
 
 enum DailyMissionType { solveFive, accuracy70, reviewOne }
+
 enum WeeklyMissionType { balancedInvestor }
 
 extension DailyMissionTypeX on DailyMissionType {
@@ -4936,6 +4938,11 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                     '아이템을 탭하면 바로 편집할 수 있어요.',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '현재 장착 베이스: ${state.equippedHome.name}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ],
               ),
             ),
@@ -5173,6 +5180,10 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   bool _suppressBackgroundTap = false;
   DateTime? _selectionLockUntil;
   final Map<DecorationZone, _LiveManipulationRect> _liveRects = {};
+  Timer? _scaleHoldTimer;
+
+  static const double _minScale = 0.72;
+  static const double _maxScale = 1.38;
 
   bool get _isSelectionLocked {
     final lock = _selectionLockUntil;
@@ -5207,6 +5218,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     if (widget.state.equippedDecorations[_selectedZone] == null) {
       _selectedZone = null;
     }
+  }
+
+  @override
+  void dispose() {
+    _scaleHoldTimer?.cancel();
+    super.dispose();
   }
 
   void _beginManipulation(DecorationZone zone, {int? pointer}) {
@@ -5333,8 +5350,8 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
         (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
         placed.adjustment.offsetY;
     final nextWidth = (width + placed.anchor.size.width * delta).clamp(
-      placed.anchor.size.width * 0.72,
-      placed.anchor.size.width * 1.38,
+      placed.anchor.size.width * _minScale,
+      placed.anchor.size.width * _maxScale,
     );
     _updateFromRect(
       placed: placed,
@@ -5346,6 +5363,70 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
       snapToGrid: true,
       rememberLiveRect: false,
     );
+  }
+
+  void _setScaleRatio(
+    _RoomPlacedItem placed,
+    double maxWidth,
+    double maxHeight,
+    double ratio,
+  ) {
+    final clampedRatio = ratio.clamp(_minScale, _maxScale);
+    final width = placed.anchor.size.width * placed.adjustment.scale;
+    final height = placed.anchor.size.height * placed.adjustment.scale;
+    final left =
+        (maxWidth - width) * ((placed.anchor.alignment.x + 1) / 2) +
+        placed.adjustment.offsetX;
+    final top =
+        (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
+        placed.adjustment.offsetY;
+    final nextWidth = placed.anchor.size.width * clampedRatio;
+    _updateFromRect(
+      placed: placed,
+      left: left,
+      top: top,
+      width: nextWidth,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      snapToGrid: true,
+      rememberLiveRect: false,
+    );
+  }
+
+  void _setScalePreset(
+    _RoomPlacedItem placed,
+    double maxWidth,
+    double maxHeight,
+    double multiplier,
+  ) {
+    _setScaleRatio(
+      placed,
+      maxWidth,
+      maxHeight,
+      (placed.adjustment.scale * multiplier).clamp(_minScale, _maxScale),
+    );
+  }
+
+  void _startScaleHold(
+    _RoomPlacedItem placed,
+    double maxWidth,
+    double maxHeight,
+    double delta,
+  ) {
+    _scaleHoldTimer?.cancel();
+    _changeScaleByStep(placed, maxWidth, maxHeight, delta);
+    _scaleHoldTimer = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (!mounted || _selectedZone != placed.zone) {
+        _scaleHoldTimer?.cancel();
+        return;
+      }
+      _changeScaleByStep(placed, maxWidth, maxHeight, delta);
+    });
+  }
+
+  void _stopScaleHold() {
+    _scaleHoldTimer?.cancel();
+    _scaleHoldTimer = null;
   }
 
   Widget _buildPlacedItem(
@@ -5363,9 +5444,10 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
         (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
         placed.adjustment.offsetY;
     const hitPadding = 22.0;
-    final controlLeft = ((width - 88) / 2 + hitPadding).clamp(
+    const controlWidth = 168.0;
+    final controlLeft = ((width - controlWidth) / 2 + hitPadding).clamp(
       4.0,
-      width + hitPadding * 2 - 92,
+      width + hitPadding * 2 - (controlWidth + 4),
     );
 
     return Positioned(
@@ -5510,12 +5592,13 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
           if (selected)
             Positioned(
               left: controlLeft,
-              bottom: -18,
+              bottom: -22,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                width: controlWidth,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFE0E5EF)),
                   boxShadow: const [
                     BoxShadow(
@@ -5525,30 +5608,86 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                     ),
                   ],
                 ),
-                child: Row(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () => _changeScaleByStep(
-                        placed,
-                        maxWidth,
-                        maxHeight,
-                        -0.08,
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(6),
-                        child: Icon(Icons.remove, size: 18),
-                      ),
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _changeScaleByStep(
+                            placed,
+                            maxWidth,
+                            maxHeight,
+                            -0.08,
+                          ),
+                          onLongPressStart: (_) => _startScaleHold(
+                            placed,
+                            maxWidth,
+                            maxHeight,
+                            -0.04,
+                          ),
+                          onLongPressEnd: (_) => _stopScaleHold(),
+                          onLongPressCancel: _stopScaleHold,
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.remove_circle_outline, size: 18),
+                          ),
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: placed.adjustment.scale,
+                            min: _minScale,
+                            max: _maxScale,
+                            divisions: 22,
+                            onChanged: (value) => _setScaleRatio(
+                              placed,
+                              maxWidth,
+                              maxHeight,
+                              value,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => _changeScaleByStep(
+                            placed,
+                            maxWidth,
+                            maxHeight,
+                            0.08,
+                          ),
+                          onLongPressStart: (_) => _startScaleHold(
+                            placed,
+                            maxWidth,
+                            maxHeight,
+                            0.04,
+                          ),
+                          onLongPressEnd: (_) => _stopScaleHold(),
+                          onLongPressCancel: _stopScaleHold,
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.add_circle_outline, size: 18),
+                          ),
+                        ),
+                      ],
                     ),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () =>
-                          _changeScaleByStep(placed, maxWidth, maxHeight, 0.08),
-                      child: const Padding(
-                        padding: EdgeInsets.all(6),
-                        child: Icon(Icons.add, size: 18),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _ScalePresetButton(
+                          label: '-10%',
+                          onTap: () =>
+                              _setScalePreset(placed, maxWidth, maxHeight, 0.9),
+                        ),
+                        _ScalePresetButton(
+                          label: '기본',
+                          onTap: () =>
+                              _setScaleRatio(placed, maxWidth, maxHeight, 1.0),
+                        ),
+                        _ScalePresetButton(
+                          label: '+10%',
+                          onTap: () =>
+                              _setScalePreset(placed, maxWidth, maxHeight, 1.1),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -5930,7 +6069,8 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
       return const _MiniroomVisualSpec(
         icon: Icons.weekend_rounded,
         gradient: [Color(0xFFE8E7FF), Color(0xFFD0CEFF)],
-        assetPath: 'assets/miniroom/generated/item_floor_safe_invest_cushion.png',
+        assetPath:
+            'assets/miniroom/generated/item_floor_safe_invest_cushion.png',
       );
     case 'deco_floor_train':
       return const _MiniroomVisualSpec(
@@ -6076,6 +6216,33 @@ class _SlotPreviewChip extends StatelessWidget {
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScalePresetButton extends StatelessWidget {
+  const _ScalePresetButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F7FF),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFDDE5F6)),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -6305,7 +6472,9 @@ class _WeeklyReportTab extends StatelessWidget {
   ) {
     return switch (type) {
       WeeklyMissionType.balancedInvestor =>
-        progress.solved >= 6 && progress.avgRisk >= 72 && progress.balancedCount >= 4,
+        progress.solved >= 6 &&
+            progress.avgRisk >= 72 &&
+            progress.balancedCount >= 4,
     };
   }
 
