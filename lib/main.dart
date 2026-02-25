@@ -1159,7 +1159,9 @@ class AppState {
         for (final zone in DecorationZone.values)
           zone: RoomItemAdjustment.fromJson(rawAdjustments[zone.key]),
       },
-      characterAdjustment: RoomItemAdjustment.fromJson(json['characterAdjustment']),
+      characterAdjustment: RoomItemAdjustment.fromJson(
+        json['characterAdjustment'],
+      ),
       homeThemeName:
           (json['homeThemeName'] as String?)?.trim().isNotEmpty == true
           ? (json['homeThemeName'] as String).trim()
@@ -5202,6 +5204,40 @@ class _RoomPlacedItem {
   final RoomItemAdjustment adjustment;
 }
 
+class _RoomTarget {
+  const _RoomTarget.decoration(this.zone)
+    : isCharacter = false,
+      rect = Rect.zero;
+
+  const _RoomTarget.character()
+    : zone = null,
+      isCharacter = true,
+      rect = Rect.zero;
+
+  final DecorationZone? zone;
+  final bool isCharacter;
+  final Rect rect;
+
+  _RoomTarget withRect(Rect nextRect) =>
+      _RoomTarget._(zone, isCharacter, nextRect);
+
+  const _RoomTarget._(this.zone, this.isCharacter, this.rect);
+
+  String get key => isCharacter ? 'character' : 'zone:${zone!.name}';
+}
+
+class _RoomGestureSession {
+  _RoomGestureSession({required this.target, required this.currentRect});
+
+  final _RoomTarget target;
+  final Map<int, Offset> pointers = <int, Offset>{};
+  Rect currentRect;
+  Offset? baselineFocal;
+  Rect? baselineRect;
+  double? baselineDistance;
+  int mode = 0;
+}
+
 class _MyHomeRoomCard extends StatefulWidget {
   const _MyHomeRoomCard({
     required this.state,
@@ -5251,9 +5287,9 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   DecorationZone? _selectedZone;
   bool _isCharacterSelected = false;
   bool _isManipulating = false;
-  bool _suppressBackgroundTap = false;
   DateTime? _selectionLockUntil;
   late final AnimationController _selectionPulseController;
+  _RoomGestureSession? _gestureSession;
 
   static const double _minScale = 0.72;
   static const double _maxScale = 1.38;
@@ -5338,7 +5374,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
 
   void _endManipulation() {
     _isManipulating = false;
-    _suppressBackgroundTap = true;
     _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 220));
     widget.onGestureActiveChanged(false);
   }
@@ -5351,9 +5386,11 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   }) {
     final width = anchor.size.width * adjustment.scale;
     final height = anchor.size.height * adjustment.scale;
-    final left = (maxWidth - width) * ((anchor.alignment.x + 1) / 2) +
+    final left =
+        (maxWidth - width) * ((anchor.alignment.x + 1) / 2) +
         adjustment.offsetX;
-    final top = (maxHeight - height) * ((anchor.alignment.y + 1) / 2) +
+    final top =
+        (maxHeight - height) * ((anchor.alignment.y + 1) / 2) +
         adjustment.offsetY;
     return Rect.fromLTWH(left, top, width, height);
   }
@@ -5400,197 +5437,146 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     );
   }
 
-  Widget _buildGestureItem({
-    required String debugLabel,
-    required _RoomAnchor anchor,
-    required RoomItemAdjustment adjustment,
-    required Widget child,
-    required bool selected,
-    required VoidCallback onSelect,
-    required ValueChanged<RoomItemAdjustment> onChanged,
-    required double maxWidth,
-    required double maxHeight,
-  }) {
-    final visualRect = _visualRectFromAdjustment(
+  Rect _rectForTarget(_RoomTarget target, double maxWidth, double maxHeight) {
+    final anchor = target.isCharacter
+        ? _characterAnchor
+        : _MyHomeRoomCard._anchors[target.zone]!;
+    final adjustment = target.isCharacter
+        ? widget.state.characterAdjustment
+        : (widget.state.decorationAdjustments[target.zone] ??
+              RoomItemAdjustment.defaults);
+    return _visualRectFromAdjustment(
       anchor: anchor,
       adjustment: adjustment,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
     );
+  }
 
-    var gestureRect = visualRect;
-    Offset? lastFocal;
-    Offset? gestureStartFocal;
-    int pointerMode = 0;
-    double baseWidth = visualRect.width;
-    double baseLeft = visualRect.left;
-    double baseTop = visualRect.top;
+  _RoomTarget? _hitTestTarget(
+    Offset point,
+    List<_RoomPlacedItem> items,
+    double maxWidth,
+    double maxHeight,
+  ) {
+    final hitRects = <_RoomTarget>[];
+    for (final placed in items) {
+      final rect = _visualRectFromAdjustment(
+        anchor: placed.anchor,
+        adjustment: placed.adjustment,
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+      ).inflate(_hitSlop);
+      hitRects.add(_RoomTarget.decoration(placed.zone).withRect(rect));
+    }
+    final charRect = _visualRectFromAdjustment(
+      anchor: _characterAnchor,
+      adjustment: widget.state.characterAdjustment,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+    ).inflate(_hitSlop);
+    hitRects.add(_RoomTarget.character().withRect(charRect));
 
+    for (var i = hitRects.length - 1; i >= 0; i--) {
+      final candidate = hitRects[i];
+      if (candidate.rect.contains(point)) return candidate;
+    }
+    return null;
+  }
+
+  void _resetGestureBaseline(_RoomGestureSession session) {
+    final points = session.pointers.values.toList(growable: false);
+    if (points.isEmpty) return;
+    final focal = points.length == 1
+        ? points.first
+        : Offset(
+            (points[0].dx + points[1].dx) / 2,
+            (points[0].dy + points[1].dy) / 2,
+          );
+    session.mode = points.length >= 2 ? 2 : 1;
+    session.baselineFocal = focal;
+    session.baselineRect = session.currentRect;
+    session.baselineDistance = points.length >= 2
+        ? (points[0] - points[1]).distance.clamp(1, 9999).toDouble()
+        : null;
+    _debugTouchLog('${session.target.key} baseline-reset mode=${session.mode}');
+  }
+
+  void _emitAdjustmentForSession(
+    _RoomGestureSession session,
+    double maxWidth,
+    double maxHeight, {
+    bool snapToGrid = false,
+  }) {
+    final target = session.target;
+    final anchor = target.isCharacter
+        ? _characterAnchor
+        : _MyHomeRoomCard._anchors[target.zone]!;
+    final current = target.isCharacter
+        ? widget.state.characterAdjustment
+        : (widget.state.decorationAdjustments[target.zone] ??
+              RoomItemAdjustment.defaults);
+
+    final next = _adjustmentFromRect(
+      anchor: anchor,
+      current: current,
+      left: session.currentRect.left,
+      top: session.currentRect.top,
+      width: session.currentRect.width,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      snapToGrid: snapToGrid,
+    );
+
+    if (target.isCharacter) {
+      widget.onCharacterAdjusted(next);
+    } else {
+      widget.onDecorationAdjusted(target.zone!, next);
+    }
+  }
+
+  Widget _buildVisualItem({
+    required Rect rect,
+    required Widget child,
+    required bool selected,
+    required int mode,
+  }) {
     return Positioned(
-      left: visualRect.left - _hitSlop,
-      top: visualRect.top - _hitSlop,
-      width: visualRect.width + (_hitSlop * 2),
-      height: visualRect.height + (_hitSlop * 2),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          if (_isManipulating || _isSelectionLocked) return;
-          onSelect();
-          _debugTouchLog('$debugLabel tap-select bounds=$visualRect');
-        },
-        onScaleStart: (details) {
-          onSelect();
-          _beginManipulation(
-            zone: _selectedZone,
-            character: _isCharacterSelected,
-          );
-          gestureRect = visualRect;
-          baseWidth = gestureRect.width;
-          baseLeft = gestureRect.left;
-          baseTop = gestureRect.top;
-          lastFocal = details.focalPoint;
-          gestureStartFocal = details.focalPoint;
-          pointerMode = details.pointerCount >= 2 ? 2 : 1;
-          _debugTouchLog(
-            '$debugLabel start pointers=$pointerMode rect=$gestureRect',
-          );
-        },
-        onScaleUpdate: (details) {
-          onSelect();
-          final currentMode = details.pointerCount >= 2 ? 2 : 1;
-          if (pointerMode != currentMode) {
-            pointerMode = currentMode;
-            baseWidth = gestureRect.width;
-            baseLeft = gestureRect.left;
-            baseTop = gestureRect.top;
-            gestureStartFocal = details.focalPoint;
-            lastFocal = details.focalPoint;
-            _debugTouchLog('$debugLabel mode-switch -> $pointerMode');
-          }
-
-          if (pointerMode == 1) {
-            final delta = details.focalPoint - (lastFocal ?? details.focalPoint);
-            gestureRect = Rect.fromLTWH(
-              gestureRect.left + delta.dx,
-              gestureRect.top + delta.dy,
-              gestureRect.width,
-              gestureRect.height,
-            );
-          } else {
-            final candidateWidth =
-                (baseWidth * details.scale).clamp(
-                      anchor.size.width * _minScale,
-                      anchor.size.width * _maxScale,
-                    );
-            final widthDelta = candidateWidth - gestureRect.width;
-            final focalDelta = details.focalPoint - (gestureStartFocal ?? details.focalPoint);
-            gestureRect = Rect.fromLTWH(
-              baseLeft + focalDelta.dx - (widthDelta / 2),
-              baseTop + focalDelta.dy -
-                  ((anchor.size.height / anchor.size.width) * widthDelta / 2),
-              candidateWidth,
-              candidateWidth * (anchor.size.height / anchor.size.width),
-            );
-          }
-
-          final next = _adjustmentFromRect(
-            anchor: anchor,
-            current: adjustment,
-            left: gestureRect.left,
-            top: gestureRect.top,
-            width: gestureRect.width,
-            maxWidth: maxWidth,
-            maxHeight: maxHeight,
-          );
-          onChanged(next);
-          lastFocal = details.focalPoint;
-        },
-        onScaleEnd: (_) {
-          final next = _adjustmentFromRect(
-            anchor: anchor,
-            current: adjustment,
-            left: gestureRect.left,
-            top: gestureRect.top,
-            width: gestureRect.width,
-            maxWidth: maxWidth,
-            maxHeight: maxHeight,
-            snapToGrid: true,
-          );
-          onChanged(next);
-          _debugTouchLog('$debugLabel end rect=$gestureRect');
-          _endManipulation();
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(_hitSlop),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _SelectionGlow(
-                selected: selected,
-                pulse: _selectionPulseController,
-                child: child,
-              ),
-              if (kDebugMode && selected)
-                IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFFFF2D55),
-                        width: 1.2,
-                      ),
-                    ),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Container(
-                        color: const Color(0xAAFF2D55),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
-                        child: Text(
-                          pointerMode >= 2 ? '2F pinch' : '1F drag',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _SelectionGlow(
+            selected: selected,
+            pulse: _selectionPulseController,
+            child: child,
+          ),
+          if (kDebugMode && selected)
+            IgnorePointer(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Container(
+                  color: const Color(0xAAFF2D55),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  child: Text(
+                    mode >= 2 ? '2F pinch' : '1F drag',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-            ],
-          ),
-        ),
+              ),
+            ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildPlacedItem(_RoomPlacedItem placed, double maxWidth, double maxHeight) {
-    return _buildGestureItem(
-      debugLabel: 'deco:${placed.zone.name}',
-      anchor: placed.anchor,
-      adjustment: placed.adjustment,
-      selected: _selectedZone == placed.zone && !_isCharacterSelected,
-      onSelect: () => _beginManipulation(zone: placed.zone),
-      onChanged: (next) => widget.onDecorationAdjusted(placed.zone, next),
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-      child: _DecorationObject(item: placed.item),
-    );
-  }
-
-  Widget _buildCharacter(double maxWidth, double maxHeight) {
-    return _buildGestureItem(
-      debugLabel: 'character',
-      anchor: _characterAnchor,
-      adjustment: widget.state.characterAdjustment,
-      selected: _isCharacterSelected,
-      onSelect: () => _beginManipulation(character: true),
-      onChanged: widget.onCharacterAdjusted,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-      child: _ItemThumbnail(item: widget.state.equippedCharacter, compact: false),
     );
   }
 
@@ -5605,7 +5591,10 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${widget.state.homeThemeName} · ${theme.name}', style: const TextStyle(fontWeight: FontWeight.w900)),
+            Text(
+              '${widget.state.homeThemeName} · ${theme.name}',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 10),
             AspectRatio(
               aspectRatio: 1.32,
@@ -5613,74 +5602,263 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                 borderRadius: BorderRadius.circular(18),
                 child: LayoutBuilder(
                   builder: (context, c) {
-                    final homeVisual = _miniroomSpecForItem(widget.state.equippedHome);
-                    return Stack(
-                      children: [
-                        const Positioned.fill(
-                          child: IgnorePointer(child: CustomPaint(painter: _MiniRoomShellPainter())),
-                        ),
-                        if (homeVisual.assetPath != null)
-                          Positioned.fill(
+                    final homeVisual = _miniroomSpecForItem(
+                      widget.state.equippedHome,
+                    );
+                    final topItems = items
+                        .where(
+                          (e) =>
+                              e.zone == DecorationZone.wall ||
+                              e.zone == DecorationZone.window ||
+                              e.zone == DecorationZone.shelf,
+                        )
+                        .toList();
+                    final bottomItems = items
+                        .where(
+                          (e) =>
+                              e.zone == DecorationZone.desk ||
+                              e.zone == DecorationZone.floor,
+                        )
+                        .toList();
+
+                    Widget buildPlaced(_RoomPlacedItem placed) {
+                      final target = _RoomTarget.decoration(placed.zone);
+                      final active = _gestureSession?.target.key == target.key;
+                      final rect = active
+                          ? _gestureSession!.currentRect
+                          : _rectForTarget(target, c.maxWidth, c.maxHeight);
+                      return _buildVisualItem(
+                        rect: rect,
+                        child: _DecorationObject(item: placed.item),
+                        selected:
+                            _selectedZone == placed.zone &&
+                            !_isCharacterSelected,
+                        mode: _gestureSession?.mode ?? 0,
+                      );
+                    }
+
+                    final characterTarget = const _RoomTarget.character();
+                    final characterRect =
+                        _gestureSession?.target.key == characterTarget.key
+                        ? _gestureSession!.currentRect
+                        : _rectForTarget(
+                            characterTarget,
+                            c.maxWidth,
+                            c.maxHeight,
+                          );
+
+                    return Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: (event) {
+                        final local = event.localPosition;
+                        final hit = _hitTestTarget(
+                          local,
+                          items,
+                          c.maxWidth,
+                          c.maxHeight,
+                        );
+                        if (hit == null) {
+                          if (_gestureSession == null &&
+                              !_isManipulating &&
+                              !_isSelectionLocked) {
+                            setState(() {
+                              _selectedZone = null;
+                              _isCharacterSelected = false;
+                            });
+                            widget.onGestureActiveChanged(false);
+                          }
+                          return;
+                        }
+
+                        _gestureSession ??= _RoomGestureSession(
+                          target: hit,
+                          currentRect: _rectForTarget(
+                            hit,
+                            c.maxWidth,
+                            c.maxHeight,
+                          ),
+                        );
+                        final session = _gestureSession!;
+                        session.pointers[event.pointer] = local;
+                        _beginManipulation(
+                          zone: hit.isCharacter ? null : hit.zone,
+                          character: hit.isCharacter,
+                        );
+                        _resetGestureBaseline(session);
+                      },
+                      onPointerMove: (event) {
+                        final session = _gestureSession;
+                        if (session == null ||
+                            !session.pointers.containsKey(event.pointer)) {
+                          return;
+                        }
+                        session.pointers[event.pointer] = event.localPosition;
+                        final points = session.pointers.values.toList(
+                          growable: false,
+                        );
+                        if (points.isEmpty) return;
+
+                        if (points.length == 1) {
+                          if (session.mode != 1) _resetGestureBaseline(session);
+                          final baselineFocal =
+                              session.baselineFocal ?? points.first;
+                          final baselineRect =
+                              session.baselineRect ?? session.currentRect;
+                          final delta = points.first - baselineFocal;
+                          session.currentRect = Rect.fromLTWH(
+                            baselineRect.left + delta.dx,
+                            baselineRect.top + delta.dy,
+                            baselineRect.width,
+                            baselineRect.height,
+                          );
+                        } else {
+                          if (session.mode != 2) _resetGestureBaseline(session);
+                          final baselineRect =
+                              session.baselineRect ?? session.currentRect;
+                          final baselineFocal =
+                              session.baselineFocal ??
+                              Offset(
+                                (points[0].dx + points[1].dx) / 2,
+                                (points[0].dy + points[1].dy) / 2,
+                              );
+                          final baselineDistance =
+                              (session.baselineDistance ?? 1).clamp(1, 9999);
+                          final focal = Offset(
+                            (points[0].dx + points[1].dx) / 2,
+                            (points[0].dy + points[1].dy) / 2,
+                          );
+                          final distance = (points[0] - points[1]).distance
+                              .clamp(1, 9999);
+                          final scaleFactor = distance / baselineDistance;
+                          final targetAnchor = session.target.isCharacter
+                              ? _characterAnchor
+                              : _MyHomeRoomCard._anchors[session.target.zone]!;
+                          final ratio =
+                              targetAnchor.size.height /
+                              targetAnchor.size.width;
+                          final width = (baselineRect.width * scaleFactor)
+                              .clamp(
+                                targetAnchor.size.width * _minScale,
+                                targetAnchor.size.width * _maxScale,
+                              );
+                          final height = width * ratio;
+                          session.currentRect = Rect.fromLTWH(
+                            baselineRect.left + (focal.dx - baselineFocal.dx),
+                            baselineRect.top + (focal.dy - baselineFocal.dy),
+                            width,
+                            height,
+                          );
+                        }
+
+                        _emitAdjustmentForSession(
+                          session,
+                          c.maxWidth,
+                          c.maxHeight,
+                        );
+                        setState(() {});
+                      },
+                      onPointerUp: (event) {
+                        final session = _gestureSession;
+                        if (session == null) return;
+                        session.pointers.remove(event.pointer);
+                        if (session.pointers.isEmpty) {
+                          _emitAdjustmentForSession(
+                            session,
+                            c.maxWidth,
+                            c.maxHeight,
+                            snapToGrid: true,
+                          );
+                          _gestureSession = null;
+                          _endManipulation();
+                          return;
+                        }
+                        _resetGestureBaseline(session);
+                      },
+                      onPointerCancel: (event) {
+                        final session = _gestureSession;
+                        if (session == null) return;
+                        session.pointers.remove(event.pointer);
+                        if (session.pointers.isEmpty) {
+                          _gestureSession = null;
+                          _endManipulation();
+                          return;
+                        }
+                        _resetGestureBaseline(session);
+                      },
+                      child: Stack(
+                        children: [
+                          const Positioned.fill(
                             child: IgnorePointer(
-                              child: Image.asset(
-                                homeVisual.assetPath!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  debugPrint('[MiniRoom] base asset fallback: ${homeVisual.assetPath}');
-                                  return DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [theme.wallGradient.first, theme.floorGradient.last],
+                              child: CustomPaint(
+                                painter: _MiniRoomShellPainter(),
+                              ),
+                            ),
+                          ),
+                          if (homeVisual.assetPath != null)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Image.asset(
+                                  homeVisual.assetPath!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    debugPrint(
+                                      '[MiniRoom] base asset fallback: ${homeVisual.assetPath}',
+                                    );
+                                    return DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            theme.wallGradient.first,
+                                            theme.floorGradient.last,
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ...topItems.map(buildPlaced),
+                          _buildVisualItem(
+                            rect: characterRect,
+                            child: _ItemThumbnail(
+                              item: widget.state.equippedCharacter,
+                              compact: false,
+                            ),
+                            selected: _isCharacterSelected,
+                            mode: _gestureSession?.mode ?? 0,
+                          ),
+                          ...bottomItems.map(buildPlaced),
+                          AnimatedOpacity(
+                            duration: const Duration(milliseconds: 220),
+                            opacity: widget.showEquipFx ? 1 : 0,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFFCE1),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFE083),
+                                  ),
+                                ),
+                                child: Text(
+                                  '✨ ${widget.equipFxLabel}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        Positioned.fill(
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              if (_suppressBackgroundTap) {
-                                _suppressBackgroundTap = false;
-                                return;
-                              }
-                              if (_isManipulating || _isSelectionLocked) return;
-                              setState(() {
-                                _selectedZone = null;
-                                _isCharacterSelected = false;
-                              });
-                              widget.onGestureActiveChanged(false);
-                            },
-                            child: const SizedBox.expand(),
-                          ),
-                        ),
-                        ...items
-                            .where((e) => e.zone == DecorationZone.wall || e.zone == DecorationZone.window || e.zone == DecorationZone.shelf)
-                            .map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
-                        _buildCharacter(c.maxWidth, c.maxHeight),
-                        ...items
-                            .where((e) => e.zone == DecorationZone.desk || e.zone == DecorationZone.floor)
-                            .map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
-                        AnimatedOpacity(
-                          duration: const Duration(milliseconds: 220),
-                          opacity: widget.showEquipFx ? 1 : 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFFCE1),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: const Color(0xFFFFE083)),
-                              ),
-                              child: Text('✨ ${widget.equipFxLabel}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -5691,12 +5869,15 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
               _isCharacterSelected
                   ? '캐릭터 편집 중 · 드래그 이동 / 핀치 크기 조절'
                   : _selectedZone == null
-                      ? '드래그로 이동, 핀치로 크기 조절 (캐릭터 포함)'
-                      : '${_selectedZone!.label} 편집 중 · 드래그 이동 / 핀치 크기 조절',
+                  ? '드래그로 이동, 핀치로 크기 조절 (캐릭터 포함)'
+                  : '${_selectedZone!.label} 편집 중 · 드래그 이동 / 핀치 크기 조절',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
-            Text('현재 홈 테마: ${widget.state.equippedHome.name}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              '현재 홈 테마: ${widget.state.equippedHome.name}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ],
         ),
       ),
