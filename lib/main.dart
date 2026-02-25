@@ -5262,23 +5262,11 @@ class _MyHomeRoomCard extends StatefulWidget {
   final ValueChanged<bool> onGestureActiveChanged;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
-    DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(138, 88), 1),
-    DecorationZone.window: _RoomAnchor(
-      Alignment(0.66, -0.42),
-      Size(124, 88),
-      2,
-    ),
-    DecorationZone.shelf: _RoomAnchor(
-      Alignment(-0.70, -0.02),
-      Size(138, 118),
-      3,
-    ),
-    DecorationZone.desk: _RoomAnchor(Alignment(0.44, 0.28), Size(176, 122), 4),
-    DecorationZone.floor: _RoomAnchor(
-      Alignment(-0.18, 0.70),
-      Size(206, 112),
-      5,
-    ),
+    DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(72, 46), 1),
+    DecorationZone.window: _RoomAnchor(Alignment(0.66, -0.42), Size(64, 46), 2),
+    DecorationZone.shelf: _RoomAnchor(Alignment(-0.70, -0.02), Size(72, 61), 3),
+    DecorationZone.desk: _RoomAnchor(Alignment(0.44, 0.28), Size(102, 71), 4),
+    DecorationZone.floor: _RoomAnchor(Alignment(-0.18, 0.70), Size(124, 67), 5),
   };
 
   @override
@@ -5299,7 +5287,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   static const double _hitSlop = 0.8;
   static const _characterAnchor = _RoomAnchor(
     Alignment(0.03, 0.52),
-    Size(110, 110),
+    Size(68, 68),
     4,
   );
 
@@ -6152,32 +6140,32 @@ class _MiniroomVisualSpec {
 /// left/top/right/bottom inset fractions. Runtime hit testing uses this tighter
 /// content box instead of full image rect (or broad heuristic inset).
 const Map<String, EdgeInsets> _alphaHitInsetByItemId = {
-  'char_default': EdgeInsets.fromLTRB(0.283, 0.297, 0.283, 0.299),
-  'char_fox': EdgeInsets.fromLTRB(0.244, 0.248, 0.244, 0.250),
-  'char_penguin': EdgeInsets.fromLTRB(0.248, 0.275, 0.248, 0.277),
-  'char_tiger': EdgeInsets.fromLTRB(0.248, 0.250, 0.248, 0.250),
-  'char_robot': EdgeInsets.fromLTRB(0.256, 0.240, 0.258, 0.242),
-  'char_unicorn': EdgeInsets.fromLTRB(0.248, 0.252, 0.248, 0.252),
-  'deco_wall_chart': EdgeInsets.fromLTRB(0.307, 0.365, 0.307, 0.367),
-  'deco_wall_star': EdgeInsets.fromLTRB(0.293, 0.256, 0.293, 0.258),
-  'deco_wall_frame': EdgeInsets.fromLTRB(0.316, 0.381, 0.318, 0.383),
-  'deco_floor_rug': EdgeInsets.fromLTRB(0.281, 0.402, 0.281, 0.404),
-  'deco_floor_coinbox': EdgeInsets.fromLTRB(0.311, 0.381, 0.312, 0.381),
-  'deco_floor_plant': EdgeInsets.fromLTRB(0.293, 0.229, 0.293, 0.227),
-  'deco_desk_globe': EdgeInsets.fromLTRB(0.268, 0.268, 0.268, 0.270),
-  'deco_desk_trophy': EdgeInsets.fromLTRB(0.299, 0.307, 0.301, 0.307),
-  'deco_shelf_books': EdgeInsets.fromLTRB(0.289, 0.373, 0.291, 0.373),
-  'deco_shelf_piggy': EdgeInsets.fromLTRB(0.342, 0.365, 0.344, 0.365),
-  'deco_window_curtain': EdgeInsets.fromLTRB(0.311, 0.336, 0.312, 0.338),
-  'deco_window_cloud': EdgeInsets.fromLTRB(0.312, 0.285, 0.314, 0.287),
-  'deco_wall_planboard': EdgeInsets.fromLTRB(0.303, 0.359, 0.305, 0.361),
-  'deco_wall_medal': EdgeInsets.fromLTRB(0.344, 0.342, 0.344, 0.344),
-  'deco_floor_cushion': EdgeInsets.fromLTRB(0.297, 0.381, 0.299, 0.381),
-  'deco_floor_train': EdgeInsets.fromLTRB(0.287, 0.395, 0.289, 0.396),
-  'deco_desk_calculator': EdgeInsets.fromLTRB(0.305, 0.375, 0.305, 0.377),
-  'deco_desk_lamp': EdgeInsets.fromLTRB(0.287, 0.297, 0.287, 0.297),
-  'deco_wall_clock': EdgeInsets.fromLTRB(0.363, 0.336, 0.365, 0.338),
-  'deco_window_mobile': EdgeInsets.fromLTRB(0.312, 0.285, 0.314, 0.287),
+  'char_default': EdgeInsets.fromLTRB(0.052, 0.081, 0.052, 0.085),
+  'char_fox': EdgeInsets.fromLTRB(0.054, 0.061, 0.054, 0.065),
+  'char_penguin': EdgeInsets.fromLTRB(0.052, 0.101, 0.052, 0.104),
+  'char_tiger': EdgeInsets.fromLTRB(0.052, 0.056, 0.052, 0.056),
+  'char_robot': EdgeInsets.fromLTRB(0.081, 0.054, 0.081, 0.054),
+  'char_unicorn': EdgeInsets.fromLTRB(0.052, 0.059, 0.052, 0.059),
+  'deco_wall_chart': EdgeInsets.fromLTRB(0.054, 0.189, 0.054, 0.194),
+  'deco_wall_star': EdgeInsets.fromLTRB(0.118, 0.054, 0.122, 0.054),
+  'deco_wall_frame': EdgeInsets.fromLTRB(0.053, 0.211, 0.053, 0.211),
+  'deco_floor_rug': EdgeInsets.fromLTRB(0.052, 0.300, 0.052, 0.304),
+  'deco_floor_coinbox': EdgeInsets.fromLTRB(0.055, 0.217, 0.055, 0.221),
+  'deco_floor_plant': EdgeInsets.fromLTRB(0.160, 0.054, 0.163, 0.054),
+  'deco_desk_globe': EdgeInsets.fromLTRB(0.053, 0.053, 0.053, 0.056),
+  'deco_desk_trophy': EdgeInsets.fromLTRB(0.052, 0.066, 0.052, 0.070),
+  'deco_shelf_books': EdgeInsets.fromLTRB(0.054, 0.228, 0.054, 0.232),
+  'deco_shelf_piggy': EdgeInsets.fromLTRB(0.055, 0.116, 0.055, 0.122),
+  'deco_window_curtain': EdgeInsets.fromLTRB(0.055, 0.115, 0.055, 0.115),
+  'deco_window_cloud': EdgeInsets.fromLTRB(0.110, 0.053, 0.110, 0.053),
+  'deco_wall_planboard': EdgeInsets.fromLTRB(0.053, 0.182, 0.053, 0.182),
+  'deco_wall_medal': EdgeInsets.fromLTRB(0.055, 0.055, 0.061, 0.055),
+  'deco_floor_cushion': EdgeInsets.fromLTRB(0.052, 0.234, 0.052, 0.238),
+  'deco_floor_train': EdgeInsets.fromLTRB(0.053, 0.280, 0.053, 0.280),
+  'deco_desk_calculator': EdgeInsets.fromLTRB(0.054, 0.214, 0.054, 0.219),
+  'deco_desk_lamp': EdgeInsets.fromLTRB(0.053, 0.074, 0.053, 0.074),
+  'deco_wall_clock': EdgeInsets.fromLTRB(0.128, 0.053, 0.128, 0.053),
+  'deco_window_mobile': EdgeInsets.fromLTRB(0.110, 0.053, 0.110, 0.053),
 };
 
 _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
