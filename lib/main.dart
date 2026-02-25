@@ -1,17 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r24';
+const kAppUiVersion = 'ui-2026.02.25-r28';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5241,6 +5243,73 @@ class _RoomGestureSession {
   int mode = 0;
 }
 
+class _AlphaMaskData {
+  const _AlphaMaskData({
+    required this.width,
+    required this.height,
+    required this.alpha,
+    required this.contentBounds,
+  });
+
+  final int width;
+  final int height;
+  final Uint8List alpha;
+  final Rect contentBounds;
+
+  bool hitTest(
+    Offset worldPoint,
+    Rect visualRect, {
+    required int threshold,
+    required double slop,
+  }) {
+    if (width <= 0 || height <= 0 || visualRect.isEmpty) return false;
+
+    final imageAspect = width / height;
+    final viewAspect = visualRect.width / visualRect.height;
+
+    double drawWidth;
+    double drawHeight;
+    double drawLeft;
+    double drawTop;
+
+    if (imageAspect > viewAspect) {
+      drawWidth = visualRect.width;
+      drawHeight = drawWidth / imageAspect;
+      drawLeft = visualRect.left;
+      drawTop = visualRect.top + ((visualRect.height - drawHeight) / 2);
+    } else {
+      drawHeight = visualRect.height;
+      drawWidth = drawHeight * imageAspect;
+      drawTop = visualRect.top;
+      drawLeft = visualRect.left + ((visualRect.width - drawWidth) / 2);
+    }
+
+    final drawRect = Rect.fromLTWH(
+      drawLeft,
+      drawTop,
+      drawWidth,
+      drawHeight,
+    ).inflate(slop);
+    if (!drawRect.contains(worldPoint)) return false;
+
+    final localX = (worldPoint.dx - drawLeft) / drawWidth;
+    final localY = (worldPoint.dy - drawTop) / drawHeight;
+    if (localX < 0 || localX > 1 || localY < 0 || localY > 1) return false;
+
+    final px = (localX * (width - 1)).round().clamp(0, width - 1);
+    final py = (localY * (height - 1)).round().clamp(0, height - 1);
+
+    if (!contentBounds
+        .inflate(1)
+        .contains(Offset(px.toDouble(), py.toDouble()))) {
+      return false;
+    }
+
+    final alphaValue = alpha[(py * width) + px];
+    return alphaValue > threshold;
+  }
+}
+
 class _MyHomeRoomCard extends StatefulWidget {
   const _MyHomeRoomCard({
     required this.state,
@@ -5281,10 +5350,21 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   DateTime? _selectionLockUntil;
   late final AnimationController _selectionPulseController;
   _RoomGestureSession? _gestureSession;
+  final Map<String, _AlphaMaskData?> _alphaMaskCache =
+      <String, _AlphaMaskData?>{};
+  final Set<String> _alphaMaskLoading = <String>{};
 
   static const double _minScale = RoomItemAdjustment.minScale;
   static const double _maxScale = RoomItemAdjustment.maxScale;
   static const double _hitSlop = 0.8;
+  static const int _alphaHitThreshold = 40;
+  static const Set<String> _edgeCleanupItemIds = {
+    'char_default',
+    'deco_wall_frame',
+    'deco_wall_chart',
+    'deco_floor_coinbox',
+    'deco_window_curtain',
+  };
   static const _characterAnchor = _RoomAnchor(
     Alignment(0.03, 0.52),
     Size(68, 68),
@@ -5304,6 +5384,122 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       vsync: this,
       duration: const Duration(milliseconds: 980),
     )..repeat(reverse: true);
+    unawaited(_warmupAlphaMasks());
+  }
+
+  Future<void> _warmupAlphaMasks() async {
+    final warmupItems = <ShopItem>{widget.state.equippedCharacter};
+    for (final zone in DecorationZone.values) {
+      final id = widget.state.equippedDecorations[zone];
+      final item = widget.itemById(id);
+      if (item != null) warmupItems.add(item);
+    }
+    for (final item in warmupItems) {
+      await _ensureAlphaMask(item);
+    }
+  }
+
+  Future<void> _ensureAlphaMask(ShopItem item) async {
+    final id = item.id;
+    if (_alphaMaskCache.containsKey(id) || _alphaMaskLoading.contains(id)) {
+      return;
+    }
+    final assetPath = _miniroomSpecForItem(item).assetPath;
+    if (assetPath == null) {
+      _alphaMaskCache[id] = null;
+      return;
+    }
+
+    _alphaMaskLoading.add(id);
+    try {
+      final data = await rootBundle.load(assetPath);
+      final bytes = data.buffer.asUint8List();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final raw = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (raw == null) {
+        _alphaMaskCache[id] = null;
+        _debugTouchLog('mask-load-fail[$id] null-byteData -> bbox fallback');
+        return;
+      }
+      final rgba = raw.buffer.asUint8List();
+      final alpha = Uint8List(image.width * image.height);
+      var o = 0;
+      for (var i = 0; i < alpha.length; i++) {
+        alpha[i] = rgba[o + 3];
+        o += 4;
+      }
+
+      if (_edgeCleanupItemIds.contains(id)) {
+        _applyEdgeCleanup(alpha, image.width, image.height);
+      }
+
+      final bounds = _computeMaskBounds(alpha, image.width, image.height);
+      _alphaMaskCache[id] = _AlphaMaskData(
+        width: image.width,
+        height: image.height,
+        alpha: alpha,
+        contentBounds: bounds,
+      );
+    } catch (e) {
+      _alphaMaskCache[id] = null;
+      _debugTouchLog('mask-load-fail[$id] $e -> bbox fallback');
+    } finally {
+      _alphaMaskLoading.remove(id);
+    }
+  }
+
+  Rect _computeMaskBounds(Uint8List alpha, int width, int height) {
+    var minX = width;
+    var minY = height;
+    var maxX = -1;
+    var maxY = -1;
+
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
+        final a = alpha[(y * width) + x];
+        if (a <= _alphaHitThreshold) continue;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
+    }
+    return Rect.fromLTRB(
+      minX.toDouble(),
+      minY.toDouble(),
+      maxX.toDouble(),
+      maxY.toDouble(),
+    );
+  }
+
+  void _applyEdgeCleanup(Uint8List alpha, int width, int height) {
+    final source = Uint8List.fromList(alpha);
+    if (width < 3 || height < 3) return;
+
+    for (var y = 1; y < height - 1; y++) {
+      for (var x = 1; x < width - 1; x++) {
+        final idx = (y * width) + x;
+        if (source[idx] <= _alphaHitThreshold) continue;
+        var neighbors = 0;
+        for (var ny = -1; ny <= 1; ny++) {
+          for (var nx = -1; nx <= 1; nx++) {
+            if (nx == 0 && ny == 0) continue;
+            if (source[((y + ny) * width) + (x + nx)] > _alphaHitThreshold) {
+              neighbors++;
+            }
+          }
+        }
+        if (neighbors <= 2) {
+          alpha[idx] = 0;
+        }
+      }
+    }
   }
 
   @override
@@ -5339,6 +5535,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     if (_selectedZone != null &&
         widget.state.equippedDecorations[_selectedZone] == null) {
       _selectedZone = null;
+    }
+    if (oldWidget.state.equippedCharacterId !=
+            widget.state.equippedCharacterId ||
+        oldWidget.state.equippedDecorations !=
+            widget.state.equippedDecorations) {
+      unawaited(_warmupAlphaMasks());
     }
   }
 
@@ -5534,34 +5736,86 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     double maxWidth,
     double maxHeight,
   ) {
-    final hitRects = <_RoomTarget>[];
-    for (final placed in items) {
-      final visualRect = _visualRectFromAdjustment(
-        anchor: placed.anchor,
-        adjustment: placed.adjustment,
-        maxWidth: maxWidth,
-        maxHeight: maxHeight,
-      );
-      final rect = _hitRectFromVisualRect(visualRect, placed.item);
-      hitRects.add(_RoomTarget.decoration(placed.zone).withRect(rect));
-    }
-    final charVisualRect = _visualRectFromAdjustment(
-      anchor: _characterAnchor,
-      adjustment: widget.state.characterAdjustment,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-    );
-    final charRect = _hitRectFromVisualRect(
-      charVisualRect,
-      widget.state.equippedCharacter,
-    );
-    hitRects.add(_RoomTarget.character().withRect(charRect));
+    final topItems = items
+        .where(
+          (e) =>
+              e.zone == DecorationZone.wall ||
+              e.zone == DecorationZone.window ||
+              e.zone == DecorationZone.shelf,
+        )
+        .toList();
+    final bottomItems = items
+        .where(
+          (e) =>
+              e.zone == DecorationZone.desk || e.zone == DecorationZone.floor,
+        )
+        .toList();
 
-    for (var i = hitRects.length - 1; i >= 0; i--) {
-      final candidate = hitRects[i];
-      if (candidate.rect.contains(point)) return candidate;
+    final candidates = <({_RoomTarget target, ShopItem item, Rect visualRect})>[
+      for (final placed in topItems)
+        (
+          target: _RoomTarget.decoration(placed.zone),
+          item: placed.item,
+          visualRect: _visualRectFromAdjustment(
+            anchor: placed.anchor,
+            adjustment: placed.adjustment,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight,
+          ),
+        ),
+      (
+        target: const _RoomTarget.character(),
+        item: widget.state.equippedCharacter,
+        visualRect: _visualRectFromAdjustment(
+          anchor: _characterAnchor,
+          adjustment: widget.state.characterAdjustment,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        ),
+      ),
+      for (final placed in bottomItems)
+        (
+          target: _RoomTarget.decoration(placed.zone),
+          item: placed.item,
+          visualRect: _visualRectFromAdjustment(
+            anchor: placed.anchor,
+            adjustment: placed.adjustment,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight,
+          ),
+        ),
+    ];
+
+    for (var i = candidates.length - 1; i >= 0; i--) {
+      final c = candidates[i];
+      if (_isPerPixelHit(c.item, point, c.visualRect)) {
+        return c.target.withRect(c.visualRect);
+      }
     }
     return null;
+  }
+
+  bool _isPerPixelHit(ShopItem item, Offset point, Rect visualRect) {
+    final minimalBbox = _hitRectFromVisualRect(visualRect, item);
+    if (!minimalBbox.contains(point)) return false;
+
+    final mask = _alphaMaskCache[item.id];
+    if (mask != null) {
+      return mask.hitTest(
+        point,
+        visualRect,
+        threshold: _alphaHitThreshold,
+        slop: _hitSlop,
+      );
+    }
+
+    if (!_alphaMaskCache.containsKey(item.id) &&
+        !_alphaMaskLoading.contains(item.id)) {
+      unawaited(_ensureAlphaMask(item));
+    }
+
+    _debugTouchLog('mask-miss[${item.id}] bbox-fallback used');
+    return minimalBbox.contains(point);
   }
 
   void _resetGestureBaseline(_RoomGestureSession session) {
