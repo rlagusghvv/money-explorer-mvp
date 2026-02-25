@@ -4356,6 +4356,7 @@ class _MyHomeTab extends StatefulWidget {
 
 class _MyHomeTabState extends State<_MyHomeTab> {
   bool _showEquipFx = false;
+  bool _isEditMode = false;
   String _equipFxLabel = '장착 완료!';
   late final TextEditingController _themeNameController;
 
@@ -4416,6 +4417,69 @@ class _MyHomeTabState extends State<_MyHomeTab> {
     });
   }
 
+  void _applyLayoutPreset(_RoomLayoutPreset preset) {
+    for (final entry in preset.slots.entries) {
+      final slot = entry.value;
+      if (slot.itemId == null || widget.state.ownedItemIds.contains(slot.itemId)) {
+        widget.onPlaceDecoration(entry.key, slot.itemId);
+      }
+      widget.onDecorationAdjusted(entry.key, slot.adjustment);
+    }
+    _triggerEquipFx('${preset.name} 적용!');
+  }
+
+  List<_RoomLayoutPreset> _presetsForState(AppState state) {
+    final wall =
+        state.ownedItemIds.contains('deco_wall_frame') ? 'deco_wall_frame' :
+        state.ownedItemIds.contains('deco_wall_chart') ? 'deco_wall_chart' :
+        state.equippedDecorations[DecorationZone.wall];
+    final floor =
+        state.ownedItemIds.contains('deco_floor_rug') ? 'deco_floor_rug' :
+        state.equippedDecorations[DecorationZone.floor];
+    final desk =
+        state.ownedItemIds.contains('deco_desk_globe') ? 'deco_desk_globe' :
+        state.equippedDecorations[DecorationZone.desk];
+    final shelf =
+        state.ownedItemIds.contains('deco_shelf_books') ? 'deco_shelf_books' :
+        state.equippedDecorations[DecorationZone.shelf];
+    final window =
+        state.ownedItemIds.contains('deco_window_curtain') ? 'deco_window_curtain' :
+        state.equippedDecorations[DecorationZone.window];
+
+    return [
+      _RoomLayoutPreset(
+        name: '아늑한 공부방',
+        slots: {
+          DecorationZone.wall: _PresetSlot(wall, const RoomItemAdjustment(offsetX: -10, offsetY: -12, scale: 1.0)),
+          DecorationZone.window: _PresetSlot(window, const RoomItemAdjustment(offsetX: -6, offsetY: -4, scale: 1.0)),
+          DecorationZone.shelf: _PresetSlot(shelf, const RoomItemAdjustment(offsetX: -8, offsetY: 2, scale: 0.98)),
+          DecorationZone.desk: _PresetSlot(desk, const RoomItemAdjustment(offsetX: 4, offsetY: 6, scale: 1.02)),
+          DecorationZone.floor: _PresetSlot(floor, const RoomItemAdjustment(offsetX: -14, offsetY: 18, scale: 1.04)),
+        },
+      ),
+      _RoomLayoutPreset(
+        name: '햇살 포근방',
+        slots: {
+          DecorationZone.wall: _PresetSlot(wall, const RoomItemAdjustment(offsetX: 8, offsetY: -6, scale: 0.95)),
+          DecorationZone.window: _PresetSlot(window, const RoomItemAdjustment(offsetX: 8, offsetY: -8, scale: 1.06)),
+          DecorationZone.shelf: _PresetSlot(shelf, const RoomItemAdjustment(offsetX: -2, offsetY: 6, scale: 1.02)),
+          DecorationZone.desk: _PresetSlot(desk, const RoomItemAdjustment(offsetX: 8, offsetY: 10, scale: 1.04)),
+          DecorationZone.floor: _PresetSlot(floor, const RoomItemAdjustment(offsetX: -4, offsetY: 22, scale: 1.08)),
+        },
+      ),
+      _RoomLayoutPreset(
+        name: '정돈된 갤러리',
+        slots: {
+          DecorationZone.wall: _PresetSlot(wall, const RoomItemAdjustment(offsetX: 0, offsetY: -16, scale: 0.92)),
+          DecorationZone.window: _PresetSlot(window, const RoomItemAdjustment(offsetX: 12, offsetY: -2, scale: 0.98)),
+          DecorationZone.shelf: _PresetSlot(shelf, const RoomItemAdjustment(offsetX: -12, offsetY: -2, scale: 0.94)),
+          DecorationZone.desk: _PresetSlot(desk, const RoomItemAdjustment(offsetX: 0, offsetY: 0, scale: 0.94)),
+          DecorationZone.floor: _PresetSlot(floor, const RoomItemAdjustment(offsetX: -10, offsetY: 12, scale: 0.98)),
+        },
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
@@ -4424,6 +4488,8 @@ class _MyHomeTabState extends State<_MyHomeTab> {
     final chapterProgress = ((state.currentScenario / 10) * 100)
         .clamp(0, 100)
         .round();
+
+    final presets = _presetsForState(state);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -4443,6 +4509,18 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                   const SizedBox(height: 8),
                   Text('계정: ${widget.session?.email ?? '게스트'}'),
                   Text('동기화 상태: ${widget.syncMessage ?? '로컬 저장 중'}'),
+                  const SizedBox(height: 10),
+                  SegmentedButton<bool>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment<bool>(value: false, label: Text('보기 모드')),
+                      ButtonSegment<bool>(value: true, label: Text('꾸미기 모드')),
+                    ],
+                    selected: {_isEditMode},
+                    onSelectionChanged: (next) {
+                      setState(() => _isEditMode = next.first);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -4453,7 +4531,33 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             itemById: _itemById,
             showEquipFx: _showEquipFx,
             equipFxLabel: _equipFxLabel,
+            isEditMode: _isEditMode,
             onDecorationAdjusted: widget.onDecorationAdjusted,
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('빠른 배치 프리셋', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: presets
+                        .map(
+                          (preset) => FilledButton.tonal(
+                            onPressed: () => _applyLayoutPreset(preset),
+                            child: Text(preset.name),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           Card(
@@ -4598,6 +4702,20 @@ class _MyHomeTabState extends State<_MyHomeTab> {
   }
 }
 
+class _PresetSlot {
+  const _PresetSlot(this.itemId, this.adjustment);
+
+  final String? itemId;
+  final RoomItemAdjustment adjustment;
+}
+
+class _RoomLayoutPreset {
+  const _RoomLayoutPreset({required this.name, required this.slots});
+
+  final String name;
+  final Map<DecorationZone, _PresetSlot> slots;
+}
+
 class _RoomAnchor {
   const _RoomAnchor(this.alignment, this.size, this.depth);
 
@@ -4626,6 +4744,7 @@ class _MyHomeRoomCard extends StatefulWidget {
     required this.itemById,
     required this.showEquipFx,
     required this.equipFxLabel,
+    required this.isEditMode,
     required this.onDecorationAdjusted,
   });
 
@@ -4633,6 +4752,7 @@ class _MyHomeRoomCard extends StatefulWidget {
   final ShopItem? Function(String? id) itemById;
   final bool showEquipFx;
   final String equipFxLabel;
+  final bool isEditMode;
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
 
@@ -4686,6 +4806,10 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   @override
   void didUpdateWidget(covariant _MyHomeRoomCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!widget.isEditMode && _selectedZone != null) {
+      _selectedZone = null;
+      return;
+    }
     if (_selectedZone == null) return;
     if (widget.state.equippedDecorations[_selectedZone] == null) {
       _selectedZone = null;
@@ -4714,15 +4838,196 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     final minTop = -scaledHeight * 0.6;
     final maxTop = maxHeight - scaledHeight * 0.3;
 
-    final clampedLeft = left.clamp(minLeft, maxLeft);
-    final clampedTop = top.clamp(minTop, maxTop);
+    double snappedLeft = left.clamp(minLeft, maxLeft);
+    double snappedTop = top.clamp(minTop, maxTop);
+    const grid = 8.0;
+
+    if (widget.isEditMode) {
+      final snappedOffsetX = ((snappedLeft - baseLeft) / grid).round() * grid;
+      final snappedOffsetY = ((snappedTop - baseTop) / grid).round() * grid;
+      snappedLeft = baseLeft + snappedOffsetX;
+      snappedTop = baseTop + snappedOffsetY;
+
+      if ((snappedOffsetX).abs() <= 10) snappedLeft = baseLeft;
+      if ((snappedOffsetY).abs() <= 10) snappedTop = baseTop;
+    }
 
     widget.onDecorationAdjusted(
       placed.zone,
       RoomItemAdjustment(
-        offsetX: (clampedLeft - baseLeft).clamp(-90, 90),
-        offsetY: (clampedTop - baseTop).clamp(-90, 90),
+        offsetX: (snappedLeft - baseLeft).clamp(-90, 90),
+        offsetY: (snappedTop - baseTop).clamp(-90, 90),
         scale: scale,
+      ),
+    );
+  }
+
+  void _changeScaleByStep(
+    _RoomPlacedItem placed,
+    double maxWidth,
+    double maxHeight,
+    double delta,
+  ) {
+    final width = placed.anchor.size.width * placed.adjustment.scale;
+    final height = placed.anchor.size.height * placed.adjustment.scale;
+    final left =
+        (maxWidth - width) * ((placed.anchor.alignment.x + 1) / 2) +
+        placed.adjustment.offsetX;
+    final top =
+        (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
+        placed.adjustment.offsetY;
+    final nextWidth = (width + placed.anchor.size.width * delta).clamp(
+      placed.anchor.size.width * 0.72,
+      placed.anchor.size.width * 1.38,
+    );
+    _updateFromRect(
+      placed: placed,
+      left: left,
+      top: top,
+      width: nextWidth,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+    );
+  }
+
+  Widget _buildPlacedItem(
+    _RoomPlacedItem placed,
+    double maxWidth,
+    double maxHeight,
+  ) {
+    final selected = _selectedZone == placed.zone;
+    final width = placed.anchor.size.width * placed.adjustment.scale;
+    final height = placed.anchor.size.height * placed.adjustment.scale;
+    final left =
+        (maxWidth - width) * ((placed.anchor.alignment.x + 1) / 2) +
+        placed.adjustment.offsetX;
+    final top =
+        (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
+        placed.adjustment.offsetY;
+    const hitPadding = 14.0;
+
+    return Positioned(
+      left: left - hitPadding,
+      top: top - hitPadding,
+      width: width + hitPadding * 2,
+      height: height + hitPadding * 2,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: widget.isEditMode
+                  ? () => setState(() => _selectedZone = placed.zone)
+                  : null,
+              onPanStart: widget.isEditMode
+                  ? (_) => setState(() => _selectedZone = placed.zone)
+                  : null,
+              onPanUpdate: widget.isEditMode
+                  ? (details) {
+                      final nextLeft = left + details.delta.dx;
+                      final nextTop = top + details.delta.dy;
+                      _updateFromRect(
+                        placed: placed,
+                        left: nextLeft,
+                        top: nextTop,
+                        width: width,
+                        maxWidth: maxWidth,
+                        maxHeight: maxHeight,
+                      );
+                    }
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.all(hitPadding),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: widget.isEditMode && selected
+                        ? Border.all(color: AppDesign.secondary, width: 2)
+                        : null,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: _DecorationObject(item: placed.item),
+                ),
+              ),
+            ),
+          ),
+          if (widget.isEditMode && selected)
+            Positioned(
+              right: -14,
+              bottom: -14,
+              child: GestureDetector(
+                onPanUpdate: (details) {
+                  final nextWidth = (width + details.delta.dx).clamp(
+                    placed.anchor.size.width * 0.72,
+                    placed.anchor.size.width * 1.38,
+                  );
+                  _updateFromRect(
+                    placed: placed,
+                    left: left,
+                    top: top,
+                    width: nextWidth,
+                    maxWidth: maxWidth,
+                    maxHeight: maxHeight,
+                  );
+                },
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: AppDesign.secondary,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.open_in_full_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          if (widget.isEditMode && selected)
+            Positioned(
+              top: -12,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFE0E5EF)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () =>
+                          _changeScaleByStep(placed, maxWidth, maxHeight, -0.08),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.remove, size: 14),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () =>
+                          _changeScaleByStep(placed, maxWidth, maxHeight, 0.08),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.add, size: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -4755,132 +5060,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: () => setState(() => _selectedZone = null),
-                            child: Image.asset(
-                              'assets/miniroom/generated/room_bg_isometric.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, error, stackTrace) =>
-                                  CustomPaint(
-                                    painter: _MiniRoomShellPainter(
-                                      theme: theme,
-                                    ),
-                                  ),
+                            child: CustomPaint(
+                              painter: _MiniRoomShellPainter(theme: theme),
                             ),
                           ),
                         ),
-                        ...items.map((placed) {
-                          final selected = _selectedZone == placed.zone;
-                          final width =
-                              placed.anchor.size.width *
-                              placed.adjustment.scale;
-                          final height =
-                              placed.anchor.size.height *
-                              placed.adjustment.scale;
-                          final left =
-                              (c.maxWidth - width) *
-                                  ((placed.anchor.alignment.x + 1) / 2) +
-                              placed.adjustment.offsetX;
-                          final top =
-                              (c.maxHeight - height) *
-                                  ((placed.anchor.alignment.y + 1) / 2) +
-                              placed.adjustment.offsetY;
-
-                          return Positioned(
-                            left: left,
-                            top: top,
-                            width: width,
-                            height: height,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Positioned.fill(
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    onTap: () => setState(
-                                      () => _selectedZone = placed.zone,
-                                    ),
-                                    onPanStart: (_) => setState(
-                                      () => _selectedZone = placed.zone,
-                                    ),
-                                    onPanUpdate: (details) {
-                                      final nextLeft = left + details.delta.dx;
-                                      final nextTop = top + details.delta.dy;
-                                      _updateFromRect(
-                                        placed: placed,
-                                        left: nextLeft,
-                                        top: nextTop,
-                                        width: width,
-                                        maxWidth: c.maxWidth,
-                                        maxHeight: c.maxHeight,
-                                      );
-                                    },
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        border: selected
-                                            ? Border.all(
-                                                color: AppDesign.secondary,
-                                                width: 2,
-                                              )
-                                            : null,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: _DecorationObject(
-                                        item: placed.item,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (selected)
-                                  Positioned(
-                                    right: -16,
-                                    bottom: -16,
-                                    child: GestureDetector(
-                                      onPanUpdate: (details) {
-                                        final nextWidth =
-                                            (width + details.delta.dx).clamp(
-                                              placed.anchor.size.width * 0.72,
-                                              placed.anchor.size.width * 1.38,
-                                            );
-                                        _updateFromRect(
-                                          placed: placed,
-                                          left: left,
-                                          top: top,
-                                          width: nextWidth,
-                                          maxWidth: c.maxWidth,
-                                          maxHeight: c.maxHeight,
-                                        );
-                                      },
-                                      child: Container(
-                                        width: 30,
-                                        height: 30,
-                                        decoration: BoxDecoration(
-                                          color: AppDesign.secondary,
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 2,
-                                          ),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Color(0x33000000),
-                                              blurRadius: 6,
-                                              offset: Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: const Icon(
-                                          Icons.open_in_full_rounded,
-                                          size: 16,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        }),
+                        ...items.where((e) => e.zone == DecorationZone.wall || e.zone == DecorationZone.window || e.zone == DecorationZone.shelf).map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
                         Align(
                           alignment: const Alignment(0.03, 0.52),
                           child: SizedBox(
@@ -4892,6 +5077,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                             ),
                           ),
                         ),
+                        ...items.where((e) => e.zone == DecorationZone.desk || e.zone == DecorationZone.floor).map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
                         AnimatedOpacity(
                           duration: const Duration(milliseconds: 220),
                           opacity: widget.showEquipFx ? 1 : 0,
@@ -4926,9 +5112,11 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              _selectedZone == null
-                  ? '아이템을 탭해서 선택 후 드래그로 이동/오른쪽 아래 핸들로 크기 조절'
-                  : '${_selectedZone!.label} 선택됨 · 드래그 이동 / 핸들 크기 조절',
+              !widget.isEditMode
+                  ? '보기 모드: 아이템 배치가 잠겨 있어요. 꾸미기 모드에서만 편집할 수 있어요.'
+                  : (_selectedZone == null
+                        ? '꾸미기 모드: 아이템을 탭한 뒤 드래그 이동, 핸들 또는 +/-로 크기 조절'
+                        : '${_selectedZone!.label} 선택됨 · 드래그 이동 / 핸들·+/- 크기 조절'),
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
@@ -4989,6 +5177,40 @@ class _MiniRoomShellPainter extends CustomPainter {
       Offset(size.width * 0.92, size.height * 0.62),
       seamPaint,
     );
+
+    final zoneHintPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.20)
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.12, size.height * 0.10, size.width * 0.30, size.height * 0.18),
+        const Radius.circular(12),
+      ),
+      zoneHintPaint,
+    ); // wall zone
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.59, size.height * 0.18, size.width * 0.24, size.height * 0.20),
+        const Radius.circular(14),
+      ),
+      zoneHintPaint,
+    ); // window zone
+
+    final furniturePaint = Paint()..color = const Color(0x66FFFFFF);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.60, size.height * 0.58, size.width * 0.22, size.height * 0.10),
+        const Radius.circular(10),
+      ),
+      furniturePaint,
+    ); // desk area hint
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.08, size.height * 0.48, size.width * 0.20, size.height * 0.15),
+        const Radius.circular(10),
+      ),
+      furniturePaint,
+    ); // shelf area hint
   }
 
   @override
