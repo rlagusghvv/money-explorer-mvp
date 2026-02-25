@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,7 +13,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r31';
+const kAppUiVersion = 'ui-2026.02.26-r32';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -4890,7 +4889,6 @@ class _MyHomeTab extends StatefulWidget {
 
 class _MyHomeTabState extends State<_MyHomeTab> {
   bool _showEquipFx = false;
-  bool _isRoomGestureActive = false;
   String _equipFxLabel = '장착 완료!';
   late final TextEditingController _themeNameController;
 
@@ -4963,9 +4961,7 @@ class _MyHomeTabState extends State<_MyHomeTab> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
-        physics: _isRoomGestureActive
-            ? const NeverScrollableScrollPhysics()
-            : const BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         children: [
           Card(
             color: const Color(0xFFEFF6FF),
@@ -4983,7 +4979,7 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                   Text('동기화 상태: ${widget.syncMessage ?? '로컬 저장 중'}'),
                   const SizedBox(height: 10),
                   const Text(
-                    '아이템을 탭하면 바로 편집할 수 있어요.',
+                    '편집 모드로 들어가면 전체화면 캔버스에서 안정적으로 배치할 수 있어요.',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
@@ -5001,11 +4997,18 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             itemById: _itemById,
             showEquipFx: _showEquipFx,
             equipFxLabel: _equipFxLabel,
-            onDecorationAdjusted: widget.onDecorationAdjusted,
-            onCharacterAdjusted: widget.onCharacterAdjusted,
-            onGestureActiveChanged: (active) {
-              if (_isRoomGestureActive == active) return;
-              setState(() => _isRoomGestureActive = active);
+            onOpenEditor: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => _MiniRoomEditorScreen(
+                    state: widget.state,
+                    itemById: _itemById,
+                    onDecorationAdjusted: widget.onDecorationAdjusted,
+                    onCharacterAdjusted: widget.onCharacterAdjusted,
+                  ),
+                  fullscreenDialog: true,
+                ),
+              );
             },
           ),
           const SizedBox(height: 10),
@@ -5232,18 +5235,6 @@ class _RoomTarget {
   String get key => isCharacter ? 'character' : 'zone:${zone!.name}';
 }
 
-class _RoomGestureSession {
-  _RoomGestureSession({required this.target, required this.currentRect});
-
-  final _RoomTarget target;
-  final Map<int, Offset> pointers = <int, Offset>{};
-  Rect currentRect;
-  Offset? baselineFocal;
-  Rect? baselineRect;
-  double? baselineDistance;
-  int mode = 0;
-}
-
 class _AlphaMaskData {
   const _AlphaMaskData({
     required this.width,
@@ -5300,26 +5291,84 @@ class _AlphaMaskData {
   }
 }
 
-class _MyHomeRoomCard extends StatefulWidget {
+class _MyHomeRoomCard extends StatelessWidget {
   const _MyHomeRoomCard({
     required this.state,
     required this.itemById,
     required this.showEquipFx,
     required this.equipFxLabel,
-    required this.onDecorationAdjusted,
-    required this.onCharacterAdjusted,
-    required this.onGestureActiveChanged,
+    required this.onOpenEditor,
   });
 
   final AppState state;
   final ShopItem? Function(String? id) itemById;
   final bool showEquipFx;
   final String equipFxLabel;
+  final VoidCallback onOpenEditor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    '마이룸 미리보기',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: onOpenEditor,
+                  icon: const Icon(Icons.open_in_full),
+                  label: const Text('편집 모드'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            AspectRatio(
+              aspectRatio: 1.32,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: _MiniRoomVisual(
+                  state: state,
+                  itemById: itemById,
+                  showEquipFx: showEquipFx,
+                  equipFxLabel: equipFxLabel,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniRoomEditorScreen extends StatefulWidget {
+  const _MiniRoomEditorScreen({
+    required this.state,
+    required this.itemById,
+    required this.onDecorationAdjusted,
+    required this.onCharacterAdjusted,
+  });
+
+  final AppState state;
+  final ShopItem? Function(String? id) itemById;
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
   final ValueChanged<RoomItemAdjustment> onCharacterAdjusted;
-  final ValueChanged<bool> onGestureActiveChanged;
 
+  @override
+  State<_MiniRoomEditorScreen> createState() => _MiniRoomEditorScreenState();
+}
+
+class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
+    with SingleTickerProviderStateMixin {
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(72, 46), 1),
     DecorationZone.window: _RoomAnchor(Alignment(0.66, -0.42), Size(64, 46), 2),
@@ -5327,33 +5376,11 @@ class _MyHomeRoomCard extends StatefulWidget {
     DecorationZone.desk: _RoomAnchor(Alignment(0.44, 0.28), Size(102, 71), 4),
     DecorationZone.floor: _RoomAnchor(Alignment(-0.18, 0.70), Size(124, 67), 5),
   };
-
-  @override
-  State<_MyHomeRoomCard> createState() => _MyHomeRoomCardState();
-}
-
-class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
-    with SingleTickerProviderStateMixin {
-  DecorationZone? _selectedZone;
-  bool _isCharacterSelected = false;
-  bool _isManipulating = false;
-  DateTime? _selectionLockUntil;
-  late final AnimationController _selectionPulseController;
-  _RoomGestureSession? _gestureSession;
-  final Map<String, _AlphaMaskData?> _alphaMaskCache =
-      <String, _AlphaMaskData?>{};
-  final Set<String> _alphaMaskLoading = <String>{};
-
-  bool _visualUpdateScheduled = false;
-  int _gesturePointerMoveCount = 0;
-  int _gestureVisualFrameCount = 0;
-  int _gestureCommitCount = 0;
-  int _gestureRewindCount = 0;
-  Offset? _lastPointerForRewind;
-  Offset? _lastRectCenterForRewind;
-
-  static const double _minScale = RoomItemAdjustment.minScale;
-  static const double _maxScale = RoomItemAdjustment.maxScale;
+  static const _characterAnchor = _RoomAnchor(
+    Alignment(0.03, 0.52),
+    Size(68, 68),
+    4,
+  );
   static const int _alphaHitThreshold = 40;
   static const Set<String> _edgeCleanupItemIds = {
     'char_default',
@@ -5362,17 +5389,17 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     'deco_floor_coinbox',
     'deco_window_curtain',
   };
-  static const _characterAnchor = _RoomAnchor(
-    Alignment(0.03, 0.52),
-    Size(68, 68),
-    4,
-  );
 
-  bool get _isSelectionLocked {
-    final lock = _selectionLockUntil;
-    if (lock == null) return false;
-    return DateTime.now().isBefore(lock);
-  }
+  final Map<String, _AlphaMaskData?> _alphaMaskCache =
+      <String, _AlphaMaskData?>{};
+  final Set<String> _alphaMaskLoading = <String>{};
+  _RoomTarget? _selectedTarget;
+  _RoomTarget? _activeTarget;
+  _GestureBaseline? _baseline;
+  int _rewindCount = 0;
+  double? _lastAxisPointer;
+  double? _lastAxisObject;
+  late final AnimationController _selectionPulseController;
 
   @override
   void initState() {
@@ -5382,6 +5409,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       duration: const Duration(milliseconds: 980),
     )..repeat(reverse: true);
     unawaited(_warmupAlphaMasks());
+  }
+
+  @override
+  void dispose() {
+    _selectionPulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _warmupAlphaMasks() async {
@@ -5406,7 +5439,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       _alphaMaskCache[id] = null;
       return;
     }
-
     _alphaMaskLoading.add(id);
     try {
       final data = await rootBundle.load(assetPath);
@@ -5417,7 +5449,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       final raw = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (raw == null) {
         _alphaMaskCache[id] = null;
-        _debugTouchLog('mask-load-fail[$id] null-byteData');
         return;
       }
       final rgba = raw.buffer.asUint8List();
@@ -5427,19 +5458,16 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
         alpha[i] = rgba[o + 3];
         o += 4;
       }
-
       if (_edgeCleanupItemIds.contains(id)) {
         _applyEdgeCleanup(alpha, image.width, image.height);
       }
-
       _alphaMaskCache[id] = _AlphaMaskData(
         width: image.width,
         height: image.height,
         alpha: alpha,
       );
-    } catch (e) {
+    } catch (_) {
       _alphaMaskCache[id] = null;
-      _debugTouchLog('mask-load-fail[$id] $e');
     } finally {
       _alphaMaskLoading.remove(id);
     }
@@ -5448,7 +5476,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   void _applyEdgeCleanup(Uint8List alpha, int width, int height) {
     final source = Uint8List.fromList(alpha);
     if (width < 3 || height < 3) return;
-
     for (var y = 1; y < height - 1; y++) {
       for (var x = 1; x < width - 1; x++) {
         final idx = (y * width) + x;
@@ -5462,25 +5489,16 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
             }
           }
         }
-        if (neighbors <= 2) {
-          alpha[idx] = 0;
-        }
+        if (neighbors <= 2) alpha[idx] = 0;
       }
     }
-  }
-
-  @override
-  void dispose() {
-    widget.onGestureActiveChanged(false);
-    _selectionPulseController.dispose();
-    super.dispose();
   }
 
   List<_RoomPlacedItem> _buildItems() {
     return DecorationZone.values
         .map((zone) {
           final item = widget.itemById(widget.state.equippedDecorations[zone]);
-          final anchor = _MyHomeRoomCard._anchors[zone];
+          final anchor = _anchors[zone];
           if (item == null || anchor == null) return null;
           return _RoomPlacedItem(
             item: item,
@@ -5496,49 +5514,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       ..sort((a, b) => a.anchor.depth.compareTo(b.anchor.depth));
   }
 
-  @override
-  void didUpdateWidget(covariant _MyHomeRoomCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_selectedZone != null &&
-        widget.state.equippedDecorations[_selectedZone] == null) {
-      _selectedZone = null;
-    }
-    if (oldWidget.state.equippedCharacterId !=
-            widget.state.equippedCharacterId ||
-        oldWidget.state.equippedDecorations !=
-            widget.state.equippedDecorations) {
-      unawaited(_warmupAlphaMasks());
-    }
-  }
-
-  void _debugTouchLog(String message) {
-    if (!kDebugMode) return;
-    debugPrint('[MiniRoomTouch] $message');
-  }
-
-  void _beginManipulation({DecorationZone? zone, bool character = false}) {
-    if (_selectedZone != zone ||
-        _isCharacterSelected != character ||
-        !_isManipulating) {
-      setState(() {
-        _selectedZone = zone;
-        _isCharacterSelected = character;
-        _isManipulating = true;
-        _selectionLockUntil = DateTime.now().add(
-          const Duration(milliseconds: 450),
-        );
-      });
-    }
-    widget.onGestureActiveChanged(true);
-  }
-
-  void _endManipulation() {
-    _isManipulating = false;
-    _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 220));
-    widget.onGestureActiveChanged(false);
-  }
-
-  Rect _visualRectFromAdjustment({
+  Rect _rectFromAdjustment({
     required _RoomAnchor anchor,
     required RoomItemAdjustment adjustment,
     required double maxWidth,
@@ -5558,71 +5534,32 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   RoomItemAdjustment _adjustmentFromRect({
     required _RoomAnchor anchor,
     required RoomItemAdjustment current,
-    required double left,
-    required double top,
-    required double width,
+    required Rect rect,
     required double maxWidth,
     required double maxHeight,
-    required double maxScale,
-    bool snapToGrid = false,
   }) {
     final baseWidth = anchor.size.width;
     final baseHeight = anchor.size.height;
     final baseLeft = (maxWidth - baseWidth) * ((anchor.alignment.x + 1) / 2);
     final baseTop = (maxHeight - baseHeight) * ((anchor.alignment.y + 1) / 2);
-    final scale = (width / baseWidth).clamp(_minScale, maxScale);
+    final scale = (rect.width / baseWidth).clamp(
+      RoomItemAdjustment.minScale,
+      RoomItemAdjustment.maxScale,
+    );
     final scaledHeight = baseHeight * scale;
 
-    final minLeft = -width * 0.6;
-    final maxLeft = maxWidth - width * 0.4;
+    final minLeft = -rect.width * 0.6;
+    final maxLeft = maxWidth - rect.width * 0.4;
     final minTop = -scaledHeight * 0.6;
     final maxTop = maxHeight - scaledHeight * 0.3;
 
-    var snappedLeft = left.clamp(minLeft, maxLeft);
-    var snappedTop = top.clamp(minTop, maxTop);
-
-    if (snapToGrid) {
-      const grid = 8.0;
-      final snappedOffsetX = ((snappedLeft - baseLeft) / grid).round() * grid;
-      final snappedOffsetY = ((snappedTop - baseTop) / grid).round() * grid;
-      snappedLeft = baseLeft + snappedOffsetX;
-      snappedTop = baseTop + snappedOffsetY;
-      if (snappedOffsetX.abs() <= 10) snappedLeft = baseLeft;
-      if (snappedOffsetY.abs() <= 10) snappedTop = baseTop;
-    }
+    final left = rect.left.clamp(minLeft, maxLeft);
+    final top = rect.top.clamp(minTop, maxTop);
 
     return current.copyWith(
-      offsetX: (snappedLeft - baseLeft).clamp(-140, 140),
-      offsetY: (snappedTop - baseTop).clamp(-140, 140),
+      offsetX: (left - baseLeft).clamp(-140, 140),
+      offsetY: (top - baseTop).clamp(-140, 140),
       scale: scale,
-    );
-  }
-
-  ShopItem? _itemForTarget(_RoomTarget target) {
-    if (target.isCharacter) return widget.state.equippedCharacter;
-    final id = widget.state.equippedDecorations[target.zone];
-    return id == null ? null : widget.itemById(id);
-  }
-
-  double _maxScaleForTarget(_RoomTarget target) {
-    final item = _itemForTarget(target);
-    if (item == null) return _maxScale;
-    return _miniroomSpecForItem(item).maxScale.clamp(_minScale, _maxScale);
-  }
-
-  Rect _rectForTarget(_RoomTarget target, double maxWidth, double maxHeight) {
-    final anchor = target.isCharacter
-        ? _characterAnchor
-        : _MyHomeRoomCard._anchors[target.zone]!;
-    final adjustment = target.isCharacter
-        ? widget.state.characterAdjustment
-        : (widget.state.decorationAdjustments[target.zone] ??
-              RoomItemAdjustment.defaults);
-    return _visualRectFromAdjustment(
-      anchor: anchor,
-      adjustment: adjustment,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
     );
   }
 
@@ -5652,7 +5589,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
         (
           target: _RoomTarget.decoration(placed.zone),
           item: placed.item,
-          visualRect: _visualRectFromAdjustment(
+          visualRect: _rectFromAdjustment(
             anchor: placed.anchor,
             adjustment: placed.adjustment,
             maxWidth: maxWidth,
@@ -5662,7 +5599,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       (
         target: const _RoomTarget.character(),
         item: widget.state.equippedCharacter,
-        visualRect: _visualRectFromAdjustment(
+        visualRect: _rectFromAdjustment(
           anchor: _characterAnchor,
           adjustment: widget.state.characterAdjustment,
           maxWidth: maxWidth,
@@ -5673,7 +5610,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
         (
           target: _RoomTarget.decoration(placed.zone),
           item: placed.item,
-          visualRect: _visualRectFromAdjustment(
+          visualRect: _rectFromAdjustment(
             anchor: placed.anchor,
             adjustment: placed.adjustment,
             maxWidth: maxWidth,
@@ -5684,488 +5621,398 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
 
     for (var i = candidates.length - 1; i >= 0; i--) {
       final c = candidates[i];
-      if (_isPerPixelHit(c.item, point, c.visualRect)) {
+      final mask = _alphaMaskCache[c.item.id];
+      if (mask != null &&
+          mask.hitTest(point, c.visualRect, threshold: _alphaHitThreshold)) {
         return c.target.withRect(c.visualRect);
+      }
+      if (!_alphaMaskCache.containsKey(c.item.id) &&
+          !_alphaMaskLoading.contains(c.item.id)) {
+        unawaited(_ensureAlphaMask(c.item));
       }
     }
     return null;
   }
 
-  bool _isPerPixelHit(ShopItem item, Offset point, Rect visualRect) {
-    final mask = _alphaMaskCache[item.id];
-    if (mask != null) {
-      return mask.hitTest(point, visualRect, threshold: _alphaHitThreshold);
-    }
+  _RoomAnchor _anchorFor(_RoomTarget target) =>
+      target.isCharacter ? _characterAnchor : _anchors[target.zone]!;
 
-    if (!_alphaMaskCache.containsKey(item.id) &&
-        !_alphaMaskLoading.contains(item.id)) {
-      unawaited(_ensureAlphaMask(item));
-    }
+  RoomItemAdjustment _currentAdjustment(_RoomTarget target) =>
+      target.isCharacter
+      ? widget.state.characterAdjustment
+      : (widget.state.decorationAdjustments[target.zone] ??
+            RoomItemAdjustment.defaults);
 
-    _debugTouchLog('mask-miss[${item.id}] no-fallback');
-    return false;
+  double _maxScaleForTarget(_RoomTarget target) {
+    final item = target.isCharacter
+        ? widget.state.equippedCharacter
+        : widget.itemById(widget.state.equippedDecorations[target.zone]);
+    if (item == null) return RoomItemAdjustment.maxScale;
+    return _miniroomSpecForItem(
+      item,
+    ).maxScale.clamp(RoomItemAdjustment.minScale, RoomItemAdjustment.maxScale);
   }
 
-  void _resetGestureBaseline(_RoomGestureSession session) {
-    final points = session.pointers.values.toList(growable: false);
-    if (points.isEmpty) return;
-    final focal = points.length == 1
-        ? points.first
-        : Offset(
-            (points[0].dx + points[1].dx) / 2,
-            (points[0].dy + points[1].dy) / 2,
-          );
-    session.mode = points.length >= 2 ? 2 : 1;
-    session.baselineFocal = focal;
-    session.baselineRect = session.currentRect;
-    session.baselineDistance = points.length >= 2
-        ? (points[0] - points[1]).distance.clamp(1, 9999).toDouble()
-        : null;
-    _debugTouchLog('${session.target.key} baseline-reset mode=${session.mode}');
-  }
+  void _onScaleStart(ScaleStartDetails details, BoxConstraints c) {
+    final items = _buildItems();
+    final target = _hitTestTarget(
+      details.localFocalPoint,
+      items,
+      c.maxWidth,
+      c.maxHeight,
+    );
+    if (target == null) return;
 
-  void _emitAdjustmentForSession(
-    _RoomGestureSession session,
-    double maxWidth,
-    double maxHeight, {
-    bool snapToGrid = false,
-  }) {
-    final target = session.target;
-    final anchor = target.isCharacter
-        ? _characterAnchor
-        : _MyHomeRoomCard._anchors[target.zone]!;
-    final current = target.isCharacter
-        ? widget.state.characterAdjustment
-        : (widget.state.decorationAdjustments[target.zone] ??
-              RoomItemAdjustment.defaults);
-
-    final next = _adjustmentFromRect(
+    final anchor = _anchorFor(target);
+    final adjustment = _currentAdjustment(target);
+    final baseRect = _rectFromAdjustment(
       anchor: anchor,
-      current: current,
-      left: session.currentRect.left,
-      top: session.currentRect.top,
-      width: session.currentRect.width,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-      maxScale: _maxScaleForTarget(target),
-      snapToGrid: snapToGrid,
+      adjustment: adjustment,
+      maxWidth: c.maxWidth,
+      maxHeight: c.maxHeight,
+    );
+    final pivot = Offset(
+      ((details.localFocalPoint.dx - baseRect.left) / baseRect.width).clamp(
+        0.0,
+        1.0,
+      ),
+      ((details.localFocalPoint.dy - baseRect.top) / baseRect.height).clamp(
+        0.0,
+        1.0,
+      ),
     );
 
-    if (target.isCharacter) {
-      widget.onCharacterAdjusted(next);
-    } else {
-      widget.onDecorationAdjusted(target.zone!, next);
-    }
-    _gestureCommitCount += 1;
-  }
-
-  void _startGestureMetrics(Offset pointer, Rect rect) {
-    _gesturePointerMoveCount = 0;
-    _gestureVisualFrameCount = 0;
-    _gestureCommitCount = 0;
-    _gestureRewindCount = 0;
-    _lastPointerForRewind = pointer;
-    _lastRectCenterForRewind = rect.center;
-  }
-
-  void _trackGestureRewind(Offset pointer, Rect rect) {
-    final prevPointer = _lastPointerForRewind;
-    final prevCenter = _lastRectCenterForRewind;
-    _lastPointerForRewind = pointer;
-    _lastRectCenterForRewind = rect.center;
-    if (prevPointer == null || prevCenter == null) return;
-
-    final pointerDelta = pointer - prevPointer;
-    final centerDelta = rect.center - prevCenter;
-    final dominantX = pointerDelta.dx.abs() >= pointerDelta.dy.abs();
-    final pointerAxisDelta = dominantX ? pointerDelta.dx : pointerDelta.dy;
-    final centerAxisDelta = dominantX ? centerDelta.dx : centerDelta.dy;
-
-    if (pointerAxisDelta.abs() < 1.5 || centerAxisDelta.abs() < 6) return;
-    if (pointerAxisDelta.sign != centerAxisDelta.sign) {
-      _gestureRewindCount += 1;
-    }
-  }
-
-  void _scheduleVisualUpdate() {
-    if (_visualUpdateScheduled) return;
-    _visualUpdateScheduled = true;
-    SchedulerBinding.instance.scheduleFrameCallback((_) {
-      if (!mounted) return;
-      _visualUpdateScheduled = false;
-      _gestureVisualFrameCount += 1;
-      setState(() {});
+    setState(() {
+      _selectedTarget = target;
+      _activeTarget = target;
+      _baseline = _GestureBaseline(
+        target: target,
+        anchor: anchor,
+        baseAdjustment: adjustment,
+        startFocal: details.localFocalPoint,
+        pivot: pivot,
+        maxScale: _maxScaleForTarget(target),
+      );
+      _rewindCount = 0;
+      _lastAxisPointer = null;
+      _lastAxisObject = null;
     });
   }
 
-  void _logGestureMetrics(_RoomGestureSession session) {
-    if (!kDebugMode) return;
-    final ratio = _gesturePointerMoveCount == 0
-        ? 0
-        : ((_gestureCommitCount * 100) / _gesturePointerMoveCount).round();
-    debugPrint(
-      '[MiniRoomPerf] target=${session.target.key} moves=$_gesturePointerMoveCount '
-      'frames=$_gestureVisualFrameCount commits=$_gestureCommitCount '
-      'commitRatio=$ratio% rewind=$_gestureRewindCount',
+  void _onScaleUpdate(ScaleUpdateDetails details, BoxConstraints c) {
+    final baseline = _baseline;
+    if (baseline == null) return;
+
+    final nextScale = (baseline.baseAdjustment.scale * details.scale).clamp(
+      RoomItemAdjustment.minScale,
+      baseline.maxScale,
     );
+    final width = baseline.anchor.size.width * nextScale;
+    final height = baseline.anchor.size.height * nextScale;
+    final left = details.localFocalPoint.dx - (baseline.pivot.dx * width);
+    final top = details.localFocalPoint.dy - (baseline.pivot.dy * height);
+    final rect = Rect.fromLTWH(left, top, width, height);
+
+    final next = _adjustmentFromRect(
+      anchor: baseline.anchor,
+      current: baseline.baseAdjustment,
+      rect: rect,
+      maxWidth: c.maxWidth,
+      maxHeight: c.maxHeight,
+    );
+
+    if (baseline.target.isCharacter) {
+      widget.onCharacterAdjusted(next);
+    } else {
+      widget.onDecorationAdjusted(baseline.target.zone!, next);
+    }
+
+    final pointerAxis =
+        details.focalPointDelta.dx.abs() >= details.focalPointDelta.dy.abs()
+        ? details.localFocalPoint.dx
+        : details.localFocalPoint.dy;
+    final objectAxis =
+        details.focalPointDelta.dx.abs() >= details.focalPointDelta.dy.abs()
+        ? left
+        : top;
+    if (_lastAxisPointer != null && _lastAxisObject != null) {
+      final pDelta = pointerAxis - _lastAxisPointer!;
+      final oDelta = objectAxis - _lastAxisObject!;
+      if (pDelta.abs() > 1.5 &&
+          oDelta.abs() > 6 &&
+          pDelta.sign != oDelta.sign) {
+        _rewindCount += 1;
+      }
+    }
+    _lastAxisPointer = pointerAxis;
+    _lastAxisObject = objectAxis;
+    setState(() {});
   }
 
-  Widget _buildVisualItem({
-    required Rect rect,
-    required Widget child,
-    required bool selected,
-    required int mode,
-  }) {
-    return Positioned(
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _SelectionGlow(
-            selected: selected,
-            pulse: _selectionPulseController,
-            child: child,
+  void _onScaleEnd(ScaleEndDetails details) {
+    final target = _activeTarget;
+    if (kDebugMode && target != null) {
+      debugPrint('[MiniRoomPerf32] target=${target.key} rewind=$_rewindCount');
+    }
+    setState(() {
+      _activeTarget = null;
+      _baseline = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        title: const Text('마이룸 편집 모드'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('완료'),
           ),
-          if (kDebugMode && selected)
-            IgnorePointer(
-              child: Align(
-                alignment: Alignment.topLeft,
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onScaleStart: (d) => _onScaleStart(d, c),
+                onScaleUpdate: (d) => _onScaleUpdate(d, c),
+                onScaleEnd: _onScaleEnd,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: _MiniRoomVisual(
+                    state: widget.state,
+                    itemById: widget.itemById,
+                    showEquipFx: false,
+                    equipFxLabel: '',
+                    selectedTarget: _selectedTarget,
+                    selectionPulse: _selectionPulseController,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GestureBaseline {
+  const _GestureBaseline({
+    required this.target,
+    required this.anchor,
+    required this.baseAdjustment,
+    required this.startFocal,
+    required this.pivot,
+    required this.maxScale,
+  });
+
+  final _RoomTarget target;
+  final _RoomAnchor anchor;
+  final RoomItemAdjustment baseAdjustment;
+  final Offset startFocal;
+  final Offset pivot;
+  final double maxScale;
+}
+
+class _MiniRoomVisual extends StatelessWidget {
+  const _MiniRoomVisual({
+    required this.state,
+    required this.itemById,
+    required this.showEquipFx,
+    required this.equipFxLabel,
+    this.selectedTarget,
+    this.selectionPulse,
+  });
+
+  final AppState state;
+  final ShopItem? Function(String? id) itemById;
+  final bool showEquipFx;
+  final String equipFxLabel;
+  final _RoomTarget? selectedTarget;
+  final Animation<double>? selectionPulse;
+
+  static const Map<DecorationZone, _RoomAnchor> _anchors = {
+    DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(72, 46), 1),
+    DecorationZone.window: _RoomAnchor(Alignment(0.66, -0.42), Size(64, 46), 2),
+    DecorationZone.shelf: _RoomAnchor(Alignment(-0.70, -0.02), Size(72, 61), 3),
+    DecorationZone.desk: _RoomAnchor(Alignment(0.44, 0.28), Size(102, 71), 4),
+    DecorationZone.floor: _RoomAnchor(Alignment(-0.18, 0.70), Size(124, 67), 5),
+  };
+  static const _characterAnchor = _RoomAnchor(
+    Alignment(0.03, 0.52),
+    Size(68, 68),
+    4,
+  );
+
+  List<_RoomPlacedItem> _buildItems() {
+    return DecorationZone.values
+        .map((zone) {
+          final item = itemById(state.equippedDecorations[zone]);
+          final anchor = _anchors[zone];
+          if (item == null || anchor == null) return null;
+          return _RoomPlacedItem(
+            item: item,
+            anchor: anchor,
+            zone: zone,
+            adjustment:
+                state.decorationAdjustments[zone] ??
+                RoomItemAdjustment.defaults,
+          );
+        })
+        .whereType<_RoomPlacedItem>()
+        .toList()
+      ..sort((a, b) => a.anchor.depth.compareTo(b.anchor.depth));
+  }
+
+  Rect _visualRectFromAdjustment({
+    required _RoomAnchor anchor,
+    required RoomItemAdjustment adjustment,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    final width = anchor.size.width * adjustment.scale;
+    final height = anchor.size.height * adjustment.scale;
+    final left =
+        (maxWidth - width) * ((anchor.alignment.x + 1) / 2) +
+        adjustment.offsetX;
+    final top =
+        (maxHeight - height) * ((anchor.alignment.y + 1) / 2) +
+        adjustment.offsetY;
+    return Rect.fromLTWH(left, top, width, height);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = _HomeThemePreset.fromHomeId(state.equippedHomeId);
+    final items = _buildItems();
+    final homeVisual = _miniroomSpecForItem(state.equippedHome);
+    final topItems = items
+        .where(
+          (e) =>
+              e.zone == DecorationZone.wall ||
+              e.zone == DecorationZone.window ||
+              e.zone == DecorationZone.shelf,
+        )
+        .toList();
+    final bottomItems = items
+        .where(
+          (e) =>
+              e.zone == DecorationZone.desk || e.zone == DecorationZone.floor,
+        )
+        .toList();
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        Widget buildPlaced(_RoomPlacedItem placed) {
+          final rect = _visualRectFromAdjustment(
+            anchor: placed.anchor,
+            adjustment: placed.adjustment,
+            maxWidth: c.maxWidth,
+            maxHeight: c.maxHeight,
+          );
+          final selected =
+              selectedTarget?.zone == placed.zone &&
+              selectedTarget?.isCharacter == false;
+          return Positioned(
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+            child: _SelectionGlow(
+              selected: selected,
+              pulse: selectionPulse,
+              child: _DecorationObject(item: placed.item),
+            ),
+          );
+        }
+
+        final characterRect = _visualRectFromAdjustment(
+          anchor: _characterAnchor,
+          adjustment: state.characterAdjustment,
+          maxWidth: c.maxWidth,
+          maxHeight: c.maxHeight,
+        );
+
+        return Stack(
+          children: [
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(painter: _MiniRoomShellPainter()),
+              ),
+            ),
+            if (homeVisual.assetPath != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Image.asset(
+                    homeVisual.assetPath!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              theme.wallGradient.first,
+                              theme.floorGradient.last,
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ...topItems.map(buildPlaced),
+            Positioned(
+              left: characterRect.left,
+              top: characterRect.top,
+              width: characterRect.width,
+              height: characterRect.height,
+              child: _SelectionGlow(
+                selected: selectedTarget?.isCharacter == true,
+                pulse: selectionPulse,
+                child: _ItemThumbnail(
+                  item: state.equippedCharacter,
+                  compact: false,
+                ),
+              ),
+            ),
+            ...bottomItems.map(buildPlaced),
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 220),
+              opacity: showEquipFx ? 1 : 0,
+              child: Center(
                 child: Container(
-                  color: const Color(0xAAFF2D55),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFCE1),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFFFE083)),
                   ),
                   child: Text(
-                    mode >= 2 ? '2F pinch' : '1F drag',
+                    '✨ $equipFxLabel',
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
                     ),
                   ),
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = _HomeThemePreset.fromHomeId(widget.state.equippedHomeId);
-    final items = _buildItems();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${widget.state.homeThemeName} · ${theme.name}',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 10),
-            AspectRatio(
-              aspectRatio: 1.32,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final homeVisual = _miniroomSpecForItem(
-                      widget.state.equippedHome,
-                    );
-                    final topItems = items
-                        .where(
-                          (e) =>
-                              e.zone == DecorationZone.wall ||
-                              e.zone == DecorationZone.window ||
-                              e.zone == DecorationZone.shelf,
-                        )
-                        .toList();
-                    final bottomItems = items
-                        .where(
-                          (e) =>
-                              e.zone == DecorationZone.desk ||
-                              e.zone == DecorationZone.floor,
-                        )
-                        .toList();
-
-                    Widget buildPlaced(_RoomPlacedItem placed) {
-                      final target = _RoomTarget.decoration(placed.zone);
-                      final active = _gestureSession?.target.key == target.key;
-                      final rect = active
-                          ? _gestureSession!.currentRect
-                          : _rectForTarget(target, c.maxWidth, c.maxHeight);
-                      return _buildVisualItem(
-                        rect: rect,
-                        child: _DecorationObject(item: placed.item),
-                        selected:
-                            _selectedZone == placed.zone &&
-                            !_isCharacterSelected,
-                        mode: _gestureSession?.mode ?? 0,
-                      );
-                    }
-
-                    final characterTarget = const _RoomTarget.character();
-                    final characterRect =
-                        _gestureSession?.target.key == characterTarget.key
-                        ? _gestureSession!.currentRect
-                        : _rectForTarget(
-                            characterTarget,
-                            c.maxWidth,
-                            c.maxHeight,
-                          );
-
-                    return Listener(
-                      behavior: HitTestBehavior.opaque,
-                      onPointerDown: (event) {
-                        final local = event.localPosition;
-                        final hit = _hitTestTarget(
-                          local,
-                          items,
-                          c.maxWidth,
-                          c.maxHeight,
-                        );
-                        if (hit == null) {
-                          if (_gestureSession == null &&
-                              !_isManipulating &&
-                              !_isSelectionLocked) {
-                            setState(() {
-                              _selectedZone = null;
-                              _isCharacterSelected = false;
-                            });
-                            widget.onGestureActiveChanged(false);
-                          }
-                          return;
-                        }
-
-                        final isNewSession = _gestureSession == null;
-                        _gestureSession ??= _RoomGestureSession(
-                          target: hit,
-                          currentRect: _rectForTarget(
-                            hit,
-                            c.maxWidth,
-                            c.maxHeight,
-                          ),
-                        );
-                        final session = _gestureSession!;
-                        session.pointers[event.pointer] = local;
-                        _beginManipulation(
-                          zone: hit.isCharacter ? null : hit.zone,
-                          character: hit.isCharacter,
-                        );
-                        if (isNewSession) {
-                          _startGestureMetrics(local, session.currentRect);
-                        }
-                        _resetGestureBaseline(session);
-                      },
-                      onPointerMove: (event) {
-                        final session = _gestureSession;
-                        if (session == null ||
-                            !session.pointers.containsKey(event.pointer)) {
-                          return;
-                        }
-                        session.pointers[event.pointer] = event.localPosition;
-                        final points = session.pointers.values.toList(
-                          growable: false,
-                        );
-                        if (points.isEmpty) return;
-
-                        if (points.length == 1) {
-                          if (session.mode != 1) _resetGestureBaseline(session);
-                          final baselineFocal =
-                              session.baselineFocal ?? points.first;
-                          final baselineRect =
-                              session.baselineRect ?? session.currentRect;
-                          final delta = points.first - baselineFocal;
-                          session.currentRect = Rect.fromLTWH(
-                            baselineRect.left + delta.dx,
-                            baselineRect.top + delta.dy,
-                            baselineRect.width,
-                            baselineRect.height,
-                          );
-                        } else {
-                          if (session.mode != 2) _resetGestureBaseline(session);
-                          final baselineRect =
-                              session.baselineRect ?? session.currentRect;
-                          final baselineFocal =
-                              session.baselineFocal ??
-                              Offset(
-                                (points[0].dx + points[1].dx) / 2,
-                                (points[0].dy + points[1].dy) / 2,
-                              );
-                          final baselineDistance =
-                              (session.baselineDistance ?? 1).clamp(1, 9999);
-                          final focal = Offset(
-                            (points[0].dx + points[1].dx) / 2,
-                            (points[0].dy + points[1].dy) / 2,
-                          );
-                          final distance = (points[0] - points[1]).distance
-                              .clamp(1, 9999);
-                          final rawScaleFactor = distance / baselineDistance;
-                          final scaleFactor = rawScaleFactor >= 1
-                              ? 1 + ((rawScaleFactor - 1) * 1.4)
-                              : 1 - ((1 - rawScaleFactor) * 0.75);
-                          final targetAnchor = session.target.isCharacter
-                              ? _characterAnchor
-                              : _MyHomeRoomCard._anchors[session.target.zone]!;
-                          final ratio =
-                              targetAnchor.size.height /
-                              targetAnchor.size.width;
-                          final width = (baselineRect.width * scaleFactor)
-                              .clamp(
-                                targetAnchor.size.width * _minScale,
-                                targetAnchor.size.width *
-                                    _maxScaleForTarget(session.target),
-                              );
-                          final height = width * ratio;
-                          session.currentRect = Rect.fromLTWH(
-                            baselineRect.left + (focal.dx - baselineFocal.dx),
-                            baselineRect.top + (focal.dy - baselineFocal.dy),
-                            width,
-                            height,
-                          );
-                        }
-
-                        _gesturePointerMoveCount += 1;
-                        _trackGestureRewind(
-                          event.localPosition,
-                          session.currentRect,
-                        );
-                        _scheduleVisualUpdate();
-                      },
-                      onPointerUp: (event) {
-                        final session = _gestureSession;
-                        if (session == null) return;
-                        session.pointers.remove(event.pointer);
-                        if (session.pointers.isEmpty) {
-                          _emitAdjustmentForSession(
-                            session,
-                            c.maxWidth,
-                            c.maxHeight,
-                            snapToGrid: false,
-                          );
-                          _logGestureMetrics(session);
-                          _gestureSession = null;
-                          _endManipulation();
-                          return;
-                        }
-                        _resetGestureBaseline(session);
-                      },
-                      onPointerCancel: (event) {
-                        final session = _gestureSession;
-                        if (session == null) return;
-                        session.pointers.remove(event.pointer);
-                        if (session.pointers.isEmpty) {
-                          _logGestureMetrics(session);
-                          _gestureSession = null;
-                          _endManipulation();
-                          return;
-                        }
-                        _resetGestureBaseline(session);
-                      },
-                      child: Stack(
-                        children: [
-                          const Positioned.fill(
-                            child: IgnorePointer(
-                              child: CustomPaint(
-                                painter: _MiniRoomShellPainter(),
-                              ),
-                            ),
-                          ),
-                          if (homeVisual.assetPath != null)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: Image.asset(
-                                  homeVisual.assetPath!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    debugPrint(
-                                      '[MiniRoom] base asset fallback: ${homeVisual.assetPath}',
-                                    );
-                                    return DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [
-                                            theme.wallGradient.first,
-                                            theme.floorGradient.last,
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ...topItems.map(buildPlaced),
-                          _buildVisualItem(
-                            rect: characterRect,
-                            child: _ItemThumbnail(
-                              item: widget.state.equippedCharacter,
-                              compact: false,
-                            ),
-                            selected: _isCharacterSelected,
-                            mode: _gestureSession?.mode ?? 0,
-                          ),
-                          ...bottomItems.map(buildPlaced),
-                          AnimatedOpacity(
-                            duration: const Duration(milliseconds: 220),
-                            opacity: widget.showEquipFx ? 1 : 0,
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFFCE1),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: const Color(0xFFFFE083),
-                                  ),
-                                ),
-                                child: Text(
-                                  '✨ ${widget.equipFxLabel}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isCharacterSelected
-                  ? '캐릭터 편집 중 · 드래그 이동 / 핀치 크기 조절'
-                  : _selectedZone == null
-                  ? '드래그로 이동, 핀치로 크기 조절 (캐릭터 포함)'
-                  : '${_selectedZone!.label} 편집 중 · 드래그 이동 / 핀치 크기 조절',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '현재 홈 테마: ${widget.state.equippedHome.name}',
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -6178,17 +6025,17 @@ class _SelectionGlow extends StatelessWidget {
   });
 
   final bool selected;
-  final Animation<double> pulse;
+  final Animation<double>? pulse;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    if (!selected) return child;
+    if (!selected || pulse == null) return child;
     return AnimatedBuilder(
-      animation: pulse,
+      animation: pulse!,
       child: child,
       builder: (context, childWidget) {
-        final t = pulse.value;
+        final t = pulse!.value;
         final scale = 1 + (0.006 * t);
         final brighten = 1.06 + (0.03 * t);
 
