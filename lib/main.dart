@@ -612,7 +612,7 @@ class RoomItemAdjustment {
   });
 
   static const double minScale = 0.72;
-  static const double maxScale = 2.0;
+  static const double maxScale = 3.0;
 
   final double offsetX;
   final double offsetY;
@@ -6151,7 +6151,7 @@ const Map<String, EdgeInsets> _alphaHitInsetByItemId = {
   'deco_wall_frame': EdgeInsets.fromLTRB(0.053, 0.211, 0.053, 0.211),
   'deco_floor_rug': EdgeInsets.fromLTRB(0.052, 0.300, 0.052, 0.304),
   'deco_floor_coinbox': EdgeInsets.fromLTRB(0.055, 0.217, 0.055, 0.221),
-  'deco_floor_plant': EdgeInsets.fromLTRB(0.160, 0.054, 0.163, 0.054),
+  'deco_floor_plant': EdgeInsets.fromLTRB(0.160, 0.061, 0.163, 0.054),
   'deco_desk_globe': EdgeInsets.fromLTRB(0.053, 0.053, 0.053, 0.056),
   'deco_desk_trophy': EdgeInsets.fromLTRB(0.052, 0.066, 0.052, 0.070),
   'deco_shelf_books': EdgeInsets.fromLTRB(0.054, 0.228, 0.054, 0.232),
@@ -6270,7 +6270,7 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         gradient: [Color(0xFFE9E3F9), Color(0xFFD8CFF2)],
         assetPath: 'assets/miniroom/generated/item_round_rug.png',
         hitTestInsetFraction: EdgeInsets.fromLTRB(0.14, 0.28, 0.14, 0.10),
-        maxScale: 1.9,
+        maxScale: 2.8,
       );
     case 'deco_floor_coinbox':
       return const _MiniroomVisualSpec(
