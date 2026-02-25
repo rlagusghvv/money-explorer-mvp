@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,7 +14,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r29';
+const kAppUiVersion = 'ui-2026.02.25-r31';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5343,6 +5344,14 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       <String, _AlphaMaskData?>{};
   final Set<String> _alphaMaskLoading = <String>{};
 
+  bool _visualUpdateScheduled = false;
+  int _gesturePointerMoveCount = 0;
+  int _gestureVisualFrameCount = 0;
+  int _gestureCommitCount = 0;
+  int _gestureRewindCount = 0;
+  Offset? _lastPointerForRewind;
+  Offset? _lastRectCenterForRewind;
+
   static const double _minScale = RoomItemAdjustment.minScale;
   static const double _maxScale = RoomItemAdjustment.maxScale;
   static const int _alphaHitThreshold = 40;
@@ -5747,6 +5756,58 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     } else {
       widget.onDecorationAdjusted(target.zone!, next);
     }
+    _gestureCommitCount += 1;
+  }
+
+  void _startGestureMetrics(Offset pointer, Rect rect) {
+    _gesturePointerMoveCount = 0;
+    _gestureVisualFrameCount = 0;
+    _gestureCommitCount = 0;
+    _gestureRewindCount = 0;
+    _lastPointerForRewind = pointer;
+    _lastRectCenterForRewind = rect.center;
+  }
+
+  void _trackGestureRewind(Offset pointer, Rect rect) {
+    final prevPointer = _lastPointerForRewind;
+    final prevCenter = _lastRectCenterForRewind;
+    _lastPointerForRewind = pointer;
+    _lastRectCenterForRewind = rect.center;
+    if (prevPointer == null || prevCenter == null) return;
+
+    final pointerDelta = pointer - prevPointer;
+    final centerDelta = rect.center - prevCenter;
+    final dominantX = pointerDelta.dx.abs() >= pointerDelta.dy.abs();
+    final pointerAxisDelta = dominantX ? pointerDelta.dx : pointerDelta.dy;
+    final centerAxisDelta = dominantX ? centerDelta.dx : centerDelta.dy;
+
+    if (pointerAxisDelta.abs() < 1.5 || centerAxisDelta.abs() < 6) return;
+    if (pointerAxisDelta.sign != centerAxisDelta.sign) {
+      _gestureRewindCount += 1;
+    }
+  }
+
+  void _scheduleVisualUpdate() {
+    if (_visualUpdateScheduled) return;
+    _visualUpdateScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      if (!mounted) return;
+      _visualUpdateScheduled = false;
+      _gestureVisualFrameCount += 1;
+      setState(() {});
+    });
+  }
+
+  void _logGestureMetrics(_RoomGestureSession session) {
+    if (!kDebugMode) return;
+    final ratio = _gesturePointerMoveCount == 0
+        ? 0
+        : ((_gestureCommitCount * 100) / _gesturePointerMoveCount).round();
+    debugPrint(
+      '[MiniRoomPerf] target=${session.target.key} moves=$_gesturePointerMoveCount '
+      'frames=$_gestureVisualFrameCount commits=$_gestureCommitCount '
+      'commitRatio=$ratio% rewind=$_gestureRewindCount',
+    );
   }
 
   Widget _buildVisualItem({
@@ -5884,6 +5945,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                           return;
                         }
 
+                        final isNewSession = _gestureSession == null;
                         _gestureSession ??= _RoomGestureSession(
                           target: hit,
                           currentRect: _rectForTarget(
@@ -5898,6 +5960,9 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                           zone: hit.isCharacter ? null : hit.zone,
                           character: hit.isCharacter,
                         );
+                        if (isNewSession) {
+                          _startGestureMetrics(local, session.currentRect);
+                        }
                         _resetGestureBaseline(session);
                       },
                       onPointerMove: (event) {
@@ -5968,12 +6033,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                           );
                         }
 
-                        _emitAdjustmentForSession(
-                          session,
-                          c.maxWidth,
-                          c.maxHeight,
+                        _gesturePointerMoveCount += 1;
+                        _trackGestureRewind(
+                          event.localPosition,
+                          session.currentRect,
                         );
-                        setState(() {});
+                        _scheduleVisualUpdate();
                       },
                       onPointerUp: (event) {
                         final session = _gestureSession;
@@ -5986,6 +6051,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                             c.maxHeight,
                             snapToGrid: false,
                           );
+                          _logGestureMetrics(session);
                           _gestureSession = null;
                           _endManipulation();
                           return;
@@ -5997,6 +6063,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                         if (session == null) return;
                         session.pointers.remove(event.pointer);
                         if (session.pointers.isEmpty) {
+                          _logGestureMetrics(session);
                           _gestureSession = null;
                           _endManipulation();
                           return;
