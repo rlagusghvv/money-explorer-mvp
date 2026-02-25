@@ -614,7 +614,7 @@ class RoomItemAdjustment {
   });
 
   static const double minScale = 0.72;
-  static const double maxScale = 3.0;
+  static const double maxScale = 3.8;
 
   final double offsetX;
   final double offsetY;
@@ -647,8 +647,8 @@ class RoomItemAdjustment {
     final offsetY = (map['offsetY'] as num?)?.toDouble() ?? 0;
     final scale = (map['scale'] as num?)?.toDouble() ?? 1;
     return RoomItemAdjustment(
-      offsetX: offsetX.clamp(-90, 90),
-      offsetY: offsetY.clamp(-90, 90),
+      offsetX: offsetX.clamp(-140, 140),
+      offsetY: offsetY.clamp(-140, 140),
       scale: scale.clamp(minScale, maxScale),
     );
   }
@@ -5583,8 +5583,8 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     }
 
     return current.copyWith(
-      offsetX: (snappedLeft - baseLeft).clamp(-90, 90),
-      offsetY: (snappedTop - baseTop).clamp(-90, 90),
+      offsetX: (snappedLeft - baseLeft).clamp(-140, 140),
+      offsetY: (snappedTop - baseTop).clamp(-140, 140),
       scale: scale,
     );
   }
@@ -5943,7 +5943,10 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                           );
                           final distance = (points[0] - points[1]).distance
                               .clamp(1, 9999);
-                          final scaleFactor = distance / baselineDistance;
+                          final rawScaleFactor = distance / baselineDistance;
+                          final scaleFactor = rawScaleFactor >= 1
+                              ? 1 + ((rawScaleFactor - 1) * 1.4)
+                              : 1 - ((1 - rawScaleFactor) * 0.75);
                           final targetAnchor = session.target.isCharacter
                               ? _characterAnchor
                               : _MyHomeRoomCard._anchors[session.target.zone]!;
@@ -5981,7 +5984,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
                             session,
                             c.maxWidth,
                             c.maxHeight,
-                            snapToGrid: true,
+                            snapToGrid: false,
                           );
                           _gestureSession = null;
                           _endManipulation();
@@ -6119,26 +6122,25 @@ class _SelectionGlow extends StatelessWidget {
       child: child,
       builder: (context, childWidget) {
         final t = pulse.value;
-        final scale = 1 + (0.010 * t);
-        final halo = 0.20 + (0.10 * t);
-        final brighten = 1.10 + (0.06 * t);
+        final scale = 1 + (0.006 * t);
+        final brighten = 1.06 + (0.03 * t);
 
         final matrix = <double>[
           brighten,
           0,
           0,
           0,
-          6,
+          3,
           0,
           brighten,
           0,
           0,
-          6,
+          3,
           0,
           0,
           brighten,
           0,
-          6,
+          3,
           0,
           0,
           0,
@@ -6148,30 +6150,9 @@ class _SelectionGlow extends StatelessWidget {
 
         return Transform.scale(
           scale: scale,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ColorFiltered(
-                colorFilter: ColorFilter.matrix(matrix),
-                child: childWidget,
-              ),
-              IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(0, -0.05),
-                      radius: 0.88,
-                      colors: [
-                        const Color(0xFFFFE27B).withValues(alpha: halo),
-                        const Color(0xFFFFE27B).withValues(alpha: halo * 0.42),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.55, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          child: ColorFiltered(
+            colorFilter: ColorFilter.matrix(matrix),
+            child: childWidget,
           ),
         );
       },
@@ -6369,7 +6350,7 @@ _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
         gradient: [Color(0xFFE9E3F9), Color(0xFFD8CFF2)],
         assetPath: 'assets/miniroom/generated/item_round_rug.png',
         hitTestInsetFraction: EdgeInsets.fromLTRB(0.14, 0.28, 0.14, 0.10),
-        maxScale: 2.8,
+        maxScale: 3.6,
       );
     case 'deco_floor_coinbox':
       return const _MiniroomVisualSpec(
