@@ -13,7 +13,7 @@ import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 
-const kAppUiVersion = 'ui-2026.02.25-r28';
+const kAppUiVersion = 'ui-2026.02.25-r29';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5248,21 +5248,14 @@ class _AlphaMaskData {
     required this.width,
     required this.height,
     required this.alpha,
-    required this.contentBounds,
   });
 
   final int width;
   final int height;
   final Uint8List alpha;
-  final Rect contentBounds;
 
-  bool hitTest(
-    Offset worldPoint,
-    Rect visualRect, {
-    required int threshold,
-    required double slop,
-  }) {
-    if (width <= 0 || height <= 0 || visualRect.isEmpty) return false;
+  Offset? mapWorldPointToPixel(Offset worldPoint, Rect visualRect) {
+    if (width <= 0 || height <= 0 || visualRect.isEmpty) return null;
 
     final imageAspect = width / height;
     final viewAspect = visualRect.width / visualRect.height;
@@ -5284,27 +5277,23 @@ class _AlphaMaskData {
       drawLeft = visualRect.left + ((visualRect.width - drawWidth) / 2);
     }
 
-    final drawRect = Rect.fromLTWH(
-      drawLeft,
-      drawTop,
-      drawWidth,
-      drawHeight,
-    ).inflate(slop);
-    if (!drawRect.contains(worldPoint)) return false;
+    final drawRect = Rect.fromLTWH(drawLeft, drawTop, drawWidth, drawHeight);
+    if (!drawRect.contains(worldPoint)) return null;
 
     final localX = (worldPoint.dx - drawLeft) / drawWidth;
     final localY = (worldPoint.dy - drawTop) / drawHeight;
-    if (localX < 0 || localX > 1 || localY < 0 || localY > 1) return false;
+    if (localX < 0 || localX > 1 || localY < 0 || localY > 1) return null;
 
     final px = (localX * (width - 1)).round().clamp(0, width - 1);
     final py = (localY * (height - 1)).round().clamp(0, height - 1);
+    return Offset(px.toDouble(), py.toDouble());
+  }
 
-    if (!contentBounds
-        .inflate(1)
-        .contains(Offset(px.toDouble(), py.toDouble()))) {
-      return false;
-    }
-
+  bool hitTest(Offset worldPoint, Rect visualRect, {required int threshold}) {
+    final pixel = mapWorldPointToPixel(worldPoint, visualRect);
+    if (pixel == null) return false;
+    final px = pixel.dx.toInt();
+    final py = pixel.dy.toInt();
     final alphaValue = alpha[(py * width) + px];
     return alphaValue > threshold;
   }
@@ -5356,7 +5345,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
 
   static const double _minScale = RoomItemAdjustment.minScale;
   static const double _maxScale = RoomItemAdjustment.maxScale;
-  static const double _hitSlop = 0.8;
   static const int _alphaHitThreshold = 40;
   static const Set<String> _edgeCleanupItemIds = {
     'char_default',
@@ -5420,7 +5408,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       final raw = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (raw == null) {
         _alphaMaskCache[id] = null;
-        _debugTouchLog('mask-load-fail[$id] null-byteData -> bbox fallback');
+        _debugTouchLog('mask-load-fail[$id] null-byteData');
         return;
       }
       final rgba = raw.buffer.asUint8List();
@@ -5435,47 +5423,17 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
         _applyEdgeCleanup(alpha, image.width, image.height);
       }
 
-      final bounds = _computeMaskBounds(alpha, image.width, image.height);
       _alphaMaskCache[id] = _AlphaMaskData(
         width: image.width,
         height: image.height,
         alpha: alpha,
-        contentBounds: bounds,
       );
     } catch (e) {
       _alphaMaskCache[id] = null;
-      _debugTouchLog('mask-load-fail[$id] $e -> bbox fallback');
+      _debugTouchLog('mask-load-fail[$id] $e');
     } finally {
       _alphaMaskLoading.remove(id);
     }
-  }
-
-  Rect _computeMaskBounds(Uint8List alpha, int width, int height) {
-    var minX = width;
-    var minY = height;
-    var maxX = -1;
-    var maxY = -1;
-
-    for (var y = 0; y < height; y++) {
-      for (var x = 0; x < width; x++) {
-        final a = alpha[(y * width) + x];
-        if (a <= _alphaHitThreshold) continue;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-    }
-
-    if (maxX < minX || maxY < minY) {
-      return Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
-    }
-    return Rect.fromLTRB(
-      minX.toDouble(),
-      minY.toDouble(),
-      maxX.toDouble(),
-      maxY.toDouble(),
-    );
   }
 
   void _applyEdgeCleanup(Uint8List alpha, int width, int height) {
@@ -5643,77 +5601,6 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     return _miniroomSpecForItem(item).maxScale.clamp(_minScale, _maxScale);
   }
 
-  Rect _hitRectFromVisualRect(Rect visualRect, ShopItem? item) {
-    final inset = _effectiveHitInsetFraction(item);
-
-    final left = visualRect.left + (visualRect.width * inset.left);
-    final top = visualRect.top + (visualRect.height * inset.top);
-    final right = visualRect.right - (visualRect.width * inset.right);
-    final bottom = visualRect.bottom - (visualRect.height * inset.bottom);
-
-    final safeLeft = min(left, right);
-    final safeTop = min(top, bottom);
-    final safeRight = max(left, right);
-    final safeBottom = max(top, bottom);
-
-    final normalized = Rect.fromLTWH(
-      safeLeft,
-      safeTop,
-      (safeRight - safeLeft).clamp(8, 9999).toDouble(),
-      (safeBottom - safeTop).clamp(8, 9999).toDouble(),
-    );
-    return normalized.inflate(_hitSlop);
-  }
-
-  EdgeInsets _effectiveHitInsetFraction(ShopItem? item) {
-    if (item == null) return EdgeInsets.zero;
-
-    final alphaInset = _alphaHitInsetByItemId[item.id];
-    final baseInset = _miniroomSpecForItem(item).hitTestInsetFraction;
-    final fallbackInset = _legacyTunedHitInsetForItem(item.id);
-
-    double clampInset(double v) => v.clamp(0.0, 0.44).toDouble();
-
-    if (alphaInset != null) {
-      final charTighten = item.id.startsWith('char_') ? 0.012 : 0.0;
-      return EdgeInsets.fromLTRB(
-        clampInset(alphaInset.left + charTighten),
-        clampInset(alphaInset.top + charTighten),
-        clampInset(alphaInset.right + charTighten),
-        clampInset(alphaInset.bottom + charTighten),
-      );
-    }
-
-    return EdgeInsets.fromLTRB(
-      clampInset(baseInset.left + fallbackInset.left),
-      clampInset(baseInset.top + fallbackInset.top),
-      clampInset(baseInset.right + fallbackInset.right),
-      clampInset(baseInset.bottom + fallbackInset.bottom),
-    );
-  }
-
-  EdgeInsets _legacyTunedHitInsetForItem(String itemId) {
-    if (itemId.startsWith('char_')) {
-      return const EdgeInsets.fromLTRB(0.08, 0.08, 0.08, 0.06);
-    }
-    if (itemId.startsWith('deco_wall_')) {
-      return const EdgeInsets.fromLTRB(0.08, 0.10, 0.08, 0.10);
-    }
-    if (itemId.startsWith('deco_window_')) {
-      return const EdgeInsets.fromLTRB(0.10, 0.08, 0.10, 0.10);
-    }
-    if (itemId.startsWith('deco_floor_')) {
-      return const EdgeInsets.fromLTRB(0.10, 0.14, 0.10, 0.10);
-    }
-    if (itemId.startsWith('deco_desk_')) {
-      return const EdgeInsets.fromLTRB(0.10, 0.10, 0.10, 0.12);
-    }
-    if (itemId.startsWith('deco_shelf_')) {
-      return const EdgeInsets.fromLTRB(0.10, 0.10, 0.10, 0.10);
-    }
-    return EdgeInsets.zero;
-  }
-
   Rect _rectForTarget(_RoomTarget target, double maxWidth, double maxHeight) {
     final anchor = target.isCharacter
         ? _characterAnchor
@@ -5796,17 +5683,9 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   }
 
   bool _isPerPixelHit(ShopItem item, Offset point, Rect visualRect) {
-    final minimalBbox = _hitRectFromVisualRect(visualRect, item);
-    if (!minimalBbox.contains(point)) return false;
-
     final mask = _alphaMaskCache[item.id];
     if (mask != null) {
-      return mask.hitTest(
-        point,
-        visualRect,
-        threshold: _alphaHitThreshold,
-        slop: _hitSlop,
-      );
+      return mask.hitTest(point, visualRect, threshold: _alphaHitThreshold);
     }
 
     if (!_alphaMaskCache.containsKey(item.id) &&
@@ -5814,8 +5693,8 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
       unawaited(_ensureAlphaMask(item));
     }
 
-    _debugTouchLog('mask-miss[${item.id}] bbox-fallback used');
-    return minimalBbox.contains(point);
+    _debugTouchLog('mask-miss[${item.id}] no-fallback');
+    return false;
   }
 
   void _resetGestureBaseline(_RoomGestureSession session) {
@@ -6387,40 +6266,6 @@ class _MiniroomVisualSpec {
   final EdgeInsets hitTestInsetFraction;
   final double maxScale;
 }
-
-/// Precomputed alpha-based insets from miniroom PNG assets.
-///
-/// Method: bounding box of pixels with alpha > 24, then normalized as
-/// left/top/right/bottom inset fractions. Runtime hit testing uses this tighter
-/// content box instead of full image rect (or broad heuristic inset).
-const Map<String, EdgeInsets> _alphaHitInsetByItemId = {
-  'char_default': EdgeInsets.fromLTRB(0.052, 0.081, 0.052, 0.085),
-  'char_fox': EdgeInsets.fromLTRB(0.054, 0.061, 0.054, 0.065),
-  'char_penguin': EdgeInsets.fromLTRB(0.052, 0.101, 0.052, 0.104),
-  'char_tiger': EdgeInsets.fromLTRB(0.052, 0.056, 0.052, 0.056),
-  'char_robot': EdgeInsets.fromLTRB(0.081, 0.054, 0.081, 0.054),
-  'char_unicorn': EdgeInsets.fromLTRB(0.052, 0.059, 0.052, 0.059),
-  'deco_wall_chart': EdgeInsets.fromLTRB(0.054, 0.189, 0.054, 0.194),
-  'deco_wall_star': EdgeInsets.fromLTRB(0.118, 0.054, 0.122, 0.054),
-  'deco_wall_frame': EdgeInsets.fromLTRB(0.053, 0.211, 0.053, 0.211),
-  'deco_floor_rug': EdgeInsets.fromLTRB(0.052, 0.300, 0.052, 0.304),
-  'deco_floor_coinbox': EdgeInsets.fromLTRB(0.055, 0.217, 0.055, 0.221),
-  'deco_floor_plant': EdgeInsets.fromLTRB(0.160, 0.061, 0.163, 0.054),
-  'deco_desk_globe': EdgeInsets.fromLTRB(0.053, 0.053, 0.053, 0.056),
-  'deco_desk_trophy': EdgeInsets.fromLTRB(0.052, 0.066, 0.052, 0.070),
-  'deco_shelf_books': EdgeInsets.fromLTRB(0.054, 0.228, 0.054, 0.232),
-  'deco_shelf_piggy': EdgeInsets.fromLTRB(0.055, 0.116, 0.055, 0.122),
-  'deco_window_curtain': EdgeInsets.fromLTRB(0.055, 0.115, 0.055, 0.115),
-  'deco_window_cloud': EdgeInsets.fromLTRB(0.110, 0.053, 0.110, 0.053),
-  'deco_wall_planboard': EdgeInsets.fromLTRB(0.053, 0.182, 0.053, 0.182),
-  'deco_wall_medal': EdgeInsets.fromLTRB(0.055, 0.055, 0.061, 0.055),
-  'deco_floor_cushion': EdgeInsets.fromLTRB(0.052, 0.234, 0.052, 0.238),
-  'deco_floor_train': EdgeInsets.fromLTRB(0.053, 0.280, 0.053, 0.280),
-  'deco_desk_calculator': EdgeInsets.fromLTRB(0.054, 0.214, 0.054, 0.219),
-  'deco_desk_lamp': EdgeInsets.fromLTRB(0.053, 0.074, 0.053, 0.074),
-  'deco_wall_clock': EdgeInsets.fromLTRB(0.128, 0.053, 0.128, 0.053),
-  'deco_window_mobile': EdgeInsets.fromLTRB(0.110, 0.053, 0.110, 0.053),
-};
 
 _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
   switch (item.id) {
