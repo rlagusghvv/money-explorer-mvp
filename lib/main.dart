@@ -5394,16 +5394,22 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
       <String, _AlphaMaskData?>{};
   final Set<String> _alphaMaskLoading = <String>{};
   _RoomTarget? _selectedTarget;
-  _RoomTarget? _activeTarget;
   _GestureBaseline? _baseline;
-  int _rewindCount = 0;
-  double? _lastAxisPointer;
-  double? _lastAxisObject;
+  late Map<DecorationZone, RoomItemAdjustment> _draftDecorationAdjustments;
+  late RoomItemAdjustment _draftCharacterAdjustment;
+  RoomItemAdjustment? _pendingCommitAdjustment;
   late final AnimationController _selectionPulseController;
 
   @override
   void initState() {
     super.initState();
+    _draftDecorationAdjustments = {
+      for (final zone in DecorationZone.values)
+        zone:
+            widget.state.decorationAdjustments[zone] ??
+            RoomItemAdjustment.defaults,
+    };
+    _draftCharacterAdjustment = widget.state.characterAdjustment;
     _selectionPulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 980),
@@ -5505,7 +5511,7 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
             anchor: anchor,
             zone: zone,
             adjustment:
-                widget.state.decorationAdjustments[zone] ??
+                _draftDecorationAdjustments[zone] ??
                 RoomItemAdjustment.defaults,
           );
         })
@@ -5601,7 +5607,7 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
         item: widget.state.equippedCharacter,
         visualRect: _rectFromAdjustment(
           anchor: _characterAnchor,
-          adjustment: widget.state.characterAdjustment,
+          adjustment: _draftCharacterAdjustment,
           maxWidth: maxWidth,
           maxHeight: maxHeight,
         ),
@@ -5639,9 +5645,25 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
 
   RoomItemAdjustment _currentAdjustment(_RoomTarget target) =>
       target.isCharacter
-      ? widget.state.characterAdjustment
-      : (widget.state.decorationAdjustments[target.zone] ??
+      ? _draftCharacterAdjustment
+      : (_draftDecorationAdjustments[target.zone] ??
             RoomItemAdjustment.defaults);
+
+  void _applyDraftAdjustment(_RoomTarget target, RoomItemAdjustment adjustment) {
+    if (target.isCharacter) {
+      _draftCharacterAdjustment = adjustment;
+      return;
+    }
+    _draftDecorationAdjustments[target.zone!] = adjustment;
+  }
+
+  void _commitAdjustment(_RoomTarget target, RoomItemAdjustment adjustment) {
+    if (target.isCharacter) {
+      widget.onCharacterAdjusted(adjustment);
+      return;
+    }
+    widget.onDecorationAdjusted(target.zone!, adjustment);
+  }
 
   double _maxScaleForTarget(_RoomTarget target) {
     final item = target.isCharacter
@@ -5684,18 +5706,14 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
 
     setState(() {
       _selectedTarget = target;
-      _activeTarget = target;
       _baseline = _GestureBaseline(
         target: target,
         anchor: anchor,
         baseAdjustment: adjustment,
-        startFocal: details.localFocalPoint,
         pivot: pivot,
         maxScale: _maxScaleForTarget(target),
       );
-      _rewindCount = 0;
-      _lastAxisPointer = null;
-      _lastAxisObject = null;
+      _pendingCommitAdjustment = null;
     });
   }
 
@@ -5721,42 +5739,21 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
       maxHeight: c.maxHeight,
     );
 
-    if (baseline.target.isCharacter) {
-      widget.onCharacterAdjusted(next);
-    } else {
-      widget.onDecorationAdjusted(baseline.target.zone!, next);
-    }
-
-    final pointerAxis =
-        details.focalPointDelta.dx.abs() >= details.focalPointDelta.dy.abs()
-        ? details.localFocalPoint.dx
-        : details.localFocalPoint.dy;
-    final objectAxis =
-        details.focalPointDelta.dx.abs() >= details.focalPointDelta.dy.abs()
-        ? left
-        : top;
-    if (_lastAxisPointer != null && _lastAxisObject != null) {
-      final pDelta = pointerAxis - _lastAxisPointer!;
-      final oDelta = objectAxis - _lastAxisObject!;
-      if (pDelta.abs() > 1.5 &&
-          oDelta.abs() > 6 &&
-          pDelta.sign != oDelta.sign) {
-        _rewindCount += 1;
-      }
-    }
-    _lastAxisPointer = pointerAxis;
-    _lastAxisObject = objectAxis;
-    setState(() {});
+    setState(() {
+      _applyDraftAdjustment(baseline.target, next);
+      _pendingCommitAdjustment = next;
+    });
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
-    final target = _activeTarget;
-    if (kDebugMode && target != null) {
-      debugPrint('[MiniRoomPerf32] target=${target.key} rewind=$_rewindCount');
+    final baseline = _baseline;
+    final adjustment = _pendingCommitAdjustment;
+    if (baseline != null && adjustment != null) {
+      _commitAdjustment(baseline.target, adjustment);
     }
     setState(() {
-      _activeTarget = null;
       _baseline = null;
+      _pendingCommitAdjustment = null;
     });
   }
 
@@ -5786,7 +5783,12 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: _MiniRoomVisual(
-                    state: widget.state,
+                    state: widget.state.copyWith(
+                      decorationAdjustments: {
+                        ..._draftDecorationAdjustments,
+                      },
+                      characterAdjustment: _draftCharacterAdjustment,
+                    ),
                     itemById: widget.itemById,
                     showEquipFx: false,
                     equipFxLabel: '',
@@ -5808,7 +5810,6 @@ class _GestureBaseline {
     required this.target,
     required this.anchor,
     required this.baseAdjustment,
-    required this.startFocal,
     required this.pivot,
     required this.maxScale,
   });
@@ -5816,7 +5817,6 @@ class _GestureBaseline {
   final _RoomTarget target;
   final _RoomAnchor anchor;
   final RoomItemAdjustment baseAdjustment;
-  final Offset startFocal;
   final Offset pivot;
   final double maxScale;
 }
