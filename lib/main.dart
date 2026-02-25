@@ -5454,21 +5454,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
   }
 
   Rect _hitRectFromVisualRect(Rect visualRect, ShopItem? item) {
-    final baseInset = item == null
-        ? EdgeInsets.zero
-        : _miniroomSpecForItem(item).hitTestInsetFraction;
-    final tunedInset = item == null
-        ? EdgeInsets.zero
-        : _dynamicHitInsetForItem(item.id);
-
-    double clampInset(double v) => v.clamp(0.0, 0.44).toDouble();
-
-    final inset = EdgeInsets.fromLTRB(
-      clampInset(baseInset.left + tunedInset.left),
-      clampInset(baseInset.top + tunedInset.top),
-      clampInset(baseInset.right + tunedInset.right),
-      clampInset(baseInset.bottom + tunedInset.bottom),
-    );
+    final inset = _effectiveHitInsetFraction(item);
 
     final left = visualRect.left + (visualRect.width * inset.left);
     final top = visualRect.top + (visualRect.height * inset.top);
@@ -5489,7 +5475,34 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard>
     return normalized.inflate(_hitSlop);
   }
 
-  EdgeInsets _dynamicHitInsetForItem(String itemId) {
+  EdgeInsets _effectiveHitInsetFraction(ShopItem? item) {
+    if (item == null) return EdgeInsets.zero;
+
+    final alphaInset = _alphaHitInsetByItemId[item.id];
+    final baseInset = _miniroomSpecForItem(item).hitTestInsetFraction;
+    final fallbackInset = _legacyTunedHitInsetForItem(item.id);
+
+    double clampInset(double v) => v.clamp(0.0, 0.44).toDouble();
+
+    if (alphaInset != null) {
+      final charTighten = item.id.startsWith('char_') ? 0.012 : 0.0;
+      return EdgeInsets.fromLTRB(
+        clampInset(alphaInset.left + charTighten),
+        clampInset(alphaInset.top + charTighten),
+        clampInset(alphaInset.right + charTighten),
+        clampInset(alphaInset.bottom + charTighten),
+      );
+    }
+
+    return EdgeInsets.fromLTRB(
+      clampInset(baseInset.left + fallbackInset.left),
+      clampInset(baseInset.top + fallbackInset.top),
+      clampInset(baseInset.right + fallbackInset.right),
+      clampInset(baseInset.bottom + fallbackInset.bottom),
+    );
+  }
+
+  EdgeInsets _legacyTunedHitInsetForItem(String itemId) {
     if (itemId.startsWith('char_')) {
       return const EdgeInsets.fromLTRB(0.08, 0.08, 0.08, 0.06);
     }
@@ -5990,10 +6003,26 @@ class _SelectionGlow extends StatelessWidget {
         final brighten = 1.10 + (0.06 * t);
 
         final matrix = <double>[
-          brighten, 0, 0, 0, 6,
-          0, brighten, 0, 0, 6,
-          0, 0, brighten, 0, 6,
-          0, 0, 0, 1, 0,
+          brighten,
+          0,
+          0,
+          0,
+          6,
+          0,
+          brighten,
+          0,
+          0,
+          6,
+          0,
+          0,
+          brighten,
+          0,
+          6,
+          0,
+          0,
+          0,
+          1,
+          0,
         ];
 
         return Transform.scale(
@@ -6116,6 +6145,40 @@ class _MiniroomVisualSpec {
   final EdgeInsets hitTestInsetFraction;
   final double maxScale;
 }
+
+/// Precomputed alpha-based insets from miniroom PNG assets.
+///
+/// Method: bounding box of pixels with alpha > 24, then normalized as
+/// left/top/right/bottom inset fractions. Runtime hit testing uses this tighter
+/// content box instead of full image rect (or broad heuristic inset).
+const Map<String, EdgeInsets> _alphaHitInsetByItemId = {
+  'char_default': EdgeInsets.fromLTRB(0.283, 0.297, 0.283, 0.299),
+  'char_fox': EdgeInsets.fromLTRB(0.244, 0.248, 0.244, 0.250),
+  'char_penguin': EdgeInsets.fromLTRB(0.248, 0.275, 0.248, 0.277),
+  'char_tiger': EdgeInsets.fromLTRB(0.248, 0.250, 0.248, 0.250),
+  'char_robot': EdgeInsets.fromLTRB(0.256, 0.240, 0.258, 0.242),
+  'char_unicorn': EdgeInsets.fromLTRB(0.248, 0.252, 0.248, 0.252),
+  'deco_wall_chart': EdgeInsets.fromLTRB(0.307, 0.365, 0.307, 0.367),
+  'deco_wall_star': EdgeInsets.fromLTRB(0.293, 0.256, 0.293, 0.258),
+  'deco_wall_frame': EdgeInsets.fromLTRB(0.316, 0.381, 0.318, 0.383),
+  'deco_floor_rug': EdgeInsets.fromLTRB(0.281, 0.402, 0.281, 0.404),
+  'deco_floor_coinbox': EdgeInsets.fromLTRB(0.311, 0.381, 0.312, 0.381),
+  'deco_floor_plant': EdgeInsets.fromLTRB(0.293, 0.229, 0.293, 0.227),
+  'deco_desk_globe': EdgeInsets.fromLTRB(0.268, 0.268, 0.268, 0.270),
+  'deco_desk_trophy': EdgeInsets.fromLTRB(0.299, 0.307, 0.301, 0.307),
+  'deco_shelf_books': EdgeInsets.fromLTRB(0.289, 0.373, 0.291, 0.373),
+  'deco_shelf_piggy': EdgeInsets.fromLTRB(0.342, 0.365, 0.344, 0.365),
+  'deco_window_curtain': EdgeInsets.fromLTRB(0.311, 0.336, 0.312, 0.338),
+  'deco_window_cloud': EdgeInsets.fromLTRB(0.312, 0.285, 0.314, 0.287),
+  'deco_wall_planboard': EdgeInsets.fromLTRB(0.303, 0.359, 0.305, 0.361),
+  'deco_wall_medal': EdgeInsets.fromLTRB(0.344, 0.342, 0.344, 0.344),
+  'deco_floor_cushion': EdgeInsets.fromLTRB(0.297, 0.381, 0.299, 0.381),
+  'deco_floor_train': EdgeInsets.fromLTRB(0.287, 0.395, 0.289, 0.396),
+  'deco_desk_calculator': EdgeInsets.fromLTRB(0.305, 0.375, 0.305, 0.377),
+  'deco_desk_lamp': EdgeInsets.fromLTRB(0.287, 0.297, 0.287, 0.297),
+  'deco_wall_clock': EdgeInsets.fromLTRB(0.363, 0.336, 0.365, 0.338),
+  'deco_window_mobile': EdgeInsets.fromLTRB(0.312, 0.285, 0.314, 0.287),
+};
 
 _MiniroomVisualSpec _miniroomSpecForItem(ShopItem item) {
   switch (item.id) {
