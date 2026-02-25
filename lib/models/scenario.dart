@@ -6,8 +6,8 @@ class ScenarioOption {
 
   factory ScenarioOption.fromJson(Map<String, dynamic> json) {
     return ScenarioOption(
-      label: json['label'] as String,
-      score: (json['score'] as num).round(),
+      label: _asString(json['label']),
+      score: _asInt(json['score']),
     );
   }
 }
@@ -77,18 +77,14 @@ class Scenario {
     final rawExplanation = json['explanation'];
 
     return Scenario(
-      id: json['id'] as int,
-      title: json['title'] as String,
-      news: json['news'] as String,
-      goodIndustries: List<String>.from(json['goodIndustries'] as List<dynamic>),
-      badIndustries: List<String>.from(json['badIndustries'] as List<dynamic>),
-      industryOptions: (json['industryOptions'] as List<dynamic>)
-          .map((e) => ScenarioOption.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      quizQuestion: json['quizQuestion'] as String,
-      quizOptions: (json['quizOptions'] as List<dynamic>)
-          .map((e) => ScenarioOption.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      id: _asInt(json['id']),
+      title: _asString(json['title']),
+      news: _asString(json['news']),
+      goodIndustries: _asStringList(json['goodIndustries']),
+      badIndustries: _asStringList(json['badIndustries']),
+      industryOptions: _asOptionList(json['industryOptions']),
+      quizQuestion: _asString(json['quizQuestion']),
+      quizOptions: _asOptionList(json['quizOptions']),
       explanation: rawExplanation is Map<String, dynamic>
           ? ScenarioExplanation.fromJson(rawExplanation)
           : ScenarioExplanation.fallback,
@@ -97,10 +93,41 @@ class Scenario {
           ? List<String>.from(rawReasoningChoices)
           : null,
       reasoningBestByDifficulty: rawReasoningBest is Map<String, dynamic>
-          ? rawReasoningBest.map(
-              (key, value) => MapEntry(key, (value as num).round()),
-            )
+          ? rawReasoningBest.map((key, value) => MapEntry(key, _asInt(value)))
           : null,
     );
   }
+}
+
+int _asInt(Object? value, {int fallback = 0}) {
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+String _asString(Object? value, {String fallback = ''}) {
+  final text = value?.toString();
+  if (text == null) {
+    return fallback;
+  }
+  final trimmed = text.trim();
+  return trimmed.isEmpty ? fallback : trimmed;
+}
+
+List<String> _asStringList(Object? value) {
+  if (value is List<dynamic>) {
+    return value.map((e) => e.toString()).toList();
+  }
+  return const [];
+}
+
+List<ScenarioOption> _asOptionList(Object? value) {
+  if (value is List<dynamic>) {
+    return value
+        .whereType<Map<String, dynamic>>()
+        .map(ScenarioOption.fromJson)
+        .toList();
+  }
+  return const [];
 }
