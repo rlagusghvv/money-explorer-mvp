@@ -16,6 +16,32 @@ const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
 const _kReviewRoundRewardPoints = 18;
 
+String buildSeoulDateKey(DateTime dateTime) {
+  final nowKst = dateTime.toUtc().add(_kSeoulOffset);
+  final month = nowKst.month.toString().padLeft(2, '0');
+  final day = nowKst.day.toString().padLeft(2, '0');
+  return '${nowKst.year}-$month-$day';
+}
+
+bool isDailyMissionResetRequired({
+  required String currentDateKey,
+  required DateTime now,
+}) {
+  return currentDateKey != buildSeoulDateKey(now);
+}
+
+({int cashDelta, int rewardPointsDelta}) reviewRoundRewardDelta({
+  required bool completed,
+}) {
+  if (!completed) {
+    return (cashDelta: 0, rewardPointsDelta: 0);
+  }
+  return (
+    cashDelta: _kReviewRoundRewardCoins,
+    rewardPointsDelta: _kReviewRoundRewardPoints,
+  );
+}
+
 enum DailyMissionType { solveFive, accuracy70, reviewOne }
 
 extension DailyMissionTypeX on DailyMissionType {
@@ -374,6 +400,7 @@ class _BootstrapPageState extends State<BootstrapPage> {
   bool _loading = true;
   late AppState _state;
   late List<Scenario> _scenarios;
+  int _skippedMalformedScenarioCount = 0;
   StoredSession? _session;
   final _authService = AuthSyncService();
 
@@ -386,6 +413,8 @@ class _BootstrapPageState extends State<BootstrapPage> {
   Future<void> _load() async {
     _state = await AppStateStore.load();
     _scenarios = await ScenarioRepository.loadScenarios();
+    _skippedMalformedScenarioCount =
+        ScenarioRepository.lastSkippedMalformedCount;
     _session = await AppStateStore.loadSession();
     if (mounted) setState(() => _loading = false);
   }
@@ -398,6 +427,7 @@ class _BootstrapPageState extends State<BootstrapPage> {
     return GameHomePage(
       initialState: _state,
       scenarios: _scenarios,
+      skippedMalformedScenarioCount: _skippedMalformedScenarioCount,
       initialSession: _session,
       authService: _authService,
     );
@@ -1286,8 +1316,7 @@ class AppStateStore {
       dailyMissionDateKey: prefs.getString(_kDailyMissionDateKey) ?? '',
       dailyClaimedMissionIds:
           (prefs.getStringList(_kDailyClaimedMissionIds) ?? const []).toSet(),
-      dailyReviewCompletedCount:
-          prefs.getInt(_kDailyReviewCompletedCount) ?? 0,
+      dailyReviewCompletedCount: prefs.getInt(_kDailyReviewCompletedCount) ?? 0,
     );
   }
 
@@ -1397,12 +1426,14 @@ class GameHomePage extends StatefulWidget {
     super.key,
     required this.initialState,
     required this.scenarios,
+    required this.skippedMalformedScenarioCount,
     required this.authService,
     this.initialSession,
   });
 
   final AppState initialState;
   final List<Scenario> scenarios;
+  final int skippedMalformedScenarioCount;
   final AuthSyncService authService;
   final StoredSession? initialSession;
 
@@ -1427,17 +1458,19 @@ class _GameHomePageState extends State<GameHomePage> {
   bool get _isReviewMode => _reviewQueue.isNotEmpty;
 
   String _seoulDateKey([DateTime? dateTime]) {
-    final nowKst = (dateTime ?? DateTime.now()).toUtc().add(_kSeoulOffset);
-    final month = nowKst.month.toString().padLeft(2, '0');
-    final day = nowKst.day.toString().padLeft(2, '0');
-    return '${nowKst.year}-$month-$day';
+    return buildSeoulDateKey(dateTime ?? DateTime.now());
   }
 
   AppState _stateWithDailyResetIfNeeded(AppState source) {
-    final today = _seoulDateKey();
-    if (source.dailyMissionDateKey == today) return source;
+    final now = DateTime.now();
+    if (!isDailyMissionResetRequired(
+      currentDateKey: source.dailyMissionDateKey,
+      now: now,
+    )) {
+      return source;
+    }
     return source.copyWith(
-      dailyMissionDateKey: today,
+      dailyMissionDateKey: buildSeoulDateKey(now),
       dailyClaimedMissionIds: <String>{},
       dailyReviewCompletedCount: 0,
     );
@@ -1448,7 +1481,9 @@ class _GameHomePageState extends State<GameHomePage> {
     final todayResults = _state.results
         .where((e) => _seoulDateKey(e.timestamp) == today)
         .toList();
-    final correctCount = todayResults.where((e) => e.judgementScore >= 70).length;
+    final correctCount = todayResults
+        .where((e) => e.judgementScore >= 70)
+        .length;
     return (
       solved: todayResults.length,
       correct: correctCount,
@@ -1540,7 +1575,8 @@ class _GameHomePageState extends State<GameHomePage> {
     _persist();
     _showRewardSnackBar(
       title: '데일리 미션 성공!',
-      message: '${type.title} 완료! +${type.rewardCoins}코인 · +${type.rewardPoints}P 획득!',
+      message:
+          '${type.title} 완료! +${type.rewardCoins}코인 · +${type.rewardPoints}P 획득!',
     );
   }
 
@@ -1561,9 +1597,7 @@ class _GameHomePageState extends State<GameHomePage> {
   }
 
   void _startReviewRound() {
-    final targets = _state.wrongAnswerNotes
-        .where((e) => !e.isCleared)
-        .toList()
+    final targets = _state.wrongAnswerNotes.where((e) => !e.isCleared).toList()
       ..sort((a, b) => b.wrongAt.compareTo(a.wrongAt));
     if (targets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1581,13 +1615,14 @@ class _GameHomePageState extends State<GameHomePage> {
   }
 
   void _endReviewRound({bool completed = true}) {
+    final reward = reviewRoundRewardDelta(completed: completed);
     setState(() {
       _reviewQueue = const [];
       _reviewRoundIndex = 0;
       if (completed) {
         _state = _state.copyWith(
-          cash: _state.cash + _kReviewRoundRewardCoins,
-          rewardPoints: _state.rewardPoints + _kReviewRoundRewardPoints,
+          cash: _state.cash + reward.cashDelta,
+          rewardPoints: _state.rewardPoints + reward.rewardPointsDelta,
           dailyReviewCompletedCount: _state.dailyReviewCompletedCount + 1,
         );
       }
@@ -1840,8 +1875,7 @@ class _GameHomePageState extends State<GameHomePage> {
     if (total == 0) return;
 
     final realChapter = _state.currentScenario.clamp(0, total - 1);
-    final candidates = List<int>.generate(total, (i) => i)
-      ..remove(realChapter);
+    final candidates = List<int>.generate(total, (i) => i)..remove(realChapter);
     if (candidates.isEmpty) return;
 
     final nextScenario = candidates[Random().nextInt(candidates.length)];
@@ -2007,9 +2041,7 @@ class _GameHomePageState extends State<GameHomePage> {
           if (_isPreviewingScenario) {
             setState(() => _previewScenarioIndex = null);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('미리보기 완료! 실제 챕터 진행에는 반영되지 않았어요.'),
-              ),
+              const SnackBar(content: Text('미리보기 완료! 실제 챕터 진행에는 반영되지 않았어요.')),
             );
             return;
           }
@@ -2044,6 +2076,7 @@ class _GameHomePageState extends State<GameHomePage> {
         isReviewRunning: _isReviewMode,
         onClaimMission: _claimDailyMission,
         seoulDateKey: _seoulDateKey(),
+        skippedMalformedScenarioCount: widget.skippedMalformedScenarioCount,
       ),
       _GuideTab(
         state: _state,
@@ -2157,7 +2190,8 @@ class _PlayTab extends StatelessWidget {
   final ValueChanged<bool> onSoundMutedChanged;
   final bool showPracticeNudge;
   final VoidCallback onPracticeNudgeDismissed;
-  final void Function(Scenario scenario, WrongStageType stageType) onWrongAnswer;
+  final void Function(Scenario scenario, WrongStageType stageType)
+  onWrongAnswer;
   final VoidCallback onStopReview;
 
   static const List<String> _chapterObjectives = [
@@ -2213,7 +2247,10 @@ class _PlayTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final done = state.currentScenario >= scenarios.length && !isPreviewMode && !isReviewMode;
+    final done =
+        state.currentScenario >= scenarios.length &&
+        !isPreviewMode &&
+        !isReviewMode;
     final realChapter = state.currentScenario >= scenarios.length
         ? scenarios.length
         : (state.currentScenario + 1).clamp(1, scenarios.length);
@@ -2223,7 +2260,10 @@ class _PlayTab extends StatelessWidget {
     final playScenarioIndex = isReviewMode
         ? (reviewScenarioIndex ?? 0).clamp(0, scenarios.length - 1)
         : isPreviewMode
-        ? (previewScenarioIndex ?? state.currentScenario).clamp(0, scenarios.length - 1)
+        ? (previewScenarioIndex ?? state.currentScenario).clamp(
+            0,
+            scenarios.length - 1,
+          )
         : state.currentScenario.clamp(0, scenarios.length - 1);
     final chapterObjective = isReviewMode
         ? '복습 라운드 ${reviewRoundIndex + 1}/${reviewQueue.length}: 틀렸던 부분을 다시 연습해요.'
@@ -2264,10 +2304,16 @@ class _PlayTab extends StatelessWidget {
                   const Expanded(
                     child: Text(
                       '📝 복습 중! 맞히면 오답 노트가 정리돼요.',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                  TextButton(onPressed: onStopReview, child: const Text('복습 종료')),
+                  TextButton(
+                    onPressed: onStopReview,
+                    child: const Text('복습 종료'),
+                  ),
                 ],
               ),
             ),
@@ -2365,10 +2411,8 @@ class _PlayTab extends StatelessWidget {
                 chapterCondition: _conditionForNextChapter(),
                 soundMuted: state.soundMuted,
                 onDone: onDone,
-                onWrongAnswer: (stage) => onWrongAnswer(
-                  scenarios[playScenarioIndex],
-                  stage,
-                ),
+                onWrongAnswer: (stage) =>
+                    onWrongAnswer(scenarios[playScenarioIndex], stage),
               ),
             ),
         ],
@@ -2381,7 +2425,8 @@ class _GameFlowTutorialDialog extends StatefulWidget {
   const _GameFlowTutorialDialog();
 
   @override
-  State<_GameFlowTutorialDialog> createState() => _GameFlowTutorialDialogState();
+  State<_GameFlowTutorialDialog> createState() =>
+      _GameFlowTutorialDialogState();
 }
 
 class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
@@ -2427,8 +2472,12 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
   }
 
   Widget _samplePracticeCard() {
-    final industryHint = _sampleIndustry == null ? '👉 먼저 아래 산업 버튼 하나 눌러봐!' : '좋아! 이제 아래 이유 버튼도 눌러보자.';
-    final reasonHint = _sampleReason == null ? '👉 이유 버튼을 고르면 연습 완료!' : '완료! 이렇게 실제 게임도 같은 흐름이야.';
+    final industryHint = _sampleIndustry == null
+        ? '👉 먼저 아래 산업 버튼 하나 눌러봐!'
+        : '좋아! 이제 아래 이유 버튼도 눌러보자.';
+    final reasonHint = _sampleReason == null
+        ? '👉 이유 버튼을 고르면 연습 완료!'
+        : '완료! 이렇게 실제 게임도 같은 흐름이야.';
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -2440,9 +2489,15 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('연습 뉴스: 날씨가 갑자기 추워져서 난방을 많이 켰어요.', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+          const Text(
+            '연습 뉴스: 날씨가 갑자기 추워져서 난방을 많이 켰어요.',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+          ),
           const SizedBox(height: 6),
-          const Text('Q1. 어디가 도움을 받을까?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          const Text(
+            'Q1. 어디가 도움을 받을까?',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
           _sampleChoice(
             text: '난방 기계 파는 곳',
             selected: _sampleIndustry == 0,
@@ -2454,9 +2509,19 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
             onTap: () => setState(() => _sampleIndustry = 1),
           ),
           const SizedBox(height: 4),
-          Text(industryHint, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4C5B77))),
+          Text(
+            industryHint,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF4C5B77),
+            ),
+          ),
           const SizedBox(height: 8),
-          const Text('Q2. 그렇게 생각한 이유는?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          const Text(
+            'Q2. 그렇게 생각한 이유는?',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
           _sampleChoice(
             text: '추우면 난방을 더 많이 써서 관련 물건을 더 살 수 있어요.',
             selected: _sampleReason == 0,
@@ -2468,7 +2533,14 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
             onTap: () => setState(() => _sampleReason = 1),
           ),
           const SizedBox(height: 4),
-          Text(reasonHint, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4C5B77))),
+          Text(
+            reasonHint,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF4C5B77),
+            ),
+          ),
           if (_sampleDone)
             Container(
               margin: const EdgeInsets.only(top: 8),
@@ -2482,7 +2554,10 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
                 _sampleIndustry == 0 && _sampleReason == 0
                     ? '정확해! 뉴스 → 산업 → 이유 순서로 잘 골랐어.'
                     : '좋은 시도야! 실제 게임에선 정답보다 근거가 얼마나 맞는지가 점수가 돼.',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
         ],
@@ -2501,11 +2576,23 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(current.$1, style: const TextStyle(fontWeight: FontWeight.w800, color: AppDesign.textMuted)),
+            Text(
+              current.$1,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: AppDesign.textMuted,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(current.$2, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+            Text(
+              current.$2,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+            ),
             const SizedBox(height: 8),
-            Text(current.$3, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              current.$3,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 12),
             if (_isLast) _samplePracticeCard(),
             if (!_isLast)
@@ -2539,7 +2626,11 @@ class _GameFlowTutorialDialogState extends State<_GameFlowTutorialDialog> {
                     }
                     setState(() => _step += 1);
                   },
-                  child: Text(_isLast ? (_sampleDone ? '연습 완료!' : '버튼 눌러서 연습 완료하기') : '다음'),
+                  child: Text(
+                    _isLast
+                        ? (_sampleDone ? '연습 완료!' : '버튼 눌러서 연습 완료하기')
+                        : '다음',
+                  ),
                 ),
               ],
             ),
@@ -2574,7 +2665,10 @@ class _PracticeStartNudgeBanner extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
             ),
           ),
-          IconButton(onPressed: onClose, icon: const Icon(Icons.close, size: 18)),
+          IconButton(
+            onPressed: onClose,
+            icon: const Icon(Icons.close, size: 18),
+          ),
         ],
       ),
     );
@@ -2673,10 +2767,8 @@ class _MascotMapHeader extends StatelessWidget {
               child: Image.asset(
                 'assets/branding/mascot_icon_transparent.png',
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Text(
-                  mascotEmoji,
-                  style: const TextStyle(fontSize: 29),
-                ),
+                errorBuilder: (context, error, stackTrace) =>
+                    Text(mascotEmoji, style: const TextStyle(fontSize: 29)),
               ),
             ),
           ),
@@ -2822,9 +2914,15 @@ class _AdventureMapCard extends StatelessWidget {
       return Offset(i < 5 ? x : 1 - x, y);
     });
     final completedCount = state.currentScenario.clamp(0, totalScenarios);
-    final remainingCount = (totalScenarios - completedCount).clamp(0, totalScenarios);
-    final currentNodeIndex = previewScenarioIndex ?? state.currentScenario.clamp(0, totalScenarios - 1);
-    final currentTheme = _chapterThemes[currentNodeIndex % _chapterThemes.length];
+    final remainingCount = (totalScenarios - completedCount).clamp(
+      0,
+      totalScenarios,
+    );
+    final currentNodeIndex =
+        previewScenarioIndex ??
+        state.currentScenario.clamp(0, totalScenarios - 1);
+    final currentTheme =
+        _chapterThemes[currentNodeIndex % _chapterThemes.length];
 
     return Container(
       height: 178,
@@ -2915,9 +3013,18 @@ class _AdventureMapCard extends StatelessWidget {
                     runSpacing: 6,
                     spacing: 6,
                     children: [
-                      _MapInfoPill(label: '완료 $completedCount개', color: const Color(0xFFE7FFF0)),
-                      _MapInfoPill(label: '남음 $remainingCount개', color: const Color(0xFFF2F5FF)),
-                      _MapInfoPill(label: '지금 학습: $currentTheme', color: const Color(0xFFFFF4E3)),
+                      _MapInfoPill(
+                        label: '완료 $completedCount개',
+                        color: const Color(0xFFE7FFF0),
+                      ),
+                      _MapInfoPill(
+                        label: '남음 $remainingCount개',
+                        color: const Color(0xFFF2F5FF),
+                      ),
+                      _MapInfoPill(
+                        label: '지금 학습: $currentTheme',
+                        color: const Color(0xFFFFF4E3),
+                      ),
                     ],
                   ),
                 ),
@@ -2962,7 +3069,9 @@ class _MapNode extends StatelessWidget {
           color: bg,
           shape: BoxShape.circle,
           border: Border.all(
-            color: state == _NodeState.current ? const Color(0xFFFFD44A) : Colors.transparent,
+            color: state == _NodeState.current
+                ? const Color(0xFFFFD44A)
+                : Colors.transparent,
             width: 2,
           ),
           boxShadow: const [
@@ -4473,7 +4582,8 @@ class _MyHomeTabState extends State<_MyHomeTab> {
   void _applyLayoutPreset(_RoomLayoutPreset preset) {
     for (final entry in preset.slots.entries) {
       final slot = entry.value;
-      if (slot.itemId == null || widget.state.ownedItemIds.contains(slot.itemId)) {
+      if (slot.itemId == null ||
+          widget.state.ownedItemIds.contains(slot.itemId)) {
         widget.onPlaceDecoration(entry.key, slot.itemId);
       }
       widget.onDecorationAdjusted(entry.key, slot.adjustment);
@@ -4482,52 +4592,98 @@ class _MyHomeTabState extends State<_MyHomeTab> {
   }
 
   List<_RoomLayoutPreset> _presetsForState(AppState state) {
-    final wall =
-        state.ownedItemIds.contains('deco_wall_frame') ? 'deco_wall_frame' :
-        state.ownedItemIds.contains('deco_wall_chart') ? 'deco_wall_chart' :
-        state.equippedDecorations[DecorationZone.wall];
-    final floor =
-        state.ownedItemIds.contains('deco_floor_rug') ? 'deco_floor_rug' :
-        state.equippedDecorations[DecorationZone.floor];
-    final desk =
-        state.ownedItemIds.contains('deco_desk_globe') ? 'deco_desk_globe' :
-        state.equippedDecorations[DecorationZone.desk];
-    final shelf =
-        state.ownedItemIds.contains('deco_shelf_books') ? 'deco_shelf_books' :
-        state.equippedDecorations[DecorationZone.shelf];
-    final window =
-        state.ownedItemIds.contains('deco_window_curtain') ? 'deco_window_curtain' :
-        state.equippedDecorations[DecorationZone.window];
+    final wall = state.ownedItemIds.contains('deco_wall_frame')
+        ? 'deco_wall_frame'
+        : state.ownedItemIds.contains('deco_wall_chart')
+        ? 'deco_wall_chart'
+        : state.equippedDecorations[DecorationZone.wall];
+    final floor = state.ownedItemIds.contains('deco_floor_rug')
+        ? 'deco_floor_rug'
+        : state.equippedDecorations[DecorationZone.floor];
+    final desk = state.ownedItemIds.contains('deco_desk_globe')
+        ? 'deco_desk_globe'
+        : state.equippedDecorations[DecorationZone.desk];
+    final shelf = state.ownedItemIds.contains('deco_shelf_books')
+        ? 'deco_shelf_books'
+        : state.equippedDecorations[DecorationZone.shelf];
+    final window = state.ownedItemIds.contains('deco_window_curtain')
+        ? 'deco_window_curtain'
+        : state.equippedDecorations[DecorationZone.window];
 
     return [
       _RoomLayoutPreset(
         name: '아늑한 공부방',
         slots: {
-          DecorationZone.wall: _PresetSlot(wall, const RoomItemAdjustment(offsetX: -10, offsetY: -12, scale: 1.0)),
-          DecorationZone.window: _PresetSlot(window, const RoomItemAdjustment(offsetX: -6, offsetY: -4, scale: 1.0)),
-          DecorationZone.shelf: _PresetSlot(shelf, const RoomItemAdjustment(offsetX: -8, offsetY: 2, scale: 0.98)),
-          DecorationZone.desk: _PresetSlot(desk, const RoomItemAdjustment(offsetX: 4, offsetY: 6, scale: 1.02)),
-          DecorationZone.floor: _PresetSlot(floor, const RoomItemAdjustment(offsetX: -14, offsetY: 18, scale: 1.04)),
+          DecorationZone.wall: _PresetSlot(
+            wall,
+            const RoomItemAdjustment(offsetX: -10, offsetY: -12, scale: 1.0),
+          ),
+          DecorationZone.window: _PresetSlot(
+            window,
+            const RoomItemAdjustment(offsetX: -6, offsetY: -4, scale: 1.0),
+          ),
+          DecorationZone.shelf: _PresetSlot(
+            shelf,
+            const RoomItemAdjustment(offsetX: -8, offsetY: 2, scale: 0.98),
+          ),
+          DecorationZone.desk: _PresetSlot(
+            desk,
+            const RoomItemAdjustment(offsetX: 4, offsetY: 6, scale: 1.02),
+          ),
+          DecorationZone.floor: _PresetSlot(
+            floor,
+            const RoomItemAdjustment(offsetX: -14, offsetY: 18, scale: 1.04),
+          ),
         },
       ),
       _RoomLayoutPreset(
         name: '햇살 포근방',
         slots: {
-          DecorationZone.wall: _PresetSlot(wall, const RoomItemAdjustment(offsetX: 8, offsetY: -6, scale: 0.95)),
-          DecorationZone.window: _PresetSlot(window, const RoomItemAdjustment(offsetX: 8, offsetY: -8, scale: 1.06)),
-          DecorationZone.shelf: _PresetSlot(shelf, const RoomItemAdjustment(offsetX: -2, offsetY: 6, scale: 1.02)),
-          DecorationZone.desk: _PresetSlot(desk, const RoomItemAdjustment(offsetX: 8, offsetY: 10, scale: 1.04)),
-          DecorationZone.floor: _PresetSlot(floor, const RoomItemAdjustment(offsetX: -4, offsetY: 22, scale: 1.08)),
+          DecorationZone.wall: _PresetSlot(
+            wall,
+            const RoomItemAdjustment(offsetX: 8, offsetY: -6, scale: 0.95),
+          ),
+          DecorationZone.window: _PresetSlot(
+            window,
+            const RoomItemAdjustment(offsetX: 8, offsetY: -8, scale: 1.06),
+          ),
+          DecorationZone.shelf: _PresetSlot(
+            shelf,
+            const RoomItemAdjustment(offsetX: -2, offsetY: 6, scale: 1.02),
+          ),
+          DecorationZone.desk: _PresetSlot(
+            desk,
+            const RoomItemAdjustment(offsetX: 8, offsetY: 10, scale: 1.04),
+          ),
+          DecorationZone.floor: _PresetSlot(
+            floor,
+            const RoomItemAdjustment(offsetX: -4, offsetY: 22, scale: 1.08),
+          ),
         },
       ),
       _RoomLayoutPreset(
         name: '정돈된 갤러리',
         slots: {
-          DecorationZone.wall: _PresetSlot(wall, const RoomItemAdjustment(offsetX: 0, offsetY: -16, scale: 0.92)),
-          DecorationZone.window: _PresetSlot(window, const RoomItemAdjustment(offsetX: 12, offsetY: -2, scale: 0.98)),
-          DecorationZone.shelf: _PresetSlot(shelf, const RoomItemAdjustment(offsetX: -12, offsetY: -2, scale: 0.94)),
-          DecorationZone.desk: _PresetSlot(desk, const RoomItemAdjustment(offsetX: 0, offsetY: 0, scale: 0.94)),
-          DecorationZone.floor: _PresetSlot(floor, const RoomItemAdjustment(offsetX: -10, offsetY: 12, scale: 0.98)),
+          DecorationZone.wall: _PresetSlot(
+            wall,
+            const RoomItemAdjustment(offsetX: 0, offsetY: -16, scale: 0.92),
+          ),
+          DecorationZone.window: _PresetSlot(
+            window,
+            const RoomItemAdjustment(offsetX: 12, offsetY: -2, scale: 0.98),
+          ),
+          DecorationZone.shelf: _PresetSlot(
+            shelf,
+            const RoomItemAdjustment(offsetX: -12, offsetY: -2, scale: 0.94),
+          ),
+          DecorationZone.desk: _PresetSlot(
+            desk,
+            const RoomItemAdjustment(offsetX: 0, offsetY: 0, scale: 0.94),
+          ),
+          DecorationZone.floor: _PresetSlot(
+            floor,
+            const RoomItemAdjustment(offsetX: -10, offsetY: 12, scale: 0.98),
+          ),
         },
       ),
     ];
@@ -4594,7 +4750,10 @@ class _MyHomeTabState extends State<_MyHomeTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('빠른 배치 프리셋', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Text(
+                    '빠른 배치 프리셋',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -4791,6 +4950,18 @@ class _RoomPlacedItem {
   final RoomItemAdjustment adjustment;
 }
 
+class _LiveManipulationRect {
+  const _LiveManipulationRect({
+    required this.left,
+    required this.top,
+    required this.width,
+  });
+
+  final double left;
+  final double top;
+  final double width;
+}
+
 class _MyHomeRoomCard extends StatefulWidget {
   const _MyHomeRoomCard({
     required this.state,
@@ -4838,6 +5009,14 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
   int? _activePointer;
   bool _isManipulating = false;
   bool _suppressBackgroundTap = false;
+  DateTime? _selectionLockUntil;
+  final Map<DecorationZone, _LiveManipulationRect> _liveRects = {};
+
+  bool get _isSelectionLocked {
+    final lock = _selectionLockUntil;
+    if (lock == null) return false;
+    return DateTime.now().isBefore(lock);
+  }
 
   List<_RoomPlacedItem> _buildItems() {
     return DecorationZone.values
@@ -4874,22 +5053,56 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
 
   void _beginManipulation(DecorationZone zone, {int? pointer}) {
     if (!widget.isEditMode) return;
-    if (_selectedZone != zone || !_isManipulating || _activePointer != pointer) {
+    if (_activePointer != null &&
+        pointer != null &&
+        _activePointer != pointer &&
+        _selectedZone == zone) {
+      return;
+    }
+    if (_selectedZone != zone ||
+        !_isManipulating ||
+        _activePointer != pointer) {
       setState(() {
         _selectedZone = zone;
         _isManipulating = true;
         _activePointer = pointer;
+        _selectionLockUntil = DateTime.now().add(
+          const Duration(milliseconds: 450),
+        );
       });
     }
   }
 
+  void _finalizeManipulationSnap(
+    DecorationZone zone,
+    _RoomPlacedItem placed,
+    double maxWidth,
+    double maxHeight,
+  ) {
+    final live = _liveRects.remove(zone);
+    if (live == null) return;
+    _updateFromRect(
+      placed: placed,
+      left: live.left,
+      top: live.top,
+      width: live.width,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      snapToGrid: true,
+      rememberLiveRect: false,
+    );
+  }
+
   void _endManipulation({int? pointer}) {
-    if (pointer != null && _activePointer != null && pointer != _activePointer) {
+    if (pointer != null &&
+        _activePointer != null &&
+        pointer != _activePointer) {
       return;
     }
     _activePointer = null;
     _isManipulating = false;
     _suppressBackgroundTap = true;
+    _selectionLockUntil = DateTime.now().add(const Duration(milliseconds: 220));
   }
 
   void _updateFromRect({
@@ -4899,6 +5112,8 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     required double width,
     required double maxWidth,
     required double maxHeight,
+    bool snapToGrid = false,
+    bool rememberLiveRect = true,
   }) {
     final baseWidth = placed.anchor.size.width;
     final baseHeight = placed.anchor.size.height;
@@ -4918,7 +5133,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     double snappedTop = top.clamp(minTop, maxTop);
     const grid = 8.0;
 
-    if (widget.isEditMode) {
+    if (widget.isEditMode && snapToGrid) {
       final snappedOffsetX = ((snappedLeft - baseLeft) / grid).round() * grid;
       final snappedOffsetY = ((snappedTop - baseTop) / grid).round() * grid;
       snappedLeft = baseLeft + snappedOffsetX;
@@ -4926,6 +5141,14 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
 
       if ((snappedOffsetX).abs() <= 10) snappedLeft = baseLeft;
       if ((snappedOffsetY).abs() <= 10) snappedTop = baseTop;
+    }
+
+    if (rememberLiveRect) {
+      _liveRects[placed.zone] = _LiveManipulationRect(
+        left: snappedLeft,
+        top: snappedTop,
+        width: width,
+      );
     }
 
     widget.onDecorationAdjusted(
@@ -4963,6 +5186,8 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
       width: nextWidth,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
+      snapToGrid: true,
+      rememberLiveRect: false,
     );
   }
 
@@ -4980,7 +5205,11 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
     final top =
         (maxHeight - height) * ((placed.anchor.alignment.y + 1) / 2) +
         placed.adjustment.offsetY;
-    const hitPadding = 14.0;
+    const hitPadding = 22.0;
+    final controlLeft = ((width - 88) / 2 + hitPadding).clamp(
+      4.0,
+      width + hitPadding * 2 - 92,
+    );
 
     return Positioned(
       left: left - hitPadding,
@@ -5024,11 +5253,32 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                           width: width,
                           maxWidth: maxWidth,
                           maxHeight: maxHeight,
+                          snapToGrid: false,
                         );
                       }
                     : null,
-                onPanEnd: widget.isEditMode ? (_) => _endManipulation() : null,
-                onPanCancel: widget.isEditMode ? _endManipulation : null,
+                onPanEnd: widget.isEditMode
+                    ? (_) {
+                        _finalizeManipulationSnap(
+                          placed.zone,
+                          placed,
+                          maxWidth,
+                          maxHeight,
+                        );
+                        _endManipulation();
+                      }
+                    : null,
+                onPanCancel: widget.isEditMode
+                    ? () {
+                        _finalizeManipulationSnap(
+                          placed.zone,
+                          placed,
+                          maxWidth,
+                          maxHeight,
+                        );
+                        _endManipulation();
+                      }
+                    : null,
                 child: Padding(
                   padding: const EdgeInsets.all(hitPadding),
                   child: DecoratedBox(
@@ -5051,7 +5301,8 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
               child: Listener(
                 onPointerDown: (event) =>
                     _beginManipulation(placed.zone, pointer: event.pointer),
-                onPointerUp: (event) => _endManipulation(pointer: event.pointer),
+                onPointerUp: (event) =>
+                    _endManipulation(pointer: event.pointer),
                 onPointerCancel: (event) =>
                     _endManipulation(pointer: event.pointer),
                 child: GestureDetector(
@@ -5069,16 +5320,33 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                       width: nextWidth,
                       maxWidth: maxWidth,
                       maxHeight: maxHeight,
+                      snapToGrid: false,
                     );
                   },
-                  onPanEnd: (_) => _endManipulation(),
-                  onPanCancel: _endManipulation,
+                  onPanEnd: (_) {
+                    _finalizeManipulationSnap(
+                      placed.zone,
+                      placed,
+                      maxWidth,
+                      maxHeight,
+                    );
+                    _endManipulation();
+                  },
+                  onPanCancel: () {
+                    _finalizeManipulationSnap(
+                      placed.zone,
+                      placed,
+                      maxWidth,
+                      maxHeight,
+                    );
+                    _endManipulation();
+                  },
                   child: Container(
-                    width: 38,
-                    height: 38,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
                       color: AppDesign.secondary,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(23),
                       border: Border.all(color: Colors.white, width: 2),
                       boxShadow: const [
                         BoxShadow(
@@ -5099,7 +5367,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
             ),
           if (widget.isEditMode && selected)
             Positioned(
-              left: (width - 88) / 2 + hitPadding,
+              left: controlLeft,
               bottom: -18,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -5120,8 +5388,12 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                   children: [
                     InkWell(
                       borderRadius: BorderRadius.circular(999),
-                      onTap: () =>
-                          _changeScaleByStep(placed, maxWidth, maxHeight, -0.08),
+                      onTap: () => _changeScaleByStep(
+                        placed,
+                        maxWidth,
+                        maxHeight,
+                        -0.08,
+                      ),
                       child: const Padding(
                         padding: EdgeInsets.all(6),
                         child: Icon(Icons.remove, size: 18),
@@ -5178,7 +5450,7 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                                 _suppressBackgroundTap = false;
                                 return;
                               }
-                              if (_isManipulating) return;
+                              if (_isManipulating || _isSelectionLocked) return;
                               setState(() => _selectedZone = null);
                             },
                             child: CustomPaint(
@@ -5186,7 +5458,20 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                             ),
                           ),
                         ),
-                        ...items.where((e) => e.zone == DecorationZone.wall || e.zone == DecorationZone.window || e.zone == DecorationZone.shelf).map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
+                        ...items
+                            .where(
+                              (e) =>
+                                  e.zone == DecorationZone.wall ||
+                                  e.zone == DecorationZone.window ||
+                                  e.zone == DecorationZone.shelf,
+                            )
+                            .map(
+                              (placed) => _buildPlacedItem(
+                                placed,
+                                c.maxWidth,
+                                c.maxHeight,
+                              ),
+                            ),
                         Align(
                           alignment: const Alignment(0.03, 0.52),
                           child: SizedBox(
@@ -5198,7 +5483,19 @@ class _MyHomeRoomCardState extends State<_MyHomeRoomCard> {
                             ),
                           ),
                         ),
-                        ...items.where((e) => e.zone == DecorationZone.desk || e.zone == DecorationZone.floor).map((placed) => _buildPlacedItem(placed, c.maxWidth, c.maxHeight)),
+                        ...items
+                            .where(
+                              (e) =>
+                                  e.zone == DecorationZone.desk ||
+                                  e.zone == DecorationZone.floor,
+                            )
+                            .map(
+                              (placed) => _buildPlacedItem(
+                                placed,
+                                c.maxWidth,
+                                c.maxHeight,
+                              ),
+                            ),
                         AnimatedOpacity(
                           duration: const Duration(milliseconds: 220),
                           opacity: widget.showEquipFx ? 1 : 0,
@@ -5304,14 +5601,24 @@ class _MiniRoomShellPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.12, size.height * 0.10, size.width * 0.30, size.height * 0.18),
+        Rect.fromLTWH(
+          size.width * 0.12,
+          size.height * 0.10,
+          size.width * 0.30,
+          size.height * 0.18,
+        ),
         const Radius.circular(12),
       ),
       zoneHintPaint,
     ); // wall zone
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.59, size.height * 0.18, size.width * 0.24, size.height * 0.20),
+        Rect.fromLTWH(
+          size.width * 0.59,
+          size.height * 0.18,
+          size.width * 0.24,
+          size.height * 0.20,
+        ),
         const Radius.circular(14),
       ),
       zoneHintPaint,
@@ -5319,17 +5626,28 @@ class _MiniRoomShellPainter extends CustomPainter {
 
     // 배치 충돌을 줄이기 위해 배경에 가구 실루엣은 그리지 않는다.
     // 대신 장식이 자연스럽게 놓일 수 있는 깨끗한 존만 아주 약하게 표시.
-    final cleanZonePaint = Paint()..color = Colors.white.withValues(alpha: 0.10);
+    final cleanZonePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.10);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.50, size.height * 0.54, size.width * 0.32, size.height * 0.13),
+        Rect.fromLTWH(
+          size.width * 0.50,
+          size.height * 0.54,
+          size.width * 0.32,
+          size.height * 0.13,
+        ),
         const Radius.circular(12),
       ),
       cleanZonePaint,
     ); // desk clean zone
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.06, size.height * 0.45, size.width * 0.25, size.height * 0.20),
+        Rect.fromLTWH(
+          size.width * 0.06,
+          size.height * 0.45,
+          size.width * 0.25,
+          size.height * 0.20,
+        ),
         const Radius.circular(12),
       ),
       cleanZonePaint,
@@ -5742,6 +6060,7 @@ class _WeeklyReportTab extends StatelessWidget {
     required this.isReviewRunning,
     required this.onClaimMission,
     required this.seoulDateKey,
+    required this.skippedMalformedScenarioCount,
   });
 
   final AppState state;
@@ -5749,6 +6068,7 @@ class _WeeklyReportTab extends StatelessWidget {
   final bool isReviewRunning;
   final ValueChanged<DailyMissionType> onClaimMission;
   final String seoulDateKey;
+  final int skippedMalformedScenarioCount;
 
   String _dateKeySeoul(DateTime dateTime) {
     final kst = dateTime.toUtc().add(_kSeoulOffset);
@@ -5768,21 +6088,29 @@ class _WeeklyReportTab extends StatelessWidget {
     );
   }
 
-  bool _isComplete(DailyMissionType type, ({int solved, int correct, int reviewDone}) progress) {
+  bool _isComplete(
+    DailyMissionType type,
+    ({int solved, int correct, int reviewDone}) progress,
+  ) {
     return switch (type) {
       DailyMissionType.solveFive => progress.solved >= 5,
       DailyMissionType.accuracy70 =>
-        progress.solved > 0 && ((progress.correct / progress.solved) * 100) >= 70,
+        progress.solved > 0 &&
+            ((progress.correct / progress.solved) * 100) >= 70,
       DailyMissionType.reviewOne => progress.reviewDone >= 1,
     };
   }
 
-  String _progressLabel(DailyMissionType type, ({int solved, int correct, int reviewDone}) progress) {
+  String _progressLabel(
+    DailyMissionType type,
+    ({int solved, int correct, int reviewDone}) progress,
+  ) {
     return switch (type) {
       DailyMissionType.solveFive => '${progress.solved}/5',
-      DailyMissionType.accuracy70 => progress.solved == 0
-          ? '0% (0/0)'
-          : '${((progress.correct / progress.solved) * 100).round()}% (${progress.correct}/${progress.solved})',
+      DailyMissionType.accuracy70 =>
+        progress.solved == 0
+            ? '0% (0/0)'
+            : '${((progress.correct / progress.solved) * 100).round()}% (${progress.correct}/${progress.solved})',
       DailyMissionType.reviewOne => '${progress.reviewDone}/1',
     };
   }
@@ -5834,8 +6162,7 @@ class _WeeklyReportTab extends StatelessWidget {
         ? 0.0
         : (state.totalPointsSpent / totalEarnedPoints) * 100;
     final savingRatio = 100 - spendingRatio;
-    final recentWrong = state.wrongAnswerNotes
-        .toList()
+    final recentWrong = state.wrongAnswerNotes.toList()
       ..sort((a, b) => b.wrongAt.compareTo(a.wrongAt));
     final pendingWrong = recentWrong.where((e) => !e.isCleared).toList();
     final progress = _todayProgress();
@@ -5851,13 +6178,27 @@ class _WeeklyReportTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🎯 데일리 미션', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const Text(
+                    '🎯 데일리 미션',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(height: 6),
                   Text('기준일: $seoulDateKey (Asia/Seoul)'),
                   const SizedBox(height: 8),
+                  Text(
+                    'debug · 스킵된 malformed 시나리오: $skippedMalformedScenarioCount',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   ...DailyMissionType.values.map((type) {
                     final completed = _isComplete(type, progress);
-                    final claimed = state.dailyClaimedMissionIds.contains(type.key);
+                    final claimed = state.dailyClaimedMissionIds.contains(
+                      type.key,
+                    );
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(10),
@@ -5869,17 +6210,43 @@ class _WeeklyReportTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(type.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                          Text(
+                            type.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
                           const SizedBox(height: 3),
-                          Text('${type.subtitle} · 진행 ${_progressLabel(type, progress)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          Text(
+                            '${type.subtitle} · 진행 ${_progressLabel(type, progress)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              Text('보상 +${type.rewardCoins}코인 +${type.rewardPoints}P', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                              Text(
+                                '보상 +${type.rewardCoins}코인 +${type.rewardPoints}P',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                               const Spacer(),
                               FilledButton.tonal(
-                                onPressed: claimed || !completed ? null : () => onClaimMission(type),
-                                child: Text(claimed ? '수령완료' : completed ? '보상받기' : '진행중'),
+                                onPressed: claimed || !completed
+                                    ? null
+                                    : () => onClaimMission(type),
+                                child: Text(
+                                  claimed
+                                      ? '수령완료'
+                                      : completed
+                                      ? '보상받기'
+                                      : '진행중',
+                                ),
                               ),
                             ],
                           ),
@@ -5899,22 +6266,32 @@ class _WeeklyReportTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('📝 오답 노트', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const Text(
+                    '📝 오답 노트',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(height: 6),
-                  Text('남은 복습 ${pendingWrong.length}개 · 최근 기록 ${recentWrong.length}개'),
+                  Text(
+                    '남은 복습 ${pendingWrong.length}개 · 최근 기록 ${recentWrong.length}개',
+                  ),
                   const SizedBox(height: 8),
                   if (recentWrong.isEmpty)
                     const Text('아직 오답 노트가 없어요. 탐험에서 틀린 문제가 여기에 쌓여요!')
                   else
-                    ...recentWrong.take(6).map(
-                      (note) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '• ${note.scenarioTitle} · ${note.stageType.label} · ${note.isCleared ? '복습 완료' : '복습 필요'}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ...recentWrong
+                        .take(6)
+                        .map(
+                          (note) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              '• ${note.scenarioTitle} · ${note.stageType.label} · ${note.isCleared ? '복습 완료' : '복습 필요'}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
                   const SizedBox(height: 10),
                   FilledButton.icon(
                     onPressed: isReviewRunning ? null : onStartReview,
