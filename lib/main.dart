@@ -12,8 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
+import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.26-r32';
+const kAppUiVersion = 'ui-2026.02.26-r35';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5242,46 +5243,23 @@ class _AlphaMaskData {
   final int height;
   final Uint8List alpha;
 
-  Offset? mapWorldPointToPixel(Offset worldPoint, Rect visualRect) {
-    if (width <= 0 || height <= 0 || visualRect.isEmpty) return null;
-
-    final imageAspect = width / height;
-    final viewAspect = visualRect.width / visualRect.height;
-
-    double drawWidth;
-    double drawHeight;
-    double drawLeft;
-    double drawTop;
-
-    if (imageAspect > viewAspect) {
-      drawWidth = visualRect.width;
-      drawHeight = drawWidth / imageAspect;
-      drawLeft = visualRect.left;
-      drawTop = visualRect.top + ((visualRect.height - drawHeight) / 2);
-    } else {
-      drawHeight = visualRect.height;
-      drawWidth = drawHeight * imageAspect;
-      drawTop = visualRect.top;
-      drawLeft = visualRect.left + ((visualRect.width - drawWidth) / 2);
-    }
-
-    final drawRect = Rect.fromLTWH(drawLeft, drawTop, drawWidth, drawHeight);
-    if (!drawRect.contains(worldPoint)) return null;
-
-    final localX = (worldPoint.dx - drawLeft) / drawWidth;
-    final localY = (worldPoint.dy - drawTop) / drawHeight;
-    if (localX < 0 || localX > 1 || localY < 0 || localY > 1) return null;
-
-    final px = (localX * (width - 1)).round().clamp(0, width - 1);
-    final py = (localY * (height - 1)).round().clamp(0, height - 1);
-    return Offset(px.toDouble(), py.toDouble());
+  MiniRoomMappedPoint? mapWorldPointToPixel(
+    Offset worldPoint,
+    Rect visualRect,
+  ) {
+    return MiniRoomImageMapper.mapWorldPointToPixel(
+      worldPoint: worldPoint,
+      visualRect: visualRect,
+      imageWidth: width,
+      imageHeight: height,
+    );
   }
 
   bool hitTest(Offset worldPoint, Rect visualRect, {required int threshold}) {
-    final pixel = mapWorldPointToPixel(worldPoint, visualRect);
-    if (pixel == null) return false;
-    final px = pixel.dx.toInt();
-    final py = pixel.dy.toInt();
+    final mapped = mapWorldPointToPixel(worldPoint, visualRect);
+    if (mapped == null) return false;
+    final px = mapped.pixel.dx.toInt();
+    final py = mapped.pixel.dy.toInt();
     final alphaValue = alpha[(py * width) + px];
     return alphaValue > threshold;
   }
@@ -5324,6 +5302,11 @@ class _MyHomeRoomCard extends StatelessWidget {
               '오브젝트 실루엣(불투명 픽셀)만 터치로 선택됩니다.',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
             ),
+            if (kDebugMode)
+              const Text(
+                '디버그: 미니룸을 길게 눌러 터치/로컬 좌표 오버레이 토글',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+              ),
             const SizedBox(height: 10),
             AspectRatio(
               aspectRatio: 1.32,
@@ -5400,6 +5383,10 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   late RoomItemAdjustment _draftCharacterAdjustment;
   RoomItemAdjustment? _pendingCommitAdjustment;
   late final AnimationController _selectionPulseController;
+  bool _debugHitOverlayVisible = false;
+  Offset? _debugWorldTouchPoint;
+  Offset? _debugLocalPoint;
+  Rect? _debugVisualRect;
 
   @override
   void initState() {
@@ -5682,12 +5669,13 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
 
   void _onScaleStart(ScaleStartDetails details, BoxConstraints c) {
     final items = _buildItems();
-    final target = _hitTestTarget(
-      details.localFocalPoint,
-      items,
-      c.maxWidth,
-      c.maxHeight,
-    );
+    final point = details.localFocalPoint;
+    final target = _hitTestTarget(point, items, c.maxWidth, c.maxHeight);
+
+    if (kDebugMode) {
+      _captureDebugTouch(point, items, c.maxWidth, c.maxHeight, target: target);
+    }
+
     if (target == null) return;
 
     final anchor = _anchorFor(target);
@@ -5699,14 +5687,8 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       maxHeight: c.maxHeight,
     );
     final pivot = Offset(
-      ((details.localFocalPoint.dx - baseRect.left) / baseRect.width).clamp(
-        0.0,
-        1.0,
-      ),
-      ((details.localFocalPoint.dy - baseRect.top) / baseRect.height).clamp(
-        0.0,
-        1.0,
-      ),
+      ((point.dx - baseRect.left) / baseRect.width).clamp(0.0, 1.0),
+      ((point.dy - baseRect.top) / baseRect.height).clamp(0.0, 1.0),
     );
 
     setState(() {
@@ -5764,6 +5746,58 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     widget.onInteractionLockChanged(false);
   }
 
+  void _captureDebugTouch(
+    Offset point,
+    List<_RoomPlacedItem> items,
+    double maxWidth,
+    double maxHeight, {
+    _RoomTarget? target,
+  }) {
+    if (!kDebugMode) return;
+
+    Rect? visualRect;
+    _AlphaMaskData? mask;
+
+    if (target != null) {
+      if (target.isCharacter) {
+        visualRect = _rectFromAdjustment(
+          anchor: _characterAnchor,
+          adjustment: _draftCharacterAdjustment,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        );
+        mask = _alphaMaskCache[widget.state.equippedCharacter.id];
+      } else {
+        _RoomPlacedItem? placed;
+        for (final candidate in items) {
+          if (candidate.zone == target.zone) {
+            placed = candidate;
+            break;
+          }
+        }
+        if (placed != null) {
+          visualRect = _rectFromAdjustment(
+            anchor: placed.anchor,
+            adjustment: placed.adjustment,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight,
+          );
+          mask = _alphaMaskCache[placed.item.id];
+        }
+      }
+    }
+
+    final mapped = (mask != null && visualRect != null)
+        ? mask.mapWorldPointToPixel(point, visualRect)
+        : null;
+
+    setState(() {
+      _debugWorldTouchPoint = point;
+      _debugVisualRect = visualRect;
+      _debugLocalPoint = mapped?.normalized;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -5779,6 +5813,13 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
             onScaleStart: (d) => _onScaleStart(d, c),
             onScaleUpdate: (d) => _onScaleUpdate(d, c),
             onScaleEnd: _onScaleEnd,
+            onLongPress: kDebugMode
+                ? () {
+                    setState(() {
+                      _debugHitOverlayVisible = !_debugHitOverlayVisible;
+                    });
+                  }
+                : null,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(18),
               child: _MiniRoomVisual(
@@ -5791,6 +5832,10 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
                 equipFxLabel: widget.equipFxLabel,
                 selectedTarget: _selectedTarget,
                 selectionPulse: _selectionPulseController,
+                debugOverlayEnabled: kDebugMode && _debugHitOverlayVisible,
+                debugWorldTouchPoint: _debugWorldTouchPoint,
+                debugLocalPoint: _debugLocalPoint,
+                debugVisualRect: _debugVisualRect,
               ),
             ),
           ),
@@ -5824,6 +5869,10 @@ class _MiniRoomVisual extends StatelessWidget {
     required this.equipFxLabel,
     this.selectedTarget,
     this.selectionPulse,
+    this.debugOverlayEnabled = false,
+    this.debugWorldTouchPoint,
+    this.debugLocalPoint,
+    this.debugVisualRect,
   });
 
   final AppState state;
@@ -5832,6 +5881,10 @@ class _MiniRoomVisual extends StatelessWidget {
   final String equipFxLabel;
   final _RoomTarget? selectedTarget;
   final Animation<double>? selectionPulse;
+  final bool debugOverlayEnabled;
+  final Offset? debugWorldTouchPoint;
+  final Offset? debugLocalPoint;
+  final Rect? debugVisualRect;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(72, 46), 1),
@@ -5974,13 +6027,22 @@ class _MiniRoomVisual extends StatelessWidget {
               child: _SelectionGlow(
                 selected: selectedTarget?.isCharacter == true,
                 pulse: selectionPulse,
-                child: _ItemThumbnail(
-                  item: state.equippedCharacter,
-                  compact: false,
-                ),
+                child: _DecorationObject(item: state.equippedCharacter),
               ),
             ),
             ...bottomItems.map(buildPlaced),
+            if (debugOverlayEnabled)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _MiniRoomHitDebugPainter(
+                      worldPoint: debugWorldTouchPoint,
+                      localPoint: debugLocalPoint,
+                      visualRect: debugVisualRect,
+                    ),
+                  ),
+                ),
+              ),
             AnimatedOpacity(
               duration: const Duration(milliseconds: 220),
               opacity: showEquipFx ? 1 : 0,
@@ -6066,6 +6128,58 @@ class _SelectionGlow extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _MiniRoomHitDebugPainter extends CustomPainter {
+  const _MiniRoomHitDebugPainter({
+    required this.worldPoint,
+    required this.localPoint,
+    required this.visualRect,
+  });
+
+  final Offset? worldPoint;
+  final Offset? localPoint;
+  final Rect? visualRect;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = visualRect;
+    final touch = worldPoint;
+    if (touch == null) return;
+
+    if (rect != null) {
+      final outline = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = const Color(0xFF4FC3F7);
+      canvas.drawRect(rect, outline);
+
+      final local = localPoint;
+      if (local != null) {
+        final px = rect.left + (local.dx.clamp(0.0, 1.0) * rect.width);
+        final py = rect.top + (local.dy.clamp(0.0, 1.0) * rect.height);
+        final lp = Offset(px, py);
+        canvas.drawCircle(
+          lp,
+          5,
+          Paint()..color = const Color(0xFFFFC107).withValues(alpha: 0.85),
+        );
+      }
+    }
+
+    canvas.drawCircle(
+      touch,
+      6,
+      Paint()..color = const Color(0xFFE91E63).withValues(alpha: 0.9),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniRoomHitDebugPainter oldDelegate) {
+    return oldDelegate.worldPoint != worldPoint ||
+        oldDelegate.localPoint != localPoint ||
+        oldDelegate.visualRect != visualRect;
   }
 }
 
