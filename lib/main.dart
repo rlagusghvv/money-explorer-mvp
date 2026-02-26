@@ -5443,7 +5443,6 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   final Map<String, _AlphaMaskData?> _alphaMaskCache =
       <String, _AlphaMaskData?>{};
   final Set<String> _alphaMaskLoading = <String>{};
-  final GlobalKey _editorGestureKey = GlobalKey();
   final GlobalKey _miniRoomCanvasKey = GlobalKey();
   _RoomTarget? _selectedTarget;
   _TouchSession? _touchSession;
@@ -5456,7 +5455,6 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   Offset? _debugLocalPoint;
   Rect? _debugVisualRect;
   String? _debugCalibrationSummary;
-  _TouchCalibrationState _touchCalibration = const _TouchCalibrationState();
 
   @override
   void initState() {
@@ -5741,104 +5739,22 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return box?.size ?? Size(c.maxWidth, c.maxHeight);
   }
 
-  void _refreshTouchCalibration(BoxConstraints c, {Offset? sampleGlobalPoint}) {
-    final canvasBox = _miniRoomCanvasRenderBox();
-    final editorContext = _editorGestureKey.currentContext;
-    final editorObject = editorContext?.findRenderObject();
-    final editorBox =
-        editorObject is RenderBox && editorObject.hasSize ? editorObject : null;
-
-    final canvasSize = canvasBox?.size ?? Size(c.maxWidth, c.maxHeight);
-    final editorSize = editorBox?.size ?? canvasSize;
-
-    final editorGlobalOrigin =
-        editorBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final canvasGlobalOrigin =
-        canvasBox?.localToGlobal(Offset.zero) ?? editorGlobalOrigin;
-
-    final scaleX = canvasSize.width <= 0 || editorSize.width <= 0
-        ? 1.0
-        : canvasSize.width / editorSize.width;
-    final scaleY = canvasSize.height <= 0 || editorSize.height <= 0
-        ? 1.0
-        : canvasSize.height / editorSize.height;
-
-    final canvasRectInEditor = Rect.fromLTWH(
-      canvasGlobalOrigin.dx - editorGlobalOrigin.dx,
-      canvasGlobalOrigin.dy - editorGlobalOrigin.dy,
-      canvasSize.width,
-      canvasSize.height,
-    );
-
-    final safePadding = MediaQuery.maybeOf(context)?.viewPadding ?? EdgeInsets.zero;
-
-    var estimatedBias = _touchCalibration.estimatedBias;
-    if (sampleGlobalPoint != null && canvasBox != null && editorBox != null) {
-      final localFromCanvas = canvasBox.globalToLocal(sampleGlobalPoint);
-      final editorLocal = editorBox.globalToLocal(sampleGlobalPoint);
-      final localFromEditor = Offset(
-        (editorLocal.dx - canvasRectInEditor.left) * scaleX,
-        (editorLocal.dy - canvasRectInEditor.top) * scaleY,
-      );
-      final residual = localFromCanvas - localFromEditor;
-      estimatedBias = Offset(
-        (estimatedBias.dx * 0.88) + (residual.dx * 0.12),
-        (estimatedBias.dy * 0.88) + (residual.dy * 0.12),
-      );
-    }
-
-    _touchCalibration = _TouchCalibrationState(
-      canvasSize: canvasSize,
-      editorSize: editorSize,
-      editorGlobalOrigin: editorGlobalOrigin,
-      canvasGlobalOrigin: canvasGlobalOrigin,
-      canvasRectInEditor: canvasRectInEditor,
-      scaleX: scaleX,
-      scaleY: scaleY,
-      safePadding: safePadding,
-      estimatedBias: estimatedBias,
-    );
-
-    if (kDebugMode) {
-      _debugCalibrationSummary =
-          'origin=${canvasGlobalOrigin.dx.toStringAsFixed(1)},${canvasGlobalOrigin.dy.toStringAsFixed(1)} '
-          'scale=${scaleX.toStringAsFixed(3)},${scaleY.toStringAsFixed(3)} '
-          'bias=${estimatedBias.dx.toStringAsFixed(2)},${estimatedBias.dy.toStringAsFixed(2)} '
-          'safe=${safePadding.left.toStringAsFixed(1)},${safePadding.top.toStringAsFixed(1)},${safePadding.right.toStringAsFixed(1)},${safePadding.bottom.toStringAsFixed(1)}';
-    }
-  }
-
   Offset _canvasLocalPointFromGlobal(Offset globalPoint, BoxConstraints c) {
-    _refreshTouchCalibration(c, sampleGlobalPoint: globalPoint);
     final canvasBox = _miniRoomCanvasRenderBox();
-    final editorLocal = _editorLocalFromGlobal(globalPoint);
-    final cal = _touchCalibration;
+    final canvasSize = _canvasSize(c);
+    final local = canvasBox?.globalToLocal(globalPoint) ?? globalPoint;
 
-    final localFromCanvas = canvasBox?.globalToLocal(globalPoint);
-    final localFromEditor = editorLocal == null
-        ? null
-        : Offset(
-            (editorLocal.dx - cal.canvasRectInEditor.left) * cal.scaleX,
-            (editorLocal.dy - cal.canvasRectInEditor.top) * cal.scaleY,
-          );
+    if (kDebugMode && canvasBox != null) {
+      final origin = canvasBox.localToGlobal(Offset.zero);
+      _debugCalibrationSummary =
+          'single-layer origin=${origin.dx.toStringAsFixed(1)},${origin.dy.toStringAsFixed(1)} '
+          'size=${canvasSize.width.toStringAsFixed(1)}x${canvasSize.height.toStringAsFixed(1)}';
+    }
 
-    final blended = localFromCanvas ?? localFromEditor ?? globalPoint;
-    final corrected = Offset(
-      blended.dx - cal.estimatedBias.dx,
-      blended.dy - cal.estimatedBias.dy,
-    );
-    final size = cal.canvasSize;
     return Offset(
-      corrected.dx.clamp(0.0, size.width),
-      corrected.dy.clamp(0.0, size.height),
+      local.dx.clamp(0.0, canvasSize.width),
+      local.dy.clamp(0.0, canvasSize.height),
     );
-  }
-
-  Offset? _editorLocalFromGlobal(Offset globalPoint) {
-    final context = _editorGestureKey.currentContext;
-    final renderObject = context?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
-    return renderObject.globalToLocal(globalPoint);
   }
 
   static const double _dragDeadZonePx = 5.0;
@@ -5879,17 +5795,6 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
 
       final anchor = _anchorFor(target);
       final adjustment = _currentAdjustment(target);
-      final transform = _transformFor(
-        anchor: anchor,
-        adjustment: adjustment,
-        canvasSize: canvasSize,
-      );
-      final pivot = transform.worldToObjectPoint(point) ?? const Offset(0.5, 0.5);
-      final clampedPivot = Offset(
-        pivot.dx.clamp(0.0, 1.0),
-        pivot.dy.clamp(0.0, 1.0),
-      );
-
       setState(() {
         _selectedTarget = target;
         _touchSession = _TouchSession(
@@ -5897,7 +5802,6 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
           anchor: anchor,
           initialAdjustment: adjustment,
           adjustmentAtModeStart: adjustment,
-          pivot: clampedPivot,
           maxScale: _maxScaleForTarget(target),
           pointers: {event.pointer: point},
           baseLocalFocal: point,
@@ -6060,11 +5964,19 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
         RoomItemAdjustment.minScale,
         session.maxScale,
       );
+
+      // r41: scale origin is always object center to prevent offset amplification.
+      final baseTransform = _transformFor(
+        anchor: session.anchor,
+        adjustment: base,
+        canvasSize: canvasSize,
+      );
+      final center = baseTransform.worldRect.center;
       final width = session.anchor.size.width * nextScale;
       final height = session.anchor.size.height * nextScale;
-      final focal = session.currentLocalFocal;
-      final left = focal.dx - (session.pivot.dx * width);
-      final top = focal.dy - (session.pivot.dy * height);
+      final left = center.dx - (width / 2);
+      final top = center.dy - (height / 2);
+
       return _adjustmentFromTransform(
         anchor: session.anchor,
         current: current,
@@ -6151,44 +6063,48 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        return Listener(
+        Widget content = Listener(
+          key: _miniRoomCanvasKey,
+          behavior: HitTestBehavior.opaque,
           onPointerDown: (event) => _onPointerDown(event, c),
           onPointerMove: (event) => _onPointerMove(event, c),
           onPointerUp: (event) => _onPointerUpOrCancel(event, c, canceled: false),
           onPointerCancel: (event) => _onPointerUpOrCancel(event, c, canceled: true),
-          child: GestureDetector(
-            key: _editorGestureKey,
-            behavior: HitTestBehavior.opaque,
-            onLongPress: kDebugMode
-                ? () {
-                    setState(() {
-                      _debugHitOverlayVisible = !_debugHitOverlayVisible;
-                    });
-                  }
-                : null,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: _MiniRoomVisual(
-                state: widget.state.copyWith(
-                  decorationAdjustments: {..._draftDecorationAdjustments},
-                  characterAdjustment: _draftCharacterAdjustment,
-                ),
-                itemById: widget.itemById,
-                showEquipFx: widget.showEquipFx,
-                equipFxLabel: widget.equipFxLabel,
-                selectedTarget: _selectedTarget,
-                selectionPulse: _selectionPulseController,
-                debugOverlayEnabled: kDebugMode && _debugHitOverlayVisible,
-                debugWorldTouchPoint: _debugWorldTouchPoint,
-                debugRawTouchPoint: _debugRawTouchPoint,
-                debugLocalPoint: _debugLocalPoint,
-                debugVisualRect: _debugVisualRect,
-                debugCalibrationSummary: _debugCalibrationSummary,
-                canvasKey: _miniRoomCanvasKey,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: _MiniRoomVisual(
+              state: widget.state.copyWith(
+                decorationAdjustments: {..._draftDecorationAdjustments},
+                characterAdjustment: _draftCharacterAdjustment,
               ),
+              itemById: widget.itemById,
+              showEquipFx: widget.showEquipFx,
+              equipFxLabel: widget.equipFxLabel,
+              selectedTarget: _selectedTarget,
+              selectionPulse: _selectionPulseController,
+              debugOverlayEnabled: kDebugMode && _debugHitOverlayVisible,
+              debugWorldTouchPoint: _debugWorldTouchPoint,
+              debugRawTouchPoint: _debugRawTouchPoint,
+              debugLocalPoint: _debugLocalPoint,
+              debugVisualRect: _debugVisualRect,
+              debugCalibrationSummary: _debugCalibrationSummary,
             ),
           ),
         );
+
+        if (kDebugMode) {
+          content = GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onLongPress: () {
+              setState(() {
+                _debugHitOverlayVisible = !_debugHitOverlayVisible;
+              });
+            },
+            child: content,
+          );
+        }
+
+        return content;
       },
     );
   }
@@ -6202,7 +6118,6 @@ class _TouchSession {
     required this.anchor,
     required this.initialAdjustment,
     required this.adjustmentAtModeStart,
-    required this.pivot,
     required this.maxScale,
     required this.pointers,
     required this.baseLocalFocal,
@@ -6217,7 +6132,6 @@ class _TouchSession {
   final _RoomAnchor anchor;
   final RoomItemAdjustment initialAdjustment;
   final RoomItemAdjustment adjustmentAtModeStart;
-  final Offset pivot;
   final double maxScale;
   final Map<int, Offset> pointers;
   final Offset baseLocalFocal;
@@ -6242,7 +6156,6 @@ class _TouchSession {
       anchor: anchor,
       initialAdjustment: initialAdjustment,
       adjustmentAtModeStart: adjustmentAtModeStart ?? this.adjustmentAtModeStart,
-      pivot: pivot,
       maxScale: maxScale,
       pointers: pointers ?? this.pointers,
       baseLocalFocal: baseLocalFocal ?? this.baseLocalFocal,
@@ -6253,30 +6166,6 @@ class _TouchSession {
       cancelCount: cancelCount ?? this.cancelCount,
     );
   }
-}
-
-class _TouchCalibrationState {
-  const _TouchCalibrationState({
-    this.canvasSize = Size.zero,
-    this.editorSize = Size.zero,
-    this.editorGlobalOrigin = Offset.zero,
-    this.canvasGlobalOrigin = Offset.zero,
-    this.canvasRectInEditor = Rect.zero,
-    this.scaleX = 1,
-    this.scaleY = 1,
-    this.safePadding = EdgeInsets.zero,
-    this.estimatedBias = Offset.zero,
-  });
-
-  final Size canvasSize;
-  final Size editorSize;
-  final Offset editorGlobalOrigin;
-  final Offset canvasGlobalOrigin;
-  final Rect canvasRectInEditor;
-  final double scaleX;
-  final double scaleY;
-  final EdgeInsets safePadding;
-  final Offset estimatedBias;
 }
 
 class _MiniRoomVisual extends StatelessWidget {
@@ -6293,7 +6182,6 @@ class _MiniRoomVisual extends StatelessWidget {
     this.debugLocalPoint,
     this.debugVisualRect,
     this.debugCalibrationSummary,
-    this.canvasKey,
   });
 
   final AppState state;
@@ -6308,7 +6196,6 @@ class _MiniRoomVisual extends StatelessWidget {
   final Offset? debugLocalPoint;
   final Rect? debugVisualRect;
   final String? debugCalibrationSummary;
-  final Key? canvasKey;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(72, 46), 1),
@@ -6409,7 +6296,6 @@ class _MiniRoomVisual extends StatelessWidget {
         );
 
         return SizedBox.expand(
-          key: canvasKey,
           child: Stack(
             children: [
               const Positioned.fill(
