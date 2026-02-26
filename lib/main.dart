@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.26-r44';
+const kAppUiVersion = 'ui-2026.02.26-r46';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -626,6 +626,113 @@ enum CosmeticType { character, home, decoration }
 
 enum DecorationZone { wall, floor, desk, shelf, window }
 
+enum MinimiCategory { hair, top, accessory }
+
+class MinimiPresetItem {
+  const MinimiPresetItem({
+    required this.id,
+    required this.label,
+    required this.emoji,
+    this.shopItemId,
+  });
+
+  final String id;
+  final String label;
+  final String emoji;
+  final String? shopItemId;
+}
+
+class MinimiCosmeticState {
+  const MinimiCosmeticState({required this.selectedByCategory});
+
+  static const Map<MinimiCategory, String> _defaults = {
+    MinimiCategory.hair: 'hair_basic_black',
+    MinimiCategory.top: 'top_green_hoodie',
+    MinimiCategory.accessory: 'acc_none',
+  };
+
+  static MinimiCosmeticState initial() =>
+      const MinimiCosmeticState(selectedByCategory: _defaults);
+
+  final Map<MinimiCategory, String> selectedByCategory;
+
+  String selectedId(MinimiCategory category) =>
+      selectedByCategory[category] ?? _defaults[category]!;
+
+  MinimiCosmeticState copyWithSelection(
+    MinimiCategory category,
+    String itemId,
+  ) {
+    final valid =
+        kMinimiPresetByCategory[category]?.any((e) => e.id == itemId) == true;
+    final normalizedId = valid ? itemId : _defaults[category]!;
+    return MinimiCosmeticState(
+      selectedByCategory: {...selectedByCategory, category: normalizedId},
+    );
+  }
+
+  MinimiCosmeticState resetToDefault() => initial();
+
+  factory MinimiCosmeticState.fromJson(Object? raw) {
+    final base = {..._defaults};
+    if (raw is! Map) return MinimiCosmeticState(selectedByCategory: base);
+    final map = raw.cast<Object?, Object?>();
+    for (final category in MinimiCategory.values) {
+      final value = map[category.name];
+      if (value is! String) continue;
+      final valid =
+          kMinimiPresetByCategory[category]?.any((e) => e.id == value) == true;
+      if (valid) {
+        base[category] = value;
+      }
+    }
+    return MinimiCosmeticState(selectedByCategory: base);
+  }
+
+  Map<String, dynamic> toJson() => {
+    for (final category in MinimiCategory.values)
+      category.name: selectedId(category),
+  };
+}
+
+const Map<MinimiCategory, List<MinimiPresetItem>> kMinimiPresetByCategory = {
+  MinimiCategory.hair: [
+    MinimiPresetItem(id: 'hair_basic_black', label: '기본 검정', emoji: '🖤'),
+    MinimiPresetItem(id: 'hair_brown_wave', label: '브라운 웨이브', emoji: '🤎'),
+    MinimiPresetItem(id: 'hair_pink_bob', label: '핑크 보브', emoji: '💗'),
+    MinimiPresetItem(id: 'hair_blue_short', label: '블루 숏컷', emoji: '💙'),
+    MinimiPresetItem(id: 'hair_blonde', label: '골드', emoji: '💛'),
+  ],
+  MinimiCategory.top: [
+    MinimiPresetItem(id: 'top_green_hoodie', label: '초록 후드', emoji: '🟢'),
+    MinimiPresetItem(id: 'top_blue_jersey', label: '블루 저지', emoji: '🔵'),
+    MinimiPresetItem(id: 'top_orange_knit', label: '오렌지 니트', emoji: '🟠'),
+    MinimiPresetItem(id: 'top_purple_zipup', label: '퍼플 집업', emoji: '🟣'),
+    MinimiPresetItem(id: 'top_white_shirt', label: '화이트 셔츠', emoji: '⚪'),
+  ],
+  MinimiCategory.accessory: [
+    MinimiPresetItem(id: 'acc_none', label: '없음', emoji: '➖'),
+    MinimiPresetItem(id: 'acc_cap', label: '탐험 캡', emoji: '🧢'),
+    MinimiPresetItem(id: 'acc_glass', label: '동글 안경', emoji: '🕶️'),
+    MinimiPresetItem(id: 'acc_headphone', label: '헤드폰', emoji: '🎧'),
+    MinimiPresetItem(id: 'acc_star_pin', label: '별 배지', emoji: '⭐'),
+  ],
+};
+
+extension MinimiCategoryX on MinimiCategory {
+  String get label => switch (this) {
+    MinimiCategory.hair => '헤어',
+    MinimiCategory.top => '상의',
+    MinimiCategory.accessory => '소품',
+  };
+
+  IconData get icon => switch (this) {
+    MinimiCategory.hair => Icons.face_retouching_natural_rounded,
+    MinimiCategory.top => Icons.checkroom_rounded,
+    MinimiCategory.accessory => Icons.stars_rounded,
+  };
+}
+
 class RoomItemAdjustment {
   const RoomItemAdjustment({
     this.offsetX = 0,
@@ -1012,11 +1119,12 @@ class AppState {
     required this.dailyReviewCompletedCount,
     required this.weeklyMissionWeekKey,
     required this.weeklyClaimedMissionIds,
+    required this.minimiCosmetics,
     required this.mapExpanded,
     required this.scenarioOrder,
   });
 
-  factory AppState.initial() => const AppState(
+  factory AppState.initial() => AppState(
     playerName: '탐험대원',
     cash: 1000,
     rewardPoints: 0,
@@ -1062,6 +1170,7 @@ class AppState {
     dailyReviewCompletedCount: 0,
     weeklyMissionWeekKey: '',
     weeklyClaimedMissionIds: {},
+    minimiCosmetics: MinimiCosmeticState.initial(),
     mapExpanded: true,
     scenarioOrder: [],
   );
@@ -1091,6 +1200,7 @@ class AppState {
   final int dailyReviewCompletedCount;
   final String weeklyMissionWeekKey;
   final Set<String> weeklyClaimedMissionIds;
+  final MinimiCosmeticState minimiCosmetics;
   final bool mapExpanded;
   final List<int> scenarioOrder;
 
@@ -1145,6 +1255,9 @@ class AppState {
         .map((e) => (e as num?)?.round())
         .whereType<int>()
         .toList();
+    final minimiCosmetics = MinimiCosmeticState.fromJson(
+      json['minimiCosmetics'],
+    );
 
     return AppState(
       playerName: json['playerName'] as String? ?? initial.playerName,
@@ -1211,6 +1324,7 @@ class AppState {
           (json['weeklyClaimedMissionIds'] as List<dynamic>? ?? const [])
               .whereType<String>()
               .toSet(),
+      minimiCosmetics: minimiCosmetics,
       mapExpanded: json['mapExpanded'] != false,
       scenarioOrder: scenarioOrder,
     );
@@ -1248,6 +1362,7 @@ class AppState {
     'dailyReviewCompletedCount': dailyReviewCompletedCount,
     'weeklyMissionWeekKey': weeklyMissionWeekKey,
     'weeklyClaimedMissionIds': weeklyClaimedMissionIds.toList(),
+    'minimiCosmetics': minimiCosmetics.toJson(),
     'mapExpanded': mapExpanded,
     'scenarioOrder': scenarioOrder,
   };
@@ -1278,6 +1393,7 @@ class AppState {
     int? dailyReviewCompletedCount,
     String? weeklyMissionWeekKey,
     Set<String>? weeklyClaimedMissionIds,
+    MinimiCosmeticState? minimiCosmetics,
     bool? mapExpanded,
     List<int>? scenarioOrder,
   }) {
@@ -1311,6 +1427,7 @@ class AppState {
       weeklyMissionWeekKey: weeklyMissionWeekKey ?? this.weeklyMissionWeekKey,
       weeklyClaimedMissionIds:
           weeklyClaimedMissionIds ?? this.weeklyClaimedMissionIds,
+      minimiCosmetics: minimiCosmetics ?? this.minimiCosmetics,
       mapExpanded: mapExpanded ?? this.mapExpanded,
       scenarioOrder: scenarioOrder ?? this.scenarioOrder,
     );
@@ -1344,6 +1461,7 @@ class AppStateStore {
   static const _kDailyReviewCompletedCount = 'dailyReviewCompletedCount';
   static const _kWeeklyMissionWeekKey = 'weeklyMissionWeekKey';
   static const _kWeeklyClaimedMissionIds = 'weeklyClaimedMissionIds';
+  static const _kMinimiCosmetics = 'minimiCosmetics';
   static const _kMapExpanded = 'mapExpanded';
   static const _kScenarioOrder = 'scenarioOrder';
 
@@ -1455,6 +1573,16 @@ class AppStateStore {
         characterAdjustmentRaw = const {};
       }
     }
+    Map<String, dynamic> minimiRaw = const {};
+    final minimiJson = prefs.getString(_kMinimiCosmetics);
+    if (minimiJson != null && minimiJson.isNotEmpty) {
+      try {
+        minimiRaw = jsonDecode(minimiJson) as Map<String, dynamic>;
+      } catch (_) {
+        minimiRaw = const {};
+      }
+    }
+
     if (adjustmentJson != null && adjustmentJson.isNotEmpty) {
       try {
         adjustmentRaw = jsonDecode(adjustmentJson) as Map<String, dynamic>;
@@ -1510,6 +1638,7 @@ class AppStateStore {
       weeklyMissionWeekKey: prefs.getString(_kWeeklyMissionWeekKey) ?? '',
       weeklyClaimedMissionIds:
           (prefs.getStringList(_kWeeklyClaimedMissionIds) ?? const []).toSet(),
+      minimiCosmetics: MinimiCosmeticState.fromJson(minimiRaw),
       mapExpanded: prefs.getBool(_kMapExpanded) ?? true,
       scenarioOrder: (prefs.getStringList(_kScenarioOrder) ?? const [])
           .map((e) => int.tryParse(e))
@@ -1584,6 +1713,10 @@ class AppStateStore {
     await prefs.setStringList(
       _kWeeklyClaimedMissionIds,
       state.weeklyClaimedMissionIds.toList(),
+    );
+    await prefs.setString(
+      _kMinimiCosmetics,
+      jsonEncode(state.minimiCosmetics.toJson()),
     );
     await prefs.setBool(_kMapExpanded, state.mapExpanded);
     await prefs.setStringList(
@@ -2323,6 +2456,28 @@ class _GameHomePageState extends State<GameHomePage> {
     _persist();
   }
 
+  void _selectMinimiPreset(MinimiCategory category, String itemId) {
+    setState(() {
+      _state = _state.copyWith(
+        minimiCosmetics: _state.minimiCosmetics.copyWithSelection(
+          category,
+          itemId,
+        ),
+      );
+    });
+    _persist();
+  }
+
+  void _resetMinimiToDefault() {
+    setState(() {
+      _state = _state.copyWith(minimiCosmetics: MinimiCosmeticState.initial());
+    });
+    _persist();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('미니미를 기본 스타일로 되돌렸어요.')));
+  }
+
   void _resetProgress() {
     setState(() {
       _state = AppState.initial().copyWith(
@@ -2412,6 +2567,8 @@ class _GameHomePageState extends State<GameHomePage> {
         onCharacterAdjusted: _updateCharacterAdjustment,
         onThemeNameChanged: _updateHomeThemeName,
         onEquipHome: _equipItem,
+        onSelectMinimiPreset: _selectMinimiPreset,
+        onResetMinimi: _resetMinimiToDefault,
       ),
       _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
       _WeeklyReportTab(
@@ -4891,6 +5048,8 @@ class _MyHomeTab extends StatefulWidget {
     required this.onCharacterAdjusted,
     required this.onThemeNameChanged,
     required this.onEquipHome,
+    required this.onSelectMinimiPreset,
+    required this.onResetMinimi,
   });
 
   final AppState state;
@@ -4902,6 +5061,9 @@ class _MyHomeTab extends StatefulWidget {
   final ValueChanged<RoomItemAdjustment> onCharacterAdjusted;
   final ValueChanged<String> onThemeNameChanged;
   final ValueChanged<ShopItem> onEquipHome;
+  final void Function(MinimiCategory category, String itemId)
+  onSelectMinimiPreset;
+  final VoidCallback onResetMinimi;
 
   @override
   State<_MyHomeTab> createState() => _MyHomeTabState();
@@ -5013,6 +5175,12 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 10),
+          _MinimiMvpCard(
+            cosmetics: state.minimiCosmetics,
+            onSelectPreset: widget.onSelectMinimiPreset,
+            onReset: widget.onResetMinimi,
           ),
           const SizedBox(height: 10),
           _MyHomeRoomCard(
@@ -5200,6 +5368,125 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MinimiMvpCard extends StatefulWidget {
+  const _MinimiMvpCard({
+    required this.cosmetics,
+    required this.onSelectPreset,
+    required this.onReset,
+  });
+
+  final MinimiCosmeticState cosmetics;
+  final void Function(MinimiCategory category, String itemId) onSelectPreset;
+  final VoidCallback onReset;
+
+  @override
+  State<_MinimiMvpCard> createState() => _MinimiMvpCardState();
+}
+
+class _MinimiMvpCardState extends State<_MinimiMvpCard> {
+  MinimiCategory _category = MinimiCategory.hair;
+
+  @override
+  Widget build(BuildContext context) {
+    final presets = kMinimiPresetByCategory[_category] ?? const [];
+    final selectedId = widget.cosmetics.selectedId(_category);
+    final hair = (kMinimiPresetByCategory[MinimiCategory.hair] ?? const [])
+        .firstWhere(
+          (e) => e.id == widget.cosmetics.selectedId(MinimiCategory.hair),
+        );
+    final top = (kMinimiPresetByCategory[MinimiCategory.top] ?? const [])
+        .firstWhere(
+          (e) => e.id == widget.cosmetics.selectedId(MinimiCategory.top),
+        );
+    final accessory =
+        (kMinimiPresetByCategory[MinimiCategory.accessory] ?? const [])
+            .firstWhere(
+              (e) =>
+                  e.id == widget.cosmetics.selectedId(MinimiCategory.accessory),
+            );
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.face_6_rounded, color: AppDesign.secondary),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  '미니미 꾸미기 (MVP)',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: widget.onReset,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('기본으로'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F9FF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFDDE8F8)),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '${hair.emoji}  ${accessory.emoji == '➖' ? '' : accessory.emoji}',
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '상의 ${top.emoji}  ${top.label}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: MinimiCategory.values.map((category) {
+              return ChoiceChip(
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(category.icon, size: 16),
+                    const SizedBox(width: 4),
+                    Text(category.label),
+                  ],
+                ),
+                selected: _category == category,
+                onSelected: (_) => setState(() => _category = category),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: presets.map((preset) {
+              return ChoiceChip(
+                label: Text('${preset.emoji} ${preset.label}'),
+                selected: selectedId == preset.id,
+                onSelected: (_) => widget.onSelectPreset(_category, preset.id),
+              );
+            }).toList(),
           ),
         ],
       ),
