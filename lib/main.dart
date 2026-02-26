@@ -5208,11 +5208,19 @@ class _MyHomeTabState extends State<_MyHomeTab> {
 }
 
 class _RoomAnchor {
-  const _RoomAnchor(this.alignment, this.size, this.depth);
+  const _RoomAnchor(
+    this.alignment,
+    this.size,
+    this.depth, {
+    this.translationPivot = const Offset(0.5, 0.5),
+  });
 
   final Alignment alignment;
   final Size size;
   final int depth;
+  final Offset translationPivot;
+
+  bool get isFootpointBased => translationPivot.dy >= 0.9;
 }
 
 class _RoomPlacedItem {
@@ -5243,12 +5251,32 @@ class _RoomObjectTransform {
   double get width => anchor.size.width * adjustment.scale;
   double get height => anchor.size.height * adjustment.scale;
 
-  double get left =>
-      (canvasSize.width - width) * ((anchor.alignment.x + 1) / 2) +
-      adjustment.offsetX;
-  double get top =>
-      (canvasSize.height - height) * ((anchor.alignment.y + 1) / 2) +
-      adjustment.offsetY;
+  double get left {
+    if (anchor.isFootpointBased) {
+      final targetX = canvasSize.width * ((anchor.alignment.x + 1) / 2);
+      return targetX -
+          (width * anchor.translationPivot.dx) +
+          adjustment.offsetX;
+    }
+    return (canvasSize.width - width) * ((anchor.alignment.x + 1) / 2) +
+        adjustment.offsetX;
+  }
+
+  double get top {
+    if (anchor.isFootpointBased) {
+      final targetY = canvasSize.height * ((anchor.alignment.y + 1) / 2);
+      return targetY -
+          (height * anchor.translationPivot.dy) +
+          adjustment.offsetY;
+    }
+    return (canvasSize.height - height) * ((anchor.alignment.y + 1) / 2) +
+        adjustment.offsetY;
+  }
+
+  Offset get worldFootPoint => Offset(
+    left + (width * anchor.translationPivot.dx),
+    top + (height * anchor.translationPivot.dy),
+  );
 
   Rect get worldRect => Rect.fromLTWH(left, top, width, height);
 
@@ -5431,9 +5459,10 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     DecorationZone.floor: _RoomAnchor(Alignment(-0.18, 0.70), Size(124, 67), 5),
   };
   static const _characterAnchor = _RoomAnchor(
-    Alignment(0.03, 0.52),
+    Alignment(0.03, 0.72),
     Size(68, 68),
     4,
+    translationPivot: Offset(0.5, 0.96),
   );
   static const int _alphaHitThreshold = 40;
   static const Set<String> _edgeCleanupItemIds = {
@@ -5602,13 +5631,38 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     required double left,
     required double top,
   }) {
+    final width = anchor.size.width * scale;
+    final height = anchor.size.height * scale;
+
+    if (anchor.isFootpointBased) {
+      final baseFootX = canvasSize.width * ((anchor.alignment.x + 1) / 2);
+      final baseFootY = canvasSize.height * ((anchor.alignment.y + 1) / 2);
+      final footX = left + (width * anchor.translationPivot.dx);
+      final footY = top + (height * anchor.translationPivot.dy);
+      final clampedFootX = footX.clamp(
+        -width * 0.12,
+        canvasSize.width + width * 0.12,
+      );
+      final clampedFootY = footY.clamp(
+        canvasSize.height * 0.42,
+        canvasSize.height,
+      );
+
+      return current.copyWith(
+        offsetX: (clampedFootX - baseFootX).clamp(-140, 140),
+        offsetY: (clampedFootY - baseFootY).clamp(-140, 140),
+        scale: scale.clamp(
+          RoomItemAdjustment.minScale,
+          RoomItemAdjustment.maxScale,
+        ),
+      );
+    }
+
     final baseLeft =
         (canvasSize.width - anchor.size.width) * ((anchor.alignment.x + 1) / 2);
     final baseTop =
         (canvasSize.height - anchor.size.height) *
         ((anchor.alignment.y + 1) / 2);
-    final width = anchor.size.width * scale;
-    final height = anchor.size.height * scale;
 
     final minLeft = -width * 0.6;
     final maxLeft = canvasSize.width - width * 0.4;
@@ -6191,34 +6245,42 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        Widget content = Listener(
-          key: _miniRoomCanvasKey,
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: (event) => _onPointerDown(event, c),
-          onPointerMove: (event) => _onPointerMove(event, c),
-          onPointerUp: (event) =>
-              _onPointerUpOrCancel(event, c, canceled: false),
-          onPointerCancel: (event) =>
-              _onPointerUpOrCancel(event, c, canceled: true),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: _MiniRoomVisual(
-              state: widget.state.copyWith(
-                decorationAdjustments: {..._draftDecorationAdjustments},
-                characterAdjustment: _draftCharacterAdjustment,
+        Widget content = ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              IgnorePointer(
+                child: _MiniRoomVisual(
+                  state: widget.state.copyWith(
+                    decorationAdjustments: {..._draftDecorationAdjustments},
+                    characterAdjustment: _draftCharacterAdjustment,
+                  ),
+                  itemById: widget.itemById,
+                  showEquipFx: widget.showEquipFx,
+                  equipFxLabel: widget.equipFxLabel,
+                  selectedTarget: _selectedTarget,
+                  selectionPulse: _selectionPulseController,
+                  debugOverlayEnabled: kDebugMode && _debugHitOverlayVisible,
+                  debugWorldTouchPoint: _debugWorldTouchPoint,
+                  debugRawTouchPoint: _debugRawTouchPoint,
+                  debugLocalPoint: _debugLocalPoint,
+                  debugVisualRect: _debugVisualRect,
+                  debugCalibrationSummary: _debugCalibrationSummary,
+                ),
               ),
-              itemById: widget.itemById,
-              showEquipFx: widget.showEquipFx,
-              equipFxLabel: widget.equipFxLabel,
-              selectedTarget: _selectedTarget,
-              selectionPulse: _selectionPulseController,
-              debugOverlayEnabled: kDebugMode && _debugHitOverlayVisible,
-              debugWorldTouchPoint: _debugWorldTouchPoint,
-              debugRawTouchPoint: _debugRawTouchPoint,
-              debugLocalPoint: _debugLocalPoint,
-              debugVisualRect: _debugVisualRect,
-              debugCalibrationSummary: _debugCalibrationSummary,
-            ),
+              Listener(
+                key: _miniRoomCanvasKey,
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (event) => _onPointerDown(event, c),
+                onPointerMove: (event) => _onPointerMove(event, c),
+                onPointerUp: (event) =>
+                    _onPointerUpOrCancel(event, c, canceled: false),
+                onPointerCancel: (event) =>
+                    _onPointerUpOrCancel(event, c, canceled: true),
+                child: const SizedBox.expand(),
+              ),
+            ],
           ),
         );
 
@@ -6336,9 +6398,10 @@ class _MiniRoomVisual extends StatelessWidget {
     DecorationZone.floor: _RoomAnchor(Alignment(-0.18, 0.70), Size(124, 67), 5),
   };
   static const _characterAnchor = _RoomAnchor(
-    Alignment(0.03, 0.52),
+    Alignment(0.03, 0.72),
     Size(68, 68),
     4,
+    translationPivot: Offset(0.5, 0.96),
   );
 
   List<_RoomPlacedItem> _buildItems() {
