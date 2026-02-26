@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.26-r36';
+const kAppUiVersion = 'ui-2026.02.26-r38';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5229,6 +5229,58 @@ class _RoomPlacedItem {
   final RoomItemAdjustment adjustment;
 }
 
+class _RoomObjectTransform {
+  const _RoomObjectTransform({
+    required this.anchor,
+    required this.adjustment,
+    required this.canvasSize,
+  });
+
+  final _RoomAnchor anchor;
+  final RoomItemAdjustment adjustment;
+  final Size canvasSize;
+
+  double get width => anchor.size.width * adjustment.scale;
+  double get height => anchor.size.height * adjustment.scale;
+
+  double get left =>
+      (canvasSize.width - width) * ((anchor.alignment.x + 1) / 2) +
+      adjustment.offsetX;
+  double get top =>
+      (canvasSize.height - height) * ((anchor.alignment.y + 1) / 2) +
+      adjustment.offsetY;
+
+  Rect get worldRect => Rect.fromLTWH(left, top, width, height);
+
+  Matrix4 get objectToWorld => Matrix4.identity()
+    ..translateByDouble(left, top, 0, 1)
+    ..scaleByDouble(width, height, 1, 1);
+
+  Matrix4? get worldToObject {
+    final inverted = Matrix4.copy(objectToWorld);
+    final ok = inverted.invert();
+    return ok != 0 ? inverted : null;
+  }
+
+  Offset objectToWorldPoint(Offset objectPoint) {
+    return MatrixUtils.transformPoint(objectToWorld, objectPoint);
+  }
+
+  Offset? worldToObjectPoint(Offset worldPoint) {
+    final inverse = worldToObject;
+    if (inverse == null) return null;
+    return MatrixUtils.transformPoint(inverse, worldPoint);
+  }
+
+  _RoomObjectTransform copyWithAdjustment(RoomItemAdjustment nextAdjustment) {
+    return _RoomObjectTransform(
+      anchor: anchor,
+      adjustment: nextAdjustment,
+      canvasSize: canvasSize,
+    );
+  }
+}
+
 class _RoomTarget {
   const _RoomTarget.decoration(this.zone)
     : isCharacter = false,
@@ -5525,52 +5577,46 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       ..sort((a, b) => a.anchor.depth.compareTo(b.anchor.depth));
   }
 
-  Rect _rectFromAdjustment({
+  _RoomObjectTransform _transformFor({
     required _RoomAnchor anchor,
     required RoomItemAdjustment adjustment,
-    required double maxWidth,
-    required double maxHeight,
+    required Size canvasSize,
   }) {
-    final width = anchor.size.width * adjustment.scale;
-    final height = anchor.size.height * adjustment.scale;
-    final left =
-        (maxWidth - width) * ((anchor.alignment.x + 1) / 2) +
-        adjustment.offsetX;
-    final top =
-        (maxHeight - height) * ((anchor.alignment.y + 1) / 2) +
-        adjustment.offsetY;
-    return Rect.fromLTWH(left, top, width, height);
+    return _RoomObjectTransform(
+      anchor: anchor,
+      adjustment: adjustment,
+      canvasSize: canvasSize,
+    );
   }
 
-  RoomItemAdjustment _adjustmentFromRect({
+  RoomItemAdjustment _adjustmentFromTransform({
     required _RoomAnchor anchor,
     required RoomItemAdjustment current,
-    required Rect rect,
-    required double maxWidth,
-    required double maxHeight,
+    required Size canvasSize,
+    required double scale,
+    required double left,
+    required double top,
   }) {
-    final baseWidth = anchor.size.width;
-    final baseHeight = anchor.size.height;
-    final baseLeft = (maxWidth - baseWidth) * ((anchor.alignment.x + 1) / 2);
-    final baseTop = (maxHeight - baseHeight) * ((anchor.alignment.y + 1) / 2);
-    final scale = (rect.width / baseWidth).clamp(
-      RoomItemAdjustment.minScale,
-      RoomItemAdjustment.maxScale,
-    );
-    final scaledHeight = baseHeight * scale;
+    final baseLeft =
+        (canvasSize.width - anchor.size.width) * ((anchor.alignment.x + 1) / 2);
+    final baseTop =
+        (canvasSize.height - anchor.size.height) *
+        ((anchor.alignment.y + 1) / 2);
+    final width = anchor.size.width * scale;
+    final height = anchor.size.height * scale;
 
-    final minLeft = -rect.width * 0.6;
-    final maxLeft = maxWidth - rect.width * 0.4;
-    final minTop = -scaledHeight * 0.6;
-    final maxTop = maxHeight - scaledHeight * 0.3;
-
-    final left = rect.left.clamp(minLeft, maxLeft);
-    final top = rect.top.clamp(minTop, maxTop);
+    final minLeft = -width * 0.6;
+    final maxLeft = canvasSize.width - width * 0.4;
+    final minTop = -height * 0.6;
+    final maxTop = canvasSize.height - height * 0.3;
 
     return current.copyWith(
-      offsetX: (left - baseLeft).clamp(-140, 140),
-      offsetY: (top - baseTop).clamp(-140, 140),
-      scale: scale,
+      offsetX: (left.clamp(minLeft, maxLeft) - baseLeft).clamp(-140, 140),
+      offsetY: (top.clamp(minTop, maxTop) - baseTop).clamp(-140, 140),
+      scale: scale.clamp(
+        RoomItemAdjustment.minScale,
+        RoomItemAdjustment.maxScale,
+      ),
     );
   }
 
@@ -5595,38 +5641,36 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
         )
         .toList();
 
+    final canvasSize = Size(maxWidth, maxHeight);
     final candidates = <({_RoomTarget target, ShopItem item, Rect visualRect})>[
       for (final placed in topItems)
         (
           target: _RoomTarget.decoration(placed.zone),
           item: placed.item,
-          visualRect: _rectFromAdjustment(
+          visualRect: _transformFor(
             anchor: placed.anchor,
             adjustment: placed.adjustment,
-            maxWidth: maxWidth,
-            maxHeight: maxHeight,
-          ),
+            canvasSize: canvasSize,
+          ).worldRect,
         ),
       (
         target: const _RoomTarget.character(),
         item: widget.state.equippedCharacter,
-        visualRect: _rectFromAdjustment(
+        visualRect: _transformFor(
           anchor: _characterAnchor,
           adjustment: _draftCharacterAdjustment,
-          maxWidth: maxWidth,
-          maxHeight: maxHeight,
-        ),
+          canvasSize: canvasSize,
+        ).worldRect,
       ),
       for (final placed in bottomItems)
         (
           target: _RoomTarget.decoration(placed.zone),
           item: placed.item,
-          visualRect: _rectFromAdjustment(
+          visualRect: _transformFor(
             anchor: placed.anchor,
             adjustment: placed.adjustment,
-            maxWidth: maxWidth,
-            maxHeight: maxHeight,
-          ),
+            canvasSize: canvasSize,
+          ).worldRect,
         ),
     ];
 
@@ -5739,15 +5783,16 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
 
     final anchor = _anchorFor(target);
     final adjustment = _currentAdjustment(target);
-    final baseRect = _rectFromAdjustment(
+    final baseTransform = _transformFor(
       anchor: anchor,
       adjustment: adjustment,
-      maxWidth: canvasSize.width,
-      maxHeight: canvasSize.height,
+      canvasSize: canvasSize,
     );
-    final pivot = Offset(
-      ((point.dx - baseRect.left) / baseRect.width).clamp(0.0, 1.0),
-      ((point.dy - baseRect.top) / baseRect.height).clamp(0.0, 1.0),
+    final pivot =
+        (baseTransform.worldToObjectPoint(point) ?? const Offset(0.5, 0.5));
+    final clampedPivot = Offset(
+      pivot.dx.clamp(0.0, 1.0),
+      pivot.dy.clamp(0.0, 1.0),
     );
 
     setState(() {
@@ -5756,7 +5801,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
         target: target,
         anchor: anchor,
         baseAdjustment: adjustment,
-        pivot: pivot,
+        pivot: clampedPivot,
         maxScale: _maxScaleForTarget(target),
       );
       _pendingCommitAdjustment = null;
@@ -5778,14 +5823,14 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     final height = baseline.anchor.size.height * nextScale;
     final left = point.dx - (baseline.pivot.dx * width);
     final top = point.dy - (baseline.pivot.dy * height);
-    final rect = Rect.fromLTWH(left, top, width, height);
 
-    final next = _adjustmentFromRect(
+    final next = _adjustmentFromTransform(
       anchor: baseline.anchor,
       current: baseline.baseAdjustment,
-      rect: rect,
-      maxWidth: canvasSize.width,
-      maxHeight: canvasSize.height,
+      canvasSize: canvasSize,
+      scale: nextScale,
+      left: left,
+      top: top,
     );
 
     setState(() {
@@ -5821,12 +5866,11 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
 
     if (target != null) {
       if (target.isCharacter) {
-        visualRect = _rectFromAdjustment(
+        visualRect = _transformFor(
           anchor: _characterAnchor,
           adjustment: _draftCharacterAdjustment,
-          maxWidth: maxWidth,
-          maxHeight: maxHeight,
-        );
+          canvasSize: Size(maxWidth, maxHeight),
+        ).worldRect;
         mask = _alphaMaskCache[widget.state.equippedCharacter.id];
       } else {
         _RoomPlacedItem? placed;
@@ -5837,12 +5881,11 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
           }
         }
         if (placed != null) {
-          visualRect = _rectFromAdjustment(
+          visualRect = _transformFor(
             anchor: placed.anchor,
             adjustment: placed.adjustment,
-            maxWidth: maxWidth,
-            maxHeight: maxHeight,
-          );
+            canvasSize: Size(maxWidth, maxHeight),
+          ).worldRect;
           mask = _alphaMaskCache[placed.item.id];
         }
       }
@@ -6002,15 +6045,11 @@ class _MiniRoomVisual extends StatelessWidget {
     required double maxWidth,
     required double maxHeight,
   }) {
-    final width = anchor.size.width * adjustment.scale;
-    final height = anchor.size.height * adjustment.scale;
-    final left =
-        (maxWidth - width) * ((anchor.alignment.x + 1) / 2) +
-        adjustment.offsetX;
-    final top =
-        (maxHeight - height) * ((anchor.alignment.y + 1) / 2) +
-        adjustment.offsetY;
-    return Rect.fromLTWH(left, top, width, height);
+    return _RoomObjectTransform(
+      anchor: anchor,
+      adjustment: adjustment,
+      canvasSize: Size(maxWidth, maxHeight),
+    ).worldRect;
   }
 
   @override
