@@ -477,46 +477,11 @@ class _BootstrapLoadingView extends StatelessWidget {
     return const Scaffold(
       backgroundColor: Color(0xFFECF6FF),
       body: Center(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.all(Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x180D1632),
-                blurRadius: 16,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.explore_rounded,
-                  size: 34,
-                  color: AppDesign.secondary,
-                ),
-                SizedBox(height: 10),
-                Text(
-                  '경제탐험대 준비중',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    color: AppDesign.textStrong,
-                  ),
-                ),
-                SizedBox(height: 10),
-                SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(strokeWidth: 3),
-                ),
-              ],
-            ),
-          ),
+        child: Image(
+          image: AssetImage('assets/branding/mascot_icon_transparent.png'),
+          width: 96,
+          height: 96,
+          filterQuality: FilterQuality.high,
         ),
       ),
     );
@@ -5353,14 +5318,9 @@ class _MyHomeRoomCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             const Text(
-              '오브젝트 실루엣(불투명 픽셀)만 터치로 선택됩니다.',
+              '오브젝트를 직접 터치해 위치/크기를 조절해요.',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
             ),
-            if (kDebugMode)
-              const Text(
-                '디버그: 미니룸을 길게 눌러 터치/로컬 좌표 오버레이 토글',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-              ),
             const SizedBox(height: 10),
             AspectRatio(
               aspectRatio: 1.32,
@@ -5432,6 +5392,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       <String, _AlphaMaskData?>{};
   final Set<String> _alphaMaskLoading = <String>{};
   final GlobalKey _editorGestureKey = GlobalKey();
+  final GlobalKey _miniRoomCanvasKey = GlobalKey();
   _RoomTarget? _selectedTarget;
   _GestureBaseline? _baseline;
   late Map<DecorationZone, RoomItemAdjustment> _draftDecorationAdjustments;
@@ -5722,6 +5683,30 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     ).maxScale.clamp(RoomItemAdjustment.minScale, RoomItemAdjustment.maxScale);
   }
 
+  RenderBox? _miniRoomCanvasRenderBox() {
+    final context = _miniRoomCanvasKey.currentContext;
+    final renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+    return renderObject;
+  }
+
+  Size _canvasSize(BoxConstraints c) {
+    final box = _miniRoomCanvasRenderBox();
+    return box?.size ?? Size(c.maxWidth, c.maxHeight);
+  }
+
+  Offset _canvasLocalPointFromGlobal(Offset globalPoint, BoxConstraints c) {
+    final box = _miniRoomCanvasRenderBox();
+    final local =
+        box?.globalToLocal(globalPoint) ??
+        (_editorLocalFromGlobal(globalPoint) ?? globalPoint);
+    final size = box?.size ?? Size(c.maxWidth, c.maxHeight);
+    return Offset(
+      local.dx.clamp(0.0, size.width),
+      local.dy.clamp(0.0, size.height),
+    );
+  }
+
   Offset? _editorLocalFromGlobal(Offset globalPoint) {
     final context = _editorGestureKey.currentContext;
     final renderObject = context?.findRenderObject();
@@ -5729,23 +5714,25 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return renderObject.globalToLocal(globalPoint);
   }
 
-  Offset _clampPointToCanvas(Offset point, BoxConstraints c) {
-    return Offset(
-      point.dx.clamp(0.0, c.maxWidth),
-      point.dy.clamp(0.0, c.maxHeight),
-    );
-  }
-
   void _onScaleStart(ScaleStartDetails details, BoxConstraints c) {
     final items = _buildItems();
-    final point = _clampPointToCanvas(
-      _editorLocalFromGlobal(details.focalPoint) ?? details.localFocalPoint,
-      c,
+    final canvasSize = _canvasSize(c);
+    final point = _canvasLocalPointFromGlobal(details.focalPoint, c);
+    final target = _hitTestTarget(
+      point,
+      items,
+      canvasSize.width,
+      canvasSize.height,
     );
-    final target = _hitTestTarget(point, items, c.maxWidth, c.maxHeight);
 
     if (kDebugMode) {
-      _captureDebugTouch(point, items, c.maxWidth, c.maxHeight, target: target);
+      _captureDebugTouch(
+        point,
+        items,
+        canvasSize.width,
+        canvasSize.height,
+        target: target,
+      );
     }
 
     if (target == null) return;
@@ -5755,8 +5742,8 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     final baseRect = _rectFromAdjustment(
       anchor: anchor,
       adjustment: adjustment,
-      maxWidth: c.maxWidth,
-      maxHeight: c.maxHeight,
+      maxWidth: canvasSize.width,
+      maxHeight: canvasSize.height,
     );
     final pivot = Offset(
       ((point.dx - baseRect.left) / baseRect.width).clamp(0.0, 1.0),
@@ -5781,10 +5768,8 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     final baseline = _baseline;
     if (baseline == null) return;
 
-    final point = _clampPointToCanvas(
-      _editorLocalFromGlobal(details.focalPoint) ?? details.localFocalPoint,
-      c,
-    );
+    final canvasSize = _canvasSize(c);
+    final point = _canvasLocalPointFromGlobal(details.focalPoint, c);
     final nextScale = (baseline.baseAdjustment.scale * details.scale).clamp(
       RoomItemAdjustment.minScale,
       baseline.maxScale,
@@ -5799,8 +5784,8 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       anchor: baseline.anchor,
       current: baseline.baseAdjustment,
       rect: rect,
-      maxWidth: c.maxWidth,
-      maxHeight: c.maxHeight,
+      maxWidth: canvasSize.width,
+      maxHeight: canvasSize.height,
     );
 
     setState(() {
@@ -5882,11 +5867,14 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
           onPointerDown: (event) {
             widget.onInteractionLockChanged(true);
             if (kDebugMode && _debugHitOverlayVisible) {
-              final local = _clampPointToCanvas(
-                _editorLocalFromGlobal(event.position) ?? event.localPosition,
-                c,
+              final local = _canvasLocalPointFromGlobal(event.position, c);
+              final canvasSize = _canvasSize(c);
+              _captureDebugTouch(
+                local,
+                _buildItems(),
+                canvasSize.width,
+                canvasSize.height,
               );
-              _captureDebugTouch(local, _buildItems(), c.maxWidth, c.maxHeight);
             }
           },
           onPointerUp: (_) {
@@ -5922,6 +5910,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
                 debugWorldTouchPoint: _debugWorldTouchPoint,
                 debugLocalPoint: _debugLocalPoint,
                 debugVisualRect: _debugVisualRect,
+                canvasKey: _miniRoomCanvasKey,
               ),
             ),
           ),
@@ -5959,6 +5948,7 @@ class _MiniRoomVisual extends StatelessWidget {
     this.debugWorldTouchPoint,
     this.debugLocalPoint,
     this.debugVisualRect,
+    this.canvasKey,
   });
 
   final AppState state;
@@ -5971,6 +5961,7 @@ class _MiniRoomVisual extends StatelessWidget {
   final Offset? debugWorldTouchPoint;
   final Offset? debugLocalPoint;
   final Rect? debugVisualRect;
+  final Key? canvasKey;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(72, 46), 1),
@@ -6074,86 +6065,89 @@ class _MiniRoomVisual extends StatelessWidget {
           maxHeight: c.maxHeight,
         );
 
-        return Stack(
-          children: [
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(painter: _MiniRoomShellPainter()),
-              ),
-            ),
-            if (homeVisual.assetPath != null)
-              Positioned.fill(
+        return SizedBox.expand(
+          key: canvasKey,
+          child: Stack(
+            children: [
+              const Positioned.fill(
                 child: IgnorePointer(
-                  child: Image.asset(
-                    homeVisual.assetPath!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              theme.wallGradient.first,
-                              theme.floorGradient.last,
-                            ],
+                  child: CustomPaint(painter: _MiniRoomShellPainter()),
+                ),
+              ),
+              if (homeVisual.assetPath != null)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Image.asset(
+                      homeVisual.assetPath!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                theme.wallGradient.first,
+                                theme.floorGradient.last,
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
+              ...topItems.map(buildPlaced),
+              Positioned(
+                left: characterRect.left,
+                top: characterRect.top,
+                width: characterRect.width,
+                height: characterRect.height,
+                child: _SelectionGlow(
+                  selected: selectedTarget?.isCharacter == true,
+                  pulse: selectionPulse,
+                  child: _DecorationObject(item: state.equippedCharacter),
+                ),
               ),
-            ...topItems.map(buildPlaced),
-            Positioned(
-              left: characterRect.left,
-              top: characterRect.top,
-              width: characterRect.width,
-              height: characterRect.height,
-              child: _SelectionGlow(
-                selected: selectedTarget?.isCharacter == true,
-                pulse: selectionPulse,
-                child: _DecorationObject(item: state.equippedCharacter),
-              ),
-            ),
-            ...bottomItems.map(buildPlaced),
-            if (debugOverlayEnabled)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _MiniRoomHitDebugPainter(
-                      worldPoint: debugWorldTouchPoint,
-                      localPoint: debugLocalPoint,
-                      visualRect: debugVisualRect,
+              ...bottomItems.map(buildPlaced),
+              if (debugOverlayEnabled)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _MiniRoomHitDebugPainter(
+                        worldPoint: debugWorldTouchPoint,
+                        localPoint: debugLocalPoint,
+                        visualRect: debugVisualRect,
+                      ),
+                    ),
+                  ),
+                ),
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 220),
+                opacity: showEquipFx ? 1 : 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFCE1),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFFFE083)),
+                    ),
+                    child: Text(
+                      '✨ $equipFxLabel',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
               ),
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 220),
-              opacity: showEquipFx ? 1 : 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFCE1),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: const Color(0xFFFFE083)),
-                  ),
-                  child: Text(
-                    '✨ $equipFxLabel',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
