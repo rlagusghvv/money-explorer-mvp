@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.26-r41';
+const kAppUiVersion = 'ui-2026.02.26-r43';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5459,6 +5459,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   Offset? _debugLocalPoint;
   Rect? _debugVisualRect;
   String? _debugCalibrationSummary;
+  final List<String> _touchTraceLines = <String>[];
 
   @override
   void initState() {
@@ -5766,7 +5767,8 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return box?.size ?? Size(c.maxWidth, c.maxHeight);
   }
 
-  Offset _canvasLocalPointFromGlobal(Offset globalPoint, BoxConstraints c) {
+  // r43: single source of truth for touch calibration (global -> canvas local).
+  Offset _applyTouchCalibration(Offset globalPoint, BoxConstraints c) {
     final canvasBox = _miniRoomCanvasRenderBox();
     final canvasSize = _canvasSize(c);
     final local = canvasBox?.globalToLocal(globalPoint) ?? globalPoint;
@@ -5784,18 +5786,62 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     );
   }
 
+  void _appendTouchTrace({
+    required String phase,
+    required Offset rawGlobal,
+    required Offset local,
+    _RoomTarget? hitTarget,
+    _RoomObjectTransform? transform,
+  }) {
+    final hit = hitTarget?.key ?? 'none';
+    final rect = transform?.worldRect;
+    final transformSummary = rect == null
+        ? 'n/a'
+        : 'left=${rect.left.toStringAsFixed(1)},top=${rect.top.toStringAsFixed(1)},w=${rect.width.toStringAsFixed(1)},h=${rect.height.toStringAsFixed(1)}';
+    _touchTraceLines.add(
+      '$phase | global(${rawGlobal.dx.toStringAsFixed(1)},${rawGlobal.dy.toStringAsFixed(1)}) '
+      '| local(${local.dx.toStringAsFixed(1)},${local.dy.toStringAsFixed(1)}) '
+      '| hit=$hit | transform=$transformSummary',
+    );
+    if (_touchTraceLines.length > 80) {
+      _touchTraceLines.removeRange(0, _touchTraceLines.length - 80);
+    }
+    if (kDebugMode) {
+      debugPrint('[r43-touch-trace] ${_touchTraceLines.last}');
+    }
+  }
+
+  _RoomObjectTransform? _transformForTarget(
+    _RoomTarget? target,
+    Size canvasSize,
+  ) {
+    if (target == null) return null;
+    if (target.isCharacter) {
+      return _transformFor(
+        anchor: _characterAnchor,
+        adjustment: _draftCharacterAdjustment,
+        canvasSize: canvasSize,
+      );
+    }
+    final zone = target.zone;
+    final anchor = zone == null ? null : _anchors[zone];
+    if (anchor == null) return null;
+    return _transformFor(
+      anchor: anchor,
+      adjustment:
+          _draftDecorationAdjustments[zone] ?? RoomItemAdjustment.defaults,
+      canvasSize: canvasSize,
+    );
+  }
+
   static const double _dragDeadZonePx = 5.0;
   static const double _dragHysteresisPx = 8.0;
   static const double _pinchDeadZonePx = 3.0;
   static const double _pinchHysteresisPx = 6.0;
 
-  Offset _canvasLocalPointFromEvent(PointerEvent event, BoxConstraints c) {
-    return _canvasLocalPointFromGlobal(event.position, c);
-  }
-
   void _onPointerDown(PointerDownEvent event, BoxConstraints c) {
     final canvasSize = _canvasSize(c);
-    final point = _canvasLocalPointFromEvent(event, c);
+    final point = _applyTouchCalibration(event.position, c);
 
     final prev = _touchSession;
     if (prev == null) {
@@ -5817,6 +5863,13 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
           target: target,
         );
       }
+      _appendTouchTrace(
+        phase: 'down',
+        rawGlobal: event.position,
+        local: point,
+        hitTarget: target,
+        transform: _transformForTarget(target, canvasSize),
+      );
 
       if (target == null) return;
 
@@ -5841,6 +5894,13 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     }
 
     final nextPointers = {...prev.pointers, event.pointer: point};
+    _appendTouchTrace(
+      phase: 'down+',
+      rawGlobal: event.position,
+      local: point,
+      hitTarget: prev.target,
+      transform: _transformForTarget(prev.target, canvasSize),
+    );
     final nextFocal = _focalPoint(nextPointers.values);
     final next = prev.copyWith(
       pointers: nextPointers,
@@ -5859,7 +5919,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     if (session == null || !session.pointers.containsKey(event.pointer)) return;
 
     if (kDebugMode) _debugRawTouchPoint = event.position;
-    final local = _canvasLocalPointFromEvent(event, c);
+    final local = _applyTouchCalibration(event.position, c);
     final nextPointers = {...session.pointers, event.pointer: local};
     final focal = _focalPoint(nextPointers.values);
     final travel = (focal - session.baseLocalFocal).distance;
@@ -5920,10 +5980,18 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       cancelCount: cancels,
     );
 
-    final nextAdjustment = _nextAdjustmentFromSession(updated, _canvasSize(c));
+    final canvasSize = _canvasSize(c);
+    final nextAdjustment = _nextAdjustmentFromSession(updated, canvasSize);
     if (nextAdjustment != null) {
       _applyDraftAdjustment(updated.target, nextAdjustment);
     }
+    _appendTouchTrace(
+      phase: 'move:${updated.mode.name}',
+      rawGlobal: event.position,
+      local: local,
+      hitTarget: updated.target,
+      transform: _transformForTarget(updated.target, canvasSize),
+    );
 
     setState(() {
       _touchSession = updated;
@@ -5942,6 +6010,15 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     }
 
     final nextPointers = {...session.pointers}..remove(event.pointer);
+    final local = _applyTouchCalibration(event.position, c);
+    final canvasSize = _canvasSize(c);
+    _appendTouchTrace(
+      phase: canceled ? 'cancel' : 'up',
+      rawGlobal: event.position,
+      local: local,
+      hitTarget: session.target,
+      transform: _transformForTarget(session.target, canvasSize),
+    );
     if (nextPointers.isEmpty) {
       final finalAdjustment = _currentAdjustment(session.target);
       _commitAdjustment(session.target, finalAdjustment);
