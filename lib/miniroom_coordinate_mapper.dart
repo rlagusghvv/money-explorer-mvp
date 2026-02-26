@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
+
 class MiniRoomMappedPoint {
   const MiniRoomMappedPoint({
     required this.pixel,
@@ -14,6 +16,8 @@ class MiniRoomMappedPoint {
 
 class MiniRoomImageMapper {
   const MiniRoomImageMapper._();
+
+  static const Rect _unitRect = Rect.fromLTWH(0, 0, 1, 1);
 
   static Rect? containDrawRect({
     required Rect visualRect,
@@ -53,6 +57,51 @@ class MiniRoomImageMapper {
 
     final nx = (worldPoint.dx - drawRect.left) / drawRect.width;
     final ny = (worldPoint.dy - drawRect.top) / drawRect.height;
+    return _mapNormalizedToPixel(
+      nx: nx,
+      ny: ny,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+      drawRect: drawRect,
+    );
+  }
+
+  static MiniRoomMappedPoint? mapWorldPointToPixelWithTransform({
+    required Offset worldPoint,
+    required Matrix4? worldToObject,
+    required int imageWidth,
+    required int imageHeight,
+  }) {
+    if (worldToObject == null) return null;
+    final v = worldToObject.transform3(
+      Vector3(worldPoint.dx, worldPoint.dy, 0),
+    );
+    final objectPoint = Offset(v.x, v.y);
+    final drawRect = containDrawRect(
+      visualRect: _unitRect,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+    );
+    if (drawRect == null || !drawRect.contains(objectPoint)) return null;
+
+    final nx = (objectPoint.dx - drawRect.left) / drawRect.width;
+    final ny = (objectPoint.dy - drawRect.top) / drawRect.height;
+    return _mapNormalizedToPixel(
+      nx: nx,
+      ny: ny,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+      drawRect: drawRect,
+    );
+  }
+
+  static MiniRoomMappedPoint? _mapNormalizedToPixel({
+    required double nx,
+    required double ny,
+    required int imageWidth,
+    required int imageHeight,
+    required Rect drawRect,
+  }) {
     if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
 
     final px = (nx * (imageWidth - 1)).round().clamp(0, imageWidth - 1);

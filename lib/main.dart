@@ -5316,18 +5316,22 @@ class _AlphaMaskData {
 
   MiniRoomMappedPoint? mapWorldPointToPixel(
     Offset worldPoint,
-    Rect visualRect,
+    _RoomObjectTransform transform,
   ) {
-    return MiniRoomImageMapper.mapWorldPointToPixel(
+    return MiniRoomImageMapper.mapWorldPointToPixelWithTransform(
       worldPoint: worldPoint,
-      visualRect: visualRect,
+      worldToObject: transform.worldToObject,
       imageWidth: width,
       imageHeight: height,
     );
   }
 
-  bool hitTest(Offset worldPoint, Rect visualRect, {required int threshold}) {
-    final mapped = mapWorldPointToPixel(worldPoint, visualRect);
+  bool hitTest(
+    Offset worldPoint,
+    _RoomObjectTransform transform, {
+    required int threshold,
+  }) {
+    final mapped = mapWorldPointToPixel(worldPoint, transform);
     if (mapped == null) return false;
     final px = mapped.pixel.dx.toInt();
     final py = mapped.pixel.dy.toInt();
@@ -5642,43 +5646,66 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
         .toList();
 
     final canvasSize = Size(maxWidth, maxHeight);
-    final candidates = <({_RoomTarget target, ShopItem item, Rect visualRect})>[
-      for (final placed in topItems)
-        (
-          target: _RoomTarget.decoration(placed.zone),
-          item: placed.item,
-          visualRect: _transformFor(
-            anchor: placed.anchor,
-            adjustment: placed.adjustment,
-            canvasSize: canvasSize,
-          ).worldRect,
-        ),
-      (
-        target: const _RoomTarget.character(),
-        item: widget.state.equippedCharacter,
-        visualRect: _transformFor(
-          anchor: _characterAnchor,
-          adjustment: _draftCharacterAdjustment,
-          canvasSize: canvasSize,
-        ).worldRect,
-      ),
-      for (final placed in bottomItems)
-        (
-          target: _RoomTarget.decoration(placed.zone),
-          item: placed.item,
-          visualRect: _transformFor(
-            anchor: placed.anchor,
-            adjustment: placed.adjustment,
-            canvasSize: canvasSize,
-          ).worldRect,
-        ),
-    ];
+    final candidates =
+        <
+          ({
+            _RoomTarget target,
+            ShopItem item,
+            Rect visualRect,
+            _RoomObjectTransform transform,
+          })
+        >[
+          for (final placed in topItems)
+            (
+              target: _RoomTarget.decoration(placed.zone),
+              item: placed.item,
+              transform: _transformFor(
+                anchor: placed.anchor,
+                adjustment: placed.adjustment,
+                canvasSize: canvasSize,
+              ),
+              visualRect: _transformFor(
+                anchor: placed.anchor,
+                adjustment: placed.adjustment,
+                canvasSize: canvasSize,
+              ).worldRect,
+            ),
+          (
+            target: const _RoomTarget.character(),
+            item: widget.state.equippedCharacter,
+            transform: _transformFor(
+              anchor: _characterAnchor,
+              adjustment: _draftCharacterAdjustment,
+              canvasSize: canvasSize,
+            ),
+            visualRect: _transformFor(
+              anchor: _characterAnchor,
+              adjustment: _draftCharacterAdjustment,
+              canvasSize: canvasSize,
+            ).worldRect,
+          ),
+          for (final placed in bottomItems)
+            (
+              target: _RoomTarget.decoration(placed.zone),
+              item: placed.item,
+              transform: _transformFor(
+                anchor: placed.anchor,
+                adjustment: placed.adjustment,
+                canvasSize: canvasSize,
+              ),
+              visualRect: _transformFor(
+                anchor: placed.anchor,
+                adjustment: placed.adjustment,
+                canvasSize: canvasSize,
+              ).worldRect,
+            ),
+        ];
 
     for (var i = candidates.length - 1; i >= 0; i--) {
       final c = candidates[i];
       final mask = _alphaMaskCache[c.item.id];
       if (mask != null &&
-          mask.hitTest(point, c.visualRect, threshold: _alphaHitThreshold)) {
+          mask.hitTest(point, c.transform, threshold: _alphaHitThreshold)) {
         return c.target.withRect(c.visualRect);
       }
       if (!_alphaMaskCache.containsKey(c.item.id) &&
@@ -5856,7 +5883,8 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
           basePinch = pinch;
           adjustmentAtModeStart = _currentAdjustment(session.target);
         }
-      } else if (nextMode == _TouchMode.pendingPinch || nextMode == _TouchMode.pending) {
+      } else if (nextMode == _TouchMode.pendingPinch ||
+          nextMode == _TouchMode.pending) {
         if (pinchDelta >= _pinchDeadZonePx) {
           nextMode = _TouchMode.pinching;
           modeSwitches += 1;
@@ -5871,7 +5899,8 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
         modeSwitches += 1;
         baseFocal = focal;
         adjustmentAtModeStart = _currentAdjustment(session.target);
-      } else if ((nextMode == _TouchMode.pending || nextMode == _TouchMode.pendingPinch) &&
+      } else if ((nextMode == _TouchMode.pending ||
+              nextMode == _TouchMode.pendingPinch) &&
           travel >= _dragDeadZonePx) {
         nextMode = _TouchMode.dragging;
         modeSwitches += 1;
@@ -5901,7 +5930,11 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     });
   }
 
-  void _onPointerUpOrCancel(PointerEvent event, BoxConstraints c, {required bool canceled}) {
+  void _onPointerUpOrCancel(
+    PointerEvent event,
+    BoxConstraints c, {
+    required bool canceled,
+  }) {
     final session = _touchSession;
     if (session == null || !session.pointers.containsKey(event.pointer)) {
       if (_touchSession == null) widget.onInteractionLockChanged(false);
@@ -5913,7 +5946,9 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       final finalAdjustment = _currentAdjustment(session.target);
       _commitAdjustment(session.target, finalAdjustment);
       if (kDebugMode) {
-        debugPrint('[miniroom-touch] target=${session.target.key} modeSwitches=${session.modeSwitchCount} cancels=${session.cancelCount + (canceled ? 1 : 0)}');
+        debugPrint(
+          '[miniroom-touch] target=${session.target.key} modeSwitches=${session.modeSwitchCount} cancels=${session.cancelCount + (canceled ? 1 : 0)}',
+        );
       }
       setState(() {
         _touchSession = null;
@@ -5929,13 +5964,18 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       currentLocalFocal: focal,
       basePinchDistance: _pinchDistance(nextPointers),
       adjustmentAtModeStart: _currentAdjustment(session.target),
-      mode: nextPointers.length >= 2 ? _TouchMode.pendingPinch : _TouchMode.pending,
+      mode: nextPointers.length >= 2
+          ? _TouchMode.pendingPinch
+          : _TouchMode.pending,
       cancelCount: session.cancelCount + (canceled ? 1 : 0),
     );
     setState(() => _touchSession = reduced);
   }
 
-  RoomItemAdjustment? _nextAdjustmentFromSession(_TouchSession session, Size canvasSize) {
+  RoomItemAdjustment? _nextAdjustmentFromSession(
+    _TouchSession session,
+    Size canvasSize,
+  ) {
     final current = _currentAdjustment(session.target);
     if (session.mode == _TouchMode.dragging) {
       final delta = session.currentLocalFocal - session.baseLocalFocal;
@@ -6018,15 +6058,17 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     if (!kDebugMode) return;
 
     Rect? visualRect;
+    _RoomObjectTransform? targetTransform;
     _AlphaMaskData? mask;
 
     if (target != null) {
       if (target.isCharacter) {
-        visualRect = _transformFor(
+        targetTransform = _transformFor(
           anchor: _characterAnchor,
           adjustment: _draftCharacterAdjustment,
           canvasSize: Size(maxWidth, maxHeight),
-        ).worldRect;
+        );
+        visualRect = targetTransform.worldRect;
         mask = _alphaMaskCache[widget.state.equippedCharacter.id];
       } else {
         _RoomPlacedItem? placed;
@@ -6037,18 +6079,19 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
           }
         }
         if (placed != null) {
-          visualRect = _transformFor(
+          targetTransform = _transformFor(
             anchor: placed.anchor,
             adjustment: placed.adjustment,
             canvasSize: Size(maxWidth, maxHeight),
-          ).worldRect;
+          );
+          visualRect = targetTransform.worldRect;
           mask = _alphaMaskCache[placed.item.id];
         }
       }
     }
 
-    final mapped = (mask != null && visualRect != null)
-        ? mask.mapWorldPointToPixel(point, visualRect)
+    final mapped = (mask != null && targetTransform != null)
+        ? mask.mapWorldPointToPixel(point, targetTransform)
         : null;
 
     setState(() {
@@ -6068,8 +6111,10 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
           behavior: HitTestBehavior.opaque,
           onPointerDown: (event) => _onPointerDown(event, c),
           onPointerMove: (event) => _onPointerMove(event, c),
-          onPointerUp: (event) => _onPointerUpOrCancel(event, c, canceled: false),
-          onPointerCancel: (event) => _onPointerUpOrCancel(event, c, canceled: true),
+          onPointerUp: (event) =>
+              _onPointerUpOrCancel(event, c, canceled: false),
+          onPointerCancel: (event) =>
+              _onPointerUpOrCancel(event, c, canceled: true),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(18),
             child: _MiniRoomVisual(
@@ -6155,7 +6200,8 @@ class _TouchSession {
       target: target,
       anchor: anchor,
       initialAdjustment: initialAdjustment,
-      adjustmentAtModeStart: adjustmentAtModeStart ?? this.adjustmentAtModeStart,
+      adjustmentAtModeStart:
+          adjustmentAtModeStart ?? this.adjustmentAtModeStart,
       maxScale: maxScale,
       pointers: pointers ?? this.pointers,
       baseLocalFocal: baseLocalFocal ?? this.baseLocalFocal,
@@ -6493,7 +6539,9 @@ class _MiniRoomHitDebugPainter extends CustomPainter {
       canvas.drawLine(
         raw,
         touch,
-        Paint()..color = const Color(0xFF26A69A).withValues(alpha: 0.55)..strokeWidth = 1.1,
+        Paint()
+          ..color = const Color(0xFF26A69A).withValues(alpha: 0.55)
+          ..strokeWidth = 1.1,
       );
     }
 
