@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kid_econ_mvp/miniroom_coordinate_mapper.dart';
 
 void main() {
-  test('contain mapping keeps round-trip error <= 6px for 20 samples', () {
+  test('contain mapping keeps round-trip error <= 4px for 20 samples', () {
     const visualRect = Rect.fromLTWH(40, 20, 180, 120);
     const imageWidth = 512;
     const imageHeight = 384;
@@ -37,7 +37,7 @@ void main() {
       if (err > maxErr) maxErr = err;
     }
 
-    expect(maxErr, lessThanOrEqualTo(6.0));
+    expect(maxErr, lessThanOrEqualTo(4.0));
   });
 
   test(

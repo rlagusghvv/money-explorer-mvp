@@ -457,7 +457,7 @@ class _BootstrapPageState extends State<BootstrapPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const _BootstrapLoadingView();
     }
     return GameHomePage(
       initialState: _state,
@@ -465,6 +465,60 @@ class _BootstrapPageState extends State<BootstrapPage> {
       skippedMalformedScenarioCount: _skippedMalformedScenarioCount,
       initialSession: _session,
       authService: _authService,
+    );
+  }
+}
+
+class _BootstrapLoadingView extends StatelessWidget {
+  const _BootstrapLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFFECF6FF),
+      body: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x180D1632),
+                blurRadius: 16,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.explore_rounded,
+                  size: 34,
+                  color: AppDesign.secondary,
+                ),
+                SizedBox(height: 10),
+                Text(
+                  '경제탐험대 준비중',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    color: AppDesign.textStrong,
+                  ),
+                ),
+                SizedBox(height: 10),
+                SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -5377,6 +5431,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   final Map<String, _AlphaMaskData?> _alphaMaskCache =
       <String, _AlphaMaskData?>{};
   final Set<String> _alphaMaskLoading = <String>{};
+  final GlobalKey _editorGestureKey = GlobalKey();
   _RoomTarget? _selectedTarget;
   _GestureBaseline? _baseline;
   late Map<DecorationZone, RoomItemAdjustment> _draftDecorationAdjustments;
@@ -5667,9 +5722,26 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     ).maxScale.clamp(RoomItemAdjustment.minScale, RoomItemAdjustment.maxScale);
   }
 
+  Offset? _editorLocalFromGlobal(Offset globalPoint) {
+    final context = _editorGestureKey.currentContext;
+    final renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+    return renderObject.globalToLocal(globalPoint);
+  }
+
+  Offset _clampPointToCanvas(Offset point, BoxConstraints c) {
+    return Offset(
+      point.dx.clamp(0.0, c.maxWidth),
+      point.dy.clamp(0.0, c.maxHeight),
+    );
+  }
+
   void _onScaleStart(ScaleStartDetails details, BoxConstraints c) {
     final items = _buildItems();
-    final point = details.localFocalPoint;
+    final point = _clampPointToCanvas(
+      _editorLocalFromGlobal(details.focalPoint) ?? details.localFocalPoint,
+      c,
+    );
     final target = _hitTestTarget(point, items, c.maxWidth, c.maxHeight);
 
     if (kDebugMode) {
@@ -5709,14 +5781,18 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     final baseline = _baseline;
     if (baseline == null) return;
 
+    final point = _clampPointToCanvas(
+      _editorLocalFromGlobal(details.focalPoint) ?? details.localFocalPoint,
+      c,
+    );
     final nextScale = (baseline.baseAdjustment.scale * details.scale).clamp(
       RoomItemAdjustment.minScale,
       baseline.maxScale,
     );
     final width = baseline.anchor.size.width * nextScale;
     final height = baseline.anchor.size.height * nextScale;
-    final left = details.localFocalPoint.dx - (baseline.pivot.dx * width);
-    final top = details.localFocalPoint.dy - (baseline.pivot.dy * height);
+    final left = point.dx - (baseline.pivot.dx * width);
+    final top = point.dy - (baseline.pivot.dy * height);
     final rect = Rect.fromLTWH(left, top, width, height);
 
     final next = _adjustmentFromRect(
@@ -5803,12 +5879,22 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return LayoutBuilder(
       builder: (context, c) {
         return Listener(
-          onPointerDown: (_) => widget.onInteractionLockChanged(true),
+          onPointerDown: (event) {
+            widget.onInteractionLockChanged(true);
+            if (kDebugMode && _debugHitOverlayVisible) {
+              final local = _clampPointToCanvas(
+                _editorLocalFromGlobal(event.position) ?? event.localPosition,
+                c,
+              );
+              _captureDebugTouch(local, _buildItems(), c.maxWidth, c.maxHeight);
+            }
+          },
           onPointerUp: (_) {
             if (_baseline == null) widget.onInteractionLockChanged(false);
           },
           onPointerCancel: (_) => widget.onInteractionLockChanged(false),
           child: GestureDetector(
+            key: _editorGestureKey,
             behavior: HitTestBehavior.opaque,
             onScaleStart: (d) => _onScaleStart(d, c),
             onScaleUpdate: (d) => _onScaleUpdate(d, c),
