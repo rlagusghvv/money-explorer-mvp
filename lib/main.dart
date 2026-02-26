@@ -696,21 +696,21 @@ class MinimiCosmeticState {
 }
 
 const Map<String, String> kMinimiAssetById = {
-  'base_body': 'assets/minimi/generated/base_body.png',
-  'hair_basic_black': 'assets/minimi/generated/hair_basic_black.png',
-  'hair_brown_wave': 'assets/minimi/generated/hair_brown_wave.png',
-  'hair_pink_bob': 'assets/minimi/generated/hair_pink_bob.png',
-  'hair_blue_short': 'assets/minimi/generated/hair_blue_short.png',
-  'hair_blonde': 'assets/minimi/generated/hair_blonde.png',
-  'top_green_hoodie': 'assets/minimi/generated/top_green_hoodie.png',
-  'top_blue_jersey': 'assets/minimi/generated/top_blue_jersey.png',
-  'top_orange_knit': 'assets/minimi/generated/top_orange_knit.png',
-  'top_purple_zipup': 'assets/minimi/generated/top_purple_zipup.png',
-  'top_white_shirt': 'assets/minimi/generated/top_white_shirt.png',
-  'acc_cap': 'assets/minimi/generated/acc_cap.png',
-  'acc_glass': 'assets/minimi/generated/acc_glass.png',
-  'acc_headphone': 'assets/minimi/generated/acc_headphone.png',
-  'acc_star_pin': 'assets/minimi/generated/acc_star_pin.png',
+  'base_body': 'assets/minimi/normalized/base_body.png',
+  'hair_basic_black': 'assets/minimi/normalized/hair_basic_black.png',
+  'hair_brown_wave': 'assets/minimi/normalized/hair_brown_wave.png',
+  'hair_pink_bob': 'assets/minimi/normalized/hair_pink_bob.png',
+  'hair_blue_short': 'assets/minimi/normalized/hair_blue_short.png',
+  'hair_blonde': 'assets/minimi/normalized/hair_blonde.png',
+  'top_green_hoodie': 'assets/minimi/normalized/top_green_hoodie.png',
+  'top_blue_jersey': 'assets/minimi/normalized/top_blue_jersey.png',
+  'top_orange_knit': 'assets/minimi/normalized/top_orange_knit.png',
+  'top_purple_zipup': 'assets/minimi/normalized/top_purple_zipup.png',
+  'top_white_shirt': 'assets/minimi/normalized/top_white_shirt.png',
+  'acc_cap': 'assets/minimi/normalized/acc_cap.png',
+  'acc_glass': 'assets/minimi/normalized/acc_glass.png',
+  'acc_headphone': 'assets/minimi/normalized/acc_headphone.png',
+  'acc_star_pin': 'assets/minimi/normalized/acc_star_pin.png',
 };
 
 const Map<MinimiCategory, List<MinimiPresetItem>> kMinimiPresetByCategory = {
@@ -739,57 +739,13 @@ const Map<MinimiCategory, List<MinimiPresetItem>> kMinimiPresetByCategory = {
 
 const bool kEnableMyRoomInlineSection = false;
 
-class _MinimiLayerStyle {
-  const _MinimiLayerStyle({
-    required this.size,
-    required this.anchor,
-    required this.zIndex,
-  });
-
-  final Size size;
-  final Offset anchor;
-  final int zIndex;
-}
-
 const Size _kMinimiPreviewCanvasSize = Size(160, 242);
-const _MinimiLayerStyle _kMinimiBodyStyle = _MinimiLayerStyle(
-  size: Size(154, 242),
-  anchor: Offset(0.5, 0.5),
-  zIndex: 1,
-);
-const _MinimiLayerStyle _kMinimiHairStyle = _MinimiLayerStyle(
-  size: Size(132, 94),
-  anchor: Offset(0.5, 0.23),
-  zIndex: 3,
-);
-const _MinimiLayerStyle _kMinimiTopStyle = _MinimiLayerStyle(
-  size: Size(146, 110),
-  anchor: Offset(0.5, 0.63),
-  zIndex: 2,
-);
 
-const Map<String, _MinimiLayerStyle> _kMinimiAccessoryStyles = {
-  'acc_cap': _MinimiLayerStyle(
-    size: Size(117, 87),
-    anchor: Offset(0.5, 0.17),
-    zIndex: 4,
-  ),
-  'acc_headphone': _MinimiLayerStyle(
-    size: Size(141, 87),
-    anchor: Offset(0.5, 0.23),
-    zIndex: 4,
-  ),
-  'acc_glass': _MinimiLayerStyle(
-    size: Size(139, 52),
-    anchor: Offset(0.5, 0.245),
-    zIndex: 5,
-  ),
-  'acc_star_pin': _MinimiLayerStyle(
-    size: Size(105, 107),
-    anchor: Offset(0.62, 0.61),
-    zIndex: 5,
-  ),
-};
+// r48: normalized 512x512 assets are anchor-aligned to base_body, so preview uses
+// a simple layer stack. Only tiny category-level micro offsets are allowed.
+const Offset _kMinimiHairMicroOffset = Offset(0, -1.0);
+const Offset _kMinimiTopMicroOffset = Offset(0, 0.5);
+const Offset _kMinimiAccessoryMicroOffset = Offset(0, 0);
 
 extension MinimiCategoryX on MinimiCategory {
   String get label => switch (this) {
@@ -5583,57 +5539,37 @@ class _MinimiPreviewComposite extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final layers = <({int zIndex, Widget child})>[];
-
-    void addLayer(String id, _MinimiLayerStyle style) {
+    Widget buildLayer(String id, {Offset microOffset = Offset.zero}) {
       final assetPath = kMinimiAssetById[id];
-      if (assetPath == null) return;
-      final left =
-          (_kMinimiPreviewCanvasSize.width * style.anchor.dx) -
-          (style.size.width / 2);
-      final top =
-          (_kMinimiPreviewCanvasSize.height * style.anchor.dy) -
-          (style.size.height / 2);
-      layers.add((
-        zIndex: style.zIndex,
-        child: Positioned(
-          left: left,
-          top: top,
-          width: style.size.width,
-          height: style.size.height,
-          child: Image.asset(
-            assetPath,
-            fit: BoxFit.fill,
-            filterQuality: FilterQuality.high,
-          ),
+      if (assetPath == null) return const SizedBox.shrink();
+      return Transform.translate(
+        offset: microOffset,
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.contain,
+          width: _kMinimiPreviewCanvasSize.width,
+          height: _kMinimiPreviewCanvasSize.height,
+          filterQuality: FilterQuality.high,
         ),
-      ));
-    }
-
-    addLayer('base_body', _kMinimiBodyStyle);
-    addLayer(topId, _kMinimiTopStyle);
-    addLayer(hairId, _kMinimiHairStyle);
-    if (accessoryId != 'acc_none') {
-      addLayer(
-        accessoryId,
-        _kMinimiAccessoryStyles[accessoryId] ??
-            const _MinimiLayerStyle(
-              size: Size(128, 84),
-              anchor: Offset(0.5, 0.23),
-              zIndex: 4,
-            ),
       );
     }
 
-    layers.sort((a, b) => a.zIndex.compareTo(b.zIndex));
-
-    return FittedBox(
-      fit: BoxFit.contain,
-      child: SizedBox(
-        width: _kMinimiPreviewCanvasSize.width,
-        height: _kMinimiPreviewCanvasSize.height,
-        child: ClipRect(
-          child: Stack(children: layers.map((e) => e.child).toList()),
+    return SizedBox(
+      width: _kMinimiPreviewCanvasSize.width,
+      height: _kMinimiPreviewCanvasSize.height,
+      child: ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            buildLayer('base_body'),
+            buildLayer(topId, microOffset: _kMinimiTopMicroOffset),
+            buildLayer(hairId, microOffset: _kMinimiHairMicroOffset),
+            if (accessoryId != 'acc_none')
+              buildLayer(
+                accessoryId,
+                microOffset: _kMinimiAccessoryMicroOffset,
+              ),
+          ],
         ),
       ),
     );
