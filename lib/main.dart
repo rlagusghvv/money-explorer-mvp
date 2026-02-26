@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.26-r39';
+const kAppUiVersion = 'ui-2026.02.26-r40';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5452,8 +5452,11 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   late final AnimationController _selectionPulseController;
   bool _debugHitOverlayVisible = false;
   Offset? _debugWorldTouchPoint;
+  Offset? _debugRawTouchPoint;
   Offset? _debugLocalPoint;
   Rect? _debugVisualRect;
+  String? _debugCalibrationSummary;
+  _TouchCalibrationState _touchCalibration = const _TouchCalibrationState();
 
   @override
   void initState() {
@@ -5738,15 +5741,96 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return box?.size ?? Size(c.maxWidth, c.maxHeight);
   }
 
+  void _refreshTouchCalibration(BoxConstraints c, {Offset? sampleGlobalPoint}) {
+    final canvasBox = _miniRoomCanvasRenderBox();
+    final editorContext = _editorGestureKey.currentContext;
+    final editorObject = editorContext?.findRenderObject();
+    final editorBox =
+        editorObject is RenderBox && editorObject.hasSize ? editorObject : null;
+
+    final canvasSize = canvasBox?.size ?? Size(c.maxWidth, c.maxHeight);
+    final editorSize = editorBox?.size ?? canvasSize;
+
+    final editorGlobalOrigin =
+        editorBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final canvasGlobalOrigin =
+        canvasBox?.localToGlobal(Offset.zero) ?? editorGlobalOrigin;
+
+    final scaleX = canvasSize.width <= 0 || editorSize.width <= 0
+        ? 1.0
+        : canvasSize.width / editorSize.width;
+    final scaleY = canvasSize.height <= 0 || editorSize.height <= 0
+        ? 1.0
+        : canvasSize.height / editorSize.height;
+
+    final canvasRectInEditor = Rect.fromLTWH(
+      canvasGlobalOrigin.dx - editorGlobalOrigin.dx,
+      canvasGlobalOrigin.dy - editorGlobalOrigin.dy,
+      canvasSize.width,
+      canvasSize.height,
+    );
+
+    final safePadding = MediaQuery.maybeOf(context)?.viewPadding ?? EdgeInsets.zero;
+
+    var estimatedBias = _touchCalibration.estimatedBias;
+    if (sampleGlobalPoint != null && canvasBox != null && editorBox != null) {
+      final localFromCanvas = canvasBox.globalToLocal(sampleGlobalPoint);
+      final editorLocal = editorBox.globalToLocal(sampleGlobalPoint);
+      final localFromEditor = Offset(
+        (editorLocal.dx - canvasRectInEditor.left) * scaleX,
+        (editorLocal.dy - canvasRectInEditor.top) * scaleY,
+      );
+      final residual = localFromCanvas - localFromEditor;
+      estimatedBias = Offset(
+        (estimatedBias.dx * 0.88) + (residual.dx * 0.12),
+        (estimatedBias.dy * 0.88) + (residual.dy * 0.12),
+      );
+    }
+
+    _touchCalibration = _TouchCalibrationState(
+      canvasSize: canvasSize,
+      editorSize: editorSize,
+      editorGlobalOrigin: editorGlobalOrigin,
+      canvasGlobalOrigin: canvasGlobalOrigin,
+      canvasRectInEditor: canvasRectInEditor,
+      scaleX: scaleX,
+      scaleY: scaleY,
+      safePadding: safePadding,
+      estimatedBias: estimatedBias,
+    );
+
+    if (kDebugMode) {
+      _debugCalibrationSummary =
+          'origin=${canvasGlobalOrigin.dx.toStringAsFixed(1)},${canvasGlobalOrigin.dy.toStringAsFixed(1)} '
+          'scale=${scaleX.toStringAsFixed(3)},${scaleY.toStringAsFixed(3)} '
+          'bias=${estimatedBias.dx.toStringAsFixed(2)},${estimatedBias.dy.toStringAsFixed(2)} '
+          'safe=${safePadding.left.toStringAsFixed(1)},${safePadding.top.toStringAsFixed(1)},${safePadding.right.toStringAsFixed(1)},${safePadding.bottom.toStringAsFixed(1)}';
+    }
+  }
+
   Offset _canvasLocalPointFromGlobal(Offset globalPoint, BoxConstraints c) {
-    final box = _miniRoomCanvasRenderBox();
-    final local =
-        box?.globalToLocal(globalPoint) ??
-        (_editorLocalFromGlobal(globalPoint) ?? globalPoint);
-    final size = box?.size ?? Size(c.maxWidth, c.maxHeight);
+    _refreshTouchCalibration(c, sampleGlobalPoint: globalPoint);
+    final canvasBox = _miniRoomCanvasRenderBox();
+    final editorLocal = _editorLocalFromGlobal(globalPoint);
+    final cal = _touchCalibration;
+
+    final localFromCanvas = canvasBox?.globalToLocal(globalPoint);
+    final localFromEditor = editorLocal == null
+        ? null
+        : Offset(
+            (editorLocal.dx - cal.canvasRectInEditor.left) * cal.scaleX,
+            (editorLocal.dy - cal.canvasRectInEditor.top) * cal.scaleY,
+          );
+
+    final blended = localFromCanvas ?? localFromEditor ?? globalPoint;
+    final corrected = Offset(
+      blended.dx - cal.estimatedBias.dx,
+      blended.dy - cal.estimatedBias.dy,
+    );
+    final size = cal.canvasSize;
     return Offset(
-      local.dx.clamp(0.0, size.width),
-      local.dy.clamp(0.0, size.height),
+      corrected.dx.clamp(0.0, size.width),
+      corrected.dy.clamp(0.0, size.height),
     );
   }
 
@@ -5781,6 +5865,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       );
 
       if (kDebugMode) {
+        _debugRawTouchPoint = event.position;
         _captureDebugTouch(
           point,
           items,
@@ -5842,6 +5927,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     final session = _touchSession;
     if (session == null || !session.pointers.containsKey(event.pointer)) return;
 
+    if (kDebugMode) _debugRawTouchPoint = event.position;
     final local = _canvasLocalPointFromEvent(event, c);
     final nextPointers = {...session.pointers, event.pointer: local};
     final focal = _focalPoint(nextPointers.values);
@@ -6054,6 +6140,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
         : null;
 
     setState(() {
+      _debugRawTouchPoint = point;
       _debugWorldTouchPoint = point;
       _debugVisualRect = visualRect;
       _debugLocalPoint = mapped?.normalized;
@@ -6093,8 +6180,10 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
                 selectionPulse: _selectionPulseController,
                 debugOverlayEnabled: kDebugMode && _debugHitOverlayVisible,
                 debugWorldTouchPoint: _debugWorldTouchPoint,
+                debugRawTouchPoint: _debugRawTouchPoint,
                 debugLocalPoint: _debugLocalPoint,
                 debugVisualRect: _debugVisualRect,
+                debugCalibrationSummary: _debugCalibrationSummary,
                 canvasKey: _miniRoomCanvasKey,
               ),
             ),
@@ -6166,6 +6255,30 @@ class _TouchSession {
   }
 }
 
+class _TouchCalibrationState {
+  const _TouchCalibrationState({
+    this.canvasSize = Size.zero,
+    this.editorSize = Size.zero,
+    this.editorGlobalOrigin = Offset.zero,
+    this.canvasGlobalOrigin = Offset.zero,
+    this.canvasRectInEditor = Rect.zero,
+    this.scaleX = 1,
+    this.scaleY = 1,
+    this.safePadding = EdgeInsets.zero,
+    this.estimatedBias = Offset.zero,
+  });
+
+  final Size canvasSize;
+  final Size editorSize;
+  final Offset editorGlobalOrigin;
+  final Offset canvasGlobalOrigin;
+  final Rect canvasRectInEditor;
+  final double scaleX;
+  final double scaleY;
+  final EdgeInsets safePadding;
+  final Offset estimatedBias;
+}
+
 class _MiniRoomVisual extends StatelessWidget {
   const _MiniRoomVisual({
     required this.state,
@@ -6176,8 +6289,10 @@ class _MiniRoomVisual extends StatelessWidget {
     this.selectionPulse,
     this.debugOverlayEnabled = false,
     this.debugWorldTouchPoint,
+    this.debugRawTouchPoint,
     this.debugLocalPoint,
     this.debugVisualRect,
+    this.debugCalibrationSummary,
     this.canvasKey,
   });
 
@@ -6189,8 +6304,10 @@ class _MiniRoomVisual extends StatelessWidget {
   final Animation<double>? selectionPulse;
   final bool debugOverlayEnabled;
   final Offset? debugWorldTouchPoint;
+  final Offset? debugRawTouchPoint;
   final Offset? debugLocalPoint;
   final Rect? debugVisualRect;
+  final String? debugCalibrationSummary;
   final Key? canvasKey;
 
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
@@ -6342,8 +6459,10 @@ class _MiniRoomVisual extends StatelessWidget {
                     child: CustomPaint(
                       painter: _MiniRoomHitDebugPainter(
                         worldPoint: debugWorldTouchPoint,
+                        rawPoint: debugRawTouchPoint,
                         localPoint: debugLocalPoint,
                         visualRect: debugVisualRect,
+                        calibrationSummary: debugCalibrationSummary,
                       ),
                     ),
                   ),
@@ -6440,13 +6559,17 @@ class _SelectionGlow extends StatelessWidget {
 class _MiniRoomHitDebugPainter extends CustomPainter {
   const _MiniRoomHitDebugPainter({
     required this.worldPoint,
+    required this.rawPoint,
     required this.localPoint,
     required this.visualRect,
+    required this.calibrationSummary,
   });
 
   final Offset? worldPoint;
+  final Offset? rawPoint;
   final Offset? localPoint;
   final Rect? visualRect;
+  final String? calibrationSummary;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -6474,18 +6597,55 @@ class _MiniRoomHitDebugPainter extends CustomPainter {
       }
     }
 
+    final raw = rawPoint;
+    if (raw != null) {
+      canvas.drawCircle(
+        raw,
+        4,
+        Paint()..color = const Color(0xFF26A69A).withValues(alpha: 0.9),
+      );
+      canvas.drawLine(
+        raw,
+        touch,
+        Paint()..color = const Color(0xFF26A69A).withValues(alpha: 0.55)..strokeWidth = 1.1,
+      );
+    }
+
     canvas.drawCircle(
       touch,
       6,
       Paint()..color = const Color(0xFFE91E63).withValues(alpha: 0.9),
     );
+
+    final summary = calibrationSummary;
+    if (summary != null && summary.isNotEmpty) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: summary,
+          style: const TextStyle(
+            color: Color(0xFF102A43),
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: max(80, size.width - 14));
+      final bg = Rect.fromLTWH(6, 6, tp.width + 10, tp.height + 6);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(bg, const Radius.circular(6)),
+        Paint()..color = Colors.white.withValues(alpha: 0.78),
+      );
+      tp.paint(canvas, const Offset(11, 9));
+    }
   }
 
   @override
   bool shouldRepaint(covariant _MiniRoomHitDebugPainter oldDelegate) {
     return oldDelegate.worldPoint != worldPoint ||
+        oldDelegate.rawPoint != rawPoint ||
         oldDelegate.localPoint != localPoint ||
-        oldDelegate.visualRect != visualRect;
+        oldDelegate.visualRect != visualRect ||
+        oldDelegate.calibrationSummary != calibrationSummary;
   }
 }
 
