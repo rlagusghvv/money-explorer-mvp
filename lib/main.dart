@@ -5446,10 +5446,9 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   final GlobalKey _editorGestureKey = GlobalKey();
   final GlobalKey _miniRoomCanvasKey = GlobalKey();
   _RoomTarget? _selectedTarget;
-  _GestureBaseline? _baseline;
+  _TouchSession? _touchSession;
   late Map<DecorationZone, RoomItemAdjustment> _draftDecorationAdjustments;
   late RoomItemAdjustment _draftCharacterAdjustment;
-  RoomItemAdjustment? _pendingCommitAdjustment;
   late final AnimationController _selectionPulseController;
   bool _debugHitOverlayVisible = false;
   Offset? _debugWorldTouchPoint;
@@ -5758,98 +5757,257 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return renderObject.globalToLocal(globalPoint);
   }
 
-  void _onScaleStart(ScaleStartDetails details, BoxConstraints c) {
-    final items = _buildItems();
-    final canvasSize = _canvasSize(c);
-    final point = _canvasLocalPointFromGlobal(details.focalPoint, c);
-    final target = _hitTestTarget(
-      point,
-      items,
-      canvasSize.width,
-      canvasSize.height,
-    );
+  static const double _dragDeadZonePx = 5.0;
+  static const double _dragHysteresisPx = 8.0;
+  static const double _pinchDeadZonePx = 3.0;
+  static const double _pinchHysteresisPx = 6.0;
 
-    if (kDebugMode) {
-      _captureDebugTouch(
+  Offset _canvasLocalPointFromEvent(PointerEvent event, BoxConstraints c) {
+    return _canvasLocalPointFromGlobal(event.position, c);
+  }
+
+  void _onPointerDown(PointerDownEvent event, BoxConstraints c) {
+    final canvasSize = _canvasSize(c);
+    final point = _canvasLocalPointFromEvent(event, c);
+
+    final prev = _touchSession;
+    if (prev == null) {
+      final items = _buildItems();
+      final target = _hitTestTarget(
         point,
         items,
         canvasSize.width,
         canvasSize.height,
-        target: target,
       );
+
+      if (kDebugMode) {
+        _captureDebugTouch(
+          point,
+          items,
+          canvasSize.width,
+          canvasSize.height,
+          target: target,
+        );
+      }
+
+      if (target == null) return;
+
+      final anchor = _anchorFor(target);
+      final adjustment = _currentAdjustment(target);
+      final transform = _transformFor(
+        anchor: anchor,
+        adjustment: adjustment,
+        canvasSize: canvasSize,
+      );
+      final pivot = transform.worldToObjectPoint(point) ?? const Offset(0.5, 0.5);
+      final clampedPivot = Offset(
+        pivot.dx.clamp(0.0, 1.0),
+        pivot.dy.clamp(0.0, 1.0),
+      );
+
+      setState(() {
+        _selectedTarget = target;
+        _touchSession = _TouchSession(
+          target: target,
+          anchor: anchor,
+          initialAdjustment: adjustment,
+          adjustmentAtModeStart: adjustment,
+          pivot: clampedPivot,
+          maxScale: _maxScaleForTarget(target),
+          pointers: {event.pointer: point},
+          baseLocalFocal: point,
+          currentLocalFocal: point,
+          mode: _TouchMode.pending,
+        );
+      });
+      widget.onInteractionLockChanged(true);
+      return;
     }
 
-    if (target == null) return;
-
-    final anchor = _anchorFor(target);
-    final adjustment = _currentAdjustment(target);
-    final baseTransform = _transformFor(
-      anchor: anchor,
-      adjustment: adjustment,
-      canvasSize: canvasSize,
+    final nextPointers = {...prev.pointers, event.pointer: point};
+    final nextFocal = _focalPoint(nextPointers.values);
+    final next = prev.copyWith(
+      pointers: nextPointers,
+      baseLocalFocal: nextFocal,
+      currentLocalFocal: nextFocal,
+      adjustmentAtModeStart: _currentAdjustment(prev.target),
+      basePinchDistance: _pinchDistance(nextPointers),
+      mode: nextPointers.length >= 2 ? _TouchMode.pendingPinch : prev.mode,
     );
-    final pivot =
-        (baseTransform.worldToObjectPoint(point) ?? const Offset(0.5, 0.5));
-    final clampedPivot = Offset(
-      pivot.dx.clamp(0.0, 1.0),
-      pivot.dy.clamp(0.0, 1.0),
-    );
-
-    setState(() {
-      _selectedTarget = target;
-      _baseline = _GestureBaseline(
-        target: target,
-        anchor: anchor,
-        baseAdjustment: adjustment,
-        pivot: clampedPivot,
-        maxScale: _maxScaleForTarget(target),
-      );
-      _pendingCommitAdjustment = null;
-    });
+    setState(() => _touchSession = next);
     widget.onInteractionLockChanged(true);
   }
 
-  void _onScaleUpdate(ScaleUpdateDetails details, BoxConstraints c) {
-    final baseline = _baseline;
-    if (baseline == null) return;
+  void _onPointerMove(PointerMoveEvent event, BoxConstraints c) {
+    final session = _touchSession;
+    if (session == null || !session.pointers.containsKey(event.pointer)) return;
 
-    final canvasSize = _canvasSize(c);
-    final point = _canvasLocalPointFromGlobal(details.focalPoint, c);
-    final nextScale = (baseline.baseAdjustment.scale * details.scale).clamp(
-      RoomItemAdjustment.minScale,
-      baseline.maxScale,
-    );
-    final width = baseline.anchor.size.width * nextScale;
-    final height = baseline.anchor.size.height * nextScale;
-    final left = point.dx - (baseline.pivot.dx * width);
-    final top = point.dy - (baseline.pivot.dy * height);
+    final local = _canvasLocalPointFromEvent(event, c);
+    final nextPointers = {...session.pointers, event.pointer: local};
+    final focal = _focalPoint(nextPointers.values);
+    final travel = (focal - session.baseLocalFocal).distance;
+    final activeCount = nextPointers.length;
 
-    final next = _adjustmentFromTransform(
-      anchor: baseline.anchor,
-      current: baseline.baseAdjustment,
-      canvasSize: canvasSize,
-      scale: nextScale,
-      left: left,
-      top: top,
+    var nextMode = session.mode;
+    var modeSwitches = session.modeSwitchCount;
+    var cancels = session.cancelCount;
+    var baseFocal = session.baseLocalFocal;
+    var basePinch = session.basePinchDistance;
+    var adjustmentAtModeStart = session.adjustmentAtModeStart;
+
+    if (activeCount >= 2) {
+      final pinch = _pinchDistance(nextPointers);
+      final pinchDelta = (pinch - basePinch).abs();
+      if (nextMode == _TouchMode.dragging) {
+        if (pinchDelta >= _pinchHysteresisPx) {
+          nextMode = _TouchMode.pinching;
+          modeSwitches += 1;
+          baseFocal = focal;
+          basePinch = pinch;
+          adjustmentAtModeStart = _currentAdjustment(session.target);
+        }
+      } else if (nextMode == _TouchMode.pendingPinch || nextMode == _TouchMode.pending) {
+        if (pinchDelta >= _pinchDeadZonePx) {
+          nextMode = _TouchMode.pinching;
+          modeSwitches += 1;
+          baseFocal = focal;
+          basePinch = pinch;
+          adjustmentAtModeStart = _currentAdjustment(session.target);
+        }
+      }
+    } else {
+      if (nextMode == _TouchMode.pinching && travel >= _dragHysteresisPx) {
+        nextMode = _TouchMode.dragging;
+        modeSwitches += 1;
+        baseFocal = focal;
+        adjustmentAtModeStart = _currentAdjustment(session.target);
+      } else if ((nextMode == _TouchMode.pending || nextMode == _TouchMode.pendingPinch) &&
+          travel >= _dragDeadZonePx) {
+        nextMode = _TouchMode.dragging;
+        modeSwitches += 1;
+        baseFocal = focal;
+        adjustmentAtModeStart = _currentAdjustment(session.target);
+      }
+    }
+
+    final updated = session.copyWith(
+      pointers: nextPointers,
+      currentLocalFocal: focal,
+      baseLocalFocal: baseFocal,
+      basePinchDistance: basePinch,
+      adjustmentAtModeStart: adjustmentAtModeStart,
+      mode: nextMode,
+      modeSwitchCount: modeSwitches,
+      cancelCount: cancels,
     );
+
+    final nextAdjustment = _nextAdjustmentFromSession(updated, _canvasSize(c));
+    if (nextAdjustment != null) {
+      _applyDraftAdjustment(updated.target, nextAdjustment);
+    }
 
     setState(() {
-      _applyDraftAdjustment(baseline.target, next);
-      _pendingCommitAdjustment = next;
+      _touchSession = updated;
     });
   }
 
-  void _onScaleEnd(ScaleEndDetails details) {
-    final baseline = _baseline;
-    final adjustment = _pendingCommitAdjustment;
-    if (baseline != null && adjustment != null) {
-      _commitAdjustment(baseline.target, adjustment);
+  void _onPointerUpOrCancel(PointerEvent event, BoxConstraints c, {required bool canceled}) {
+    final session = _touchSession;
+    if (session == null || !session.pointers.containsKey(event.pointer)) {
+      if (_touchSession == null) widget.onInteractionLockChanged(false);
+      return;
     }
-    setState(() {
-      _baseline = null;
-      _pendingCommitAdjustment = null;
-    });
-    widget.onInteractionLockChanged(false);
+
+    final nextPointers = {...session.pointers}..remove(event.pointer);
+    if (nextPointers.isEmpty) {
+      final finalAdjustment = _currentAdjustment(session.target);
+      _commitAdjustment(session.target, finalAdjustment);
+      if (kDebugMode) {
+        debugPrint('[miniroom-touch] target=${session.target.key} modeSwitches=${session.modeSwitchCount} cancels=${session.cancelCount + (canceled ? 1 : 0)}');
+      }
+      setState(() {
+        _touchSession = null;
+      });
+      widget.onInteractionLockChanged(false);
+      return;
+    }
+
+    final focal = _focalPoint(nextPointers.values);
+    final reduced = session.copyWith(
+      pointers: nextPointers,
+      baseLocalFocal: focal,
+      currentLocalFocal: focal,
+      basePinchDistance: _pinchDistance(nextPointers),
+      adjustmentAtModeStart: _currentAdjustment(session.target),
+      mode: nextPointers.length >= 2 ? _TouchMode.pendingPinch : _TouchMode.pending,
+      cancelCount: session.cancelCount + (canceled ? 1 : 0),
+    );
+    setState(() => _touchSession = reduced);
+  }
+
+  RoomItemAdjustment? _nextAdjustmentFromSession(_TouchSession session, Size canvasSize) {
+    final current = _currentAdjustment(session.target);
+    if (session.mode == _TouchMode.dragging) {
+      final delta = session.currentLocalFocal - session.baseLocalFocal;
+      final base = session.adjustmentAtModeStart;
+      final transform = _transformFor(
+        anchor: session.anchor,
+        adjustment: base,
+        canvasSize: canvasSize,
+      );
+      return _adjustmentFromTransform(
+        anchor: session.anchor,
+        current: current,
+        canvasSize: canvasSize,
+        scale: base.scale,
+        left: transform.left + delta.dx,
+        top: transform.top + delta.dy,
+      );
+    }
+
+    if (session.mode == _TouchMode.pinching && session.pointers.length >= 2) {
+      final pinch = _pinchDistance(session.pointers);
+      if (session.basePinchDistance <= 0.0 || pinch <= 0.0) return null;
+      final scaleRatio = pinch / session.basePinchDistance;
+      final base = session.adjustmentAtModeStart;
+      final nextScale = (base.scale * scaleRatio).clamp(
+        RoomItemAdjustment.minScale,
+        session.maxScale,
+      );
+      final width = session.anchor.size.width * nextScale;
+      final height = session.anchor.size.height * nextScale;
+      final focal = session.currentLocalFocal;
+      final left = focal.dx - (session.pivot.dx * width);
+      final top = focal.dy - (session.pivot.dy * height);
+      return _adjustmentFromTransform(
+        anchor: session.anchor,
+        current: current,
+        canvasSize: canvasSize,
+        scale: nextScale,
+        left: left,
+        top: top,
+      );
+    }
+    return null;
+  }
+
+  Offset _focalPoint(Iterable<Offset> points) {
+    var count = 0;
+    var dx = 0.0;
+    var dy = 0.0;
+    for (final p in points) {
+      count += 1;
+      dx += p.dx;
+      dy += p.dy;
+    }
+    if (count == 0) return Offset.zero;
+    return Offset(dx / count, dy / count);
+  }
+
+  double _pinchDistance(Map<int, Offset> pointers) {
+    if (pointers.length < 2) return 0.0;
+    final values = pointers.values.take(2).toList(growable: false);
+    return (values[0] - values[1]).distance;
   }
 
   void _captureDebugTouch(
@@ -5907,29 +6065,13 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return LayoutBuilder(
       builder: (context, c) {
         return Listener(
-          onPointerDown: (event) {
-            widget.onInteractionLockChanged(true);
-            if (kDebugMode && _debugHitOverlayVisible) {
-              final local = _canvasLocalPointFromGlobal(event.position, c);
-              final canvasSize = _canvasSize(c);
-              _captureDebugTouch(
-                local,
-                _buildItems(),
-                canvasSize.width,
-                canvasSize.height,
-              );
-            }
-          },
-          onPointerUp: (_) {
-            if (_baseline == null) widget.onInteractionLockChanged(false);
-          },
-          onPointerCancel: (_) => widget.onInteractionLockChanged(false),
+          onPointerDown: (event) => _onPointerDown(event, c),
+          onPointerMove: (event) => _onPointerMove(event, c),
+          onPointerUp: (event) => _onPointerUpOrCancel(event, c, canceled: false),
+          onPointerCancel: (event) => _onPointerUpOrCancel(event, c, canceled: true),
           child: GestureDetector(
             key: _editorGestureKey,
             behavior: HitTestBehavior.opaque,
-            onScaleStart: (d) => _onScaleStart(d, c),
-            onScaleUpdate: (d) => _onScaleUpdate(d, c),
-            onScaleEnd: _onScaleEnd,
             onLongPress: kDebugMode
                 ? () {
                     setState(() {
@@ -5963,20 +6105,65 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
   }
 }
 
-class _GestureBaseline {
-  const _GestureBaseline({
+enum _TouchMode { pending, pendingPinch, dragging, pinching }
+
+class _TouchSession {
+  const _TouchSession({
     required this.target,
     required this.anchor,
-    required this.baseAdjustment,
+    required this.initialAdjustment,
+    required this.adjustmentAtModeStart,
     required this.pivot,
     required this.maxScale,
+    required this.pointers,
+    required this.baseLocalFocal,
+    required this.currentLocalFocal,
+    required this.mode,
+    this.basePinchDistance = 0,
+    this.modeSwitchCount = 0,
+    this.cancelCount = 0,
   });
 
   final _RoomTarget target;
   final _RoomAnchor anchor;
-  final RoomItemAdjustment baseAdjustment;
+  final RoomItemAdjustment initialAdjustment;
+  final RoomItemAdjustment adjustmentAtModeStart;
   final Offset pivot;
   final double maxScale;
+  final Map<int, Offset> pointers;
+  final Offset baseLocalFocal;
+  final Offset currentLocalFocal;
+  final _TouchMode mode;
+  final double basePinchDistance;
+  final int modeSwitchCount;
+  final int cancelCount;
+
+  _TouchSession copyWith({
+    RoomItemAdjustment? adjustmentAtModeStart,
+    Map<int, Offset>? pointers,
+    Offset? baseLocalFocal,
+    Offset? currentLocalFocal,
+    _TouchMode? mode,
+    double? basePinchDistance,
+    int? modeSwitchCount,
+    int? cancelCount,
+  }) {
+    return _TouchSession(
+      target: target,
+      anchor: anchor,
+      initialAdjustment: initialAdjustment,
+      adjustmentAtModeStart: adjustmentAtModeStart ?? this.adjustmentAtModeStart,
+      pivot: pivot,
+      maxScale: maxScale,
+      pointers: pointers ?? this.pointers,
+      baseLocalFocal: baseLocalFocal ?? this.baseLocalFocal,
+      currentLocalFocal: currentLocalFocal ?? this.currentLocalFocal,
+      mode: mode ?? this.mode,
+      basePinchDistance: basePinchDistance ?? this.basePinchDistance,
+      modeSwitchCount: modeSwitchCount ?? this.modeSwitchCount,
+      cancelCount: cancelCount ?? this.cancelCount,
+    );
+  }
 }
 
 class _MiniRoomVisual extends StatelessWidget {
