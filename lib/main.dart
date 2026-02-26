@@ -695,6 +695,24 @@ class MinimiCosmeticState {
   };
 }
 
+const Map<String, String> kMinimiAssetById = {
+  'base_body': 'assets/minimi/generated/base_body.png',
+  'hair_basic_black': 'assets/minimi/generated/hair_basic_black.png',
+  'hair_brown_wave': 'assets/minimi/generated/hair_brown_wave.png',
+  'hair_pink_bob': 'assets/minimi/generated/hair_pink_bob.png',
+  'hair_blue_short': 'assets/minimi/generated/hair_blue_short.png',
+  'hair_blonde': 'assets/minimi/generated/hair_blonde.png',
+  'top_green_hoodie': 'assets/minimi/generated/top_green_hoodie.png',
+  'top_blue_jersey': 'assets/minimi/generated/top_blue_jersey.png',
+  'top_orange_knit': 'assets/minimi/generated/top_orange_knit.png',
+  'top_purple_zipup': 'assets/minimi/generated/top_purple_zipup.png',
+  'top_white_shirt': 'assets/minimi/generated/top_white_shirt.png',
+  'acc_cap': 'assets/minimi/generated/acc_cap.png',
+  'acc_glass': 'assets/minimi/generated/acc_glass.png',
+  'acc_headphone': 'assets/minimi/generated/acc_headphone.png',
+  'acc_star_pin': 'assets/minimi/generated/acc_star_pin.png',
+};
+
 const Map<MinimiCategory, List<MinimiPresetItem>> kMinimiPresetByCategory = {
   MinimiCategory.hair: [
     MinimiPresetItem(id: 'hair_basic_black', label: '기본 검정', emoji: '🖤'),
@@ -5444,16 +5462,47 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             ),
             child: Column(
               children: [
-                Text(
-                  '${hair.emoji}  ${accessory.emoji == '➖' ? '' : accessory.emoji}',
+                SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        kMinimiAssetById['base_body']!,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
+                      if (kMinimiAssetById[hair.id] != null)
+                        Image.asset(
+                          kMinimiAssetById[hair.id]!,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      if (kMinimiAssetById[top.id] != null)
+                        Image.asset(
+                          kMinimiAssetById[top.id]!,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      if (accessory.id != 'acc_none' &&
+                          kMinimiAssetById[accessory.id] != null)
+                        Image.asset(
+                          kMinimiAssetById[accessory.id]!,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
-                  '상의 ${top.emoji}  ${top.label}',
+                  '${hair.label} · ${top.label} · ${accessory.label}',
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
