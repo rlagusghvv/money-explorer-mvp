@@ -737,6 +737,60 @@ const Map<MinimiCategory, List<MinimiPresetItem>> kMinimiPresetByCategory = {
   ],
 };
 
+const bool kEnableMyRoomInlineSection = false;
+
+class _MinimiLayerStyle {
+  const _MinimiLayerStyle({
+    required this.size,
+    required this.anchor,
+    required this.zIndex,
+  });
+
+  final Size size;
+  final Offset anchor;
+  final int zIndex;
+}
+
+const Size _kMinimiPreviewCanvasSize = Size(160, 242);
+const _MinimiLayerStyle _kMinimiBodyStyle = _MinimiLayerStyle(
+  size: Size(154, 242),
+  anchor: Offset(0.5, 0.5),
+  zIndex: 1,
+);
+const _MinimiLayerStyle _kMinimiHairStyle = _MinimiLayerStyle(
+  size: Size(132, 94),
+  anchor: Offset(0.5, 0.23),
+  zIndex: 3,
+);
+const _MinimiLayerStyle _kMinimiTopStyle = _MinimiLayerStyle(
+  size: Size(146, 110),
+  anchor: Offset(0.5, 0.63),
+  zIndex: 2,
+);
+
+const Map<String, _MinimiLayerStyle> _kMinimiAccessoryStyles = {
+  'acc_cap': _MinimiLayerStyle(
+    size: Size(117, 87),
+    anchor: Offset(0.5, 0.17),
+    zIndex: 4,
+  ),
+  'acc_headphone': _MinimiLayerStyle(
+    size: Size(141, 87),
+    anchor: Offset(0.5, 0.23),
+    zIndex: 4,
+  ),
+  'acc_glass': _MinimiLayerStyle(
+    size: Size(139, 52),
+    anchor: Offset(0.5, 0.245),
+    zIndex: 5,
+  ),
+  'acc_star_pin': _MinimiLayerStyle(
+    size: Size(105, 107),
+    anchor: Offset(0.62, 0.61),
+    zIndex: 5,
+  ),
+};
+
 extension MinimiCategoryX on MinimiCategory {
   String get label => switch (this) {
     MinimiCategory.hair => '헤어',
@@ -5181,11 +5235,6 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                   Text('계정: ${widget.session?.email ?? '게스트'}'),
                   Text('동기화 상태: ${widget.syncMessage ?? '로컬 저장 중'}'),
                   const SizedBox(height: 10),
-                  const Text(
-                    '미리보기 영역에서 바로 터치/핀치로 배치와 크기를 편집할 수 있어요.',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
                   Text(
                     '현재 장착 베이스: ${state.equippedHome.name}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
@@ -5200,19 +5249,21 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             onSelectPreset: widget.onSelectMinimiPreset,
             onReset: widget.onResetMinimi,
           ),
-          const SizedBox(height: 10),
-          _MyHomeRoomCard(
-            state: state,
-            itemById: _itemById,
-            showEquipFx: _showEquipFx,
-            equipFxLabel: _equipFxLabel,
-            onDecorationAdjusted: widget.onDecorationAdjusted,
-            onCharacterAdjusted: widget.onCharacterAdjusted,
-            onInteractionLockChanged: (locked) {
-              if (_lockMyHomeScroll == locked) return;
-              setState(() => _lockMyHomeScroll = locked);
-            },
-          ),
+          if (kEnableMyRoomInlineSection) ...[
+            const SizedBox(height: 10),
+            _MyHomeRoomCard(
+              state: state,
+              itemById: _itemById,
+              showEquipFx: _showEquipFx,
+              equipFxLabel: _equipFxLabel,
+              onDecorationAdjusted: widget.onDecorationAdjusted,
+              onCharacterAdjusted: widget.onCharacterAdjusted,
+              onInteractionLockChanged: (locked) {
+                if (_lockMyHomeScroll == locked) return;
+                setState(() => _lockMyHomeScroll = locked);
+              },
+            ),
+          ],
           const SizedBox(height: 10),
           Card(
             child: Padding(
@@ -5463,36 +5514,12 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             child: Column(
               children: [
                 SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.asset(
-                        kMinimiAssetById['base_body']!,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.high,
-                      ),
-                      if (kMinimiAssetById[hair.id] != null)
-                        Image.asset(
-                          kMinimiAssetById[hair.id]!,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                        ),
-                      if (kMinimiAssetById[top.id] != null)
-                        Image.asset(
-                          kMinimiAssetById[top.id]!,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                        ),
-                      if (accessory.id != 'acc_none' &&
-                          kMinimiAssetById[accessory.id] != null)
-                        Image.asset(
-                          kMinimiAssetById[accessory.id]!,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                        ),
-                    ],
+                  width: 132,
+                  height: 170,
+                  child: _MinimiPreviewComposite(
+                    hairId: hair.id,
+                    topId: top.id,
+                    accessoryId: accessory.id,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -5538,6 +5565,76 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MinimiPreviewComposite extends StatelessWidget {
+  const _MinimiPreviewComposite({
+    required this.hairId,
+    required this.topId,
+    required this.accessoryId,
+  });
+
+  final String hairId;
+  final String topId;
+  final String accessoryId;
+
+  @override
+  Widget build(BuildContext context) {
+    final layers = <({int zIndex, Widget child})>[];
+
+    void addLayer(String id, _MinimiLayerStyle style) {
+      final assetPath = kMinimiAssetById[id];
+      if (assetPath == null) return;
+      final left =
+          (_kMinimiPreviewCanvasSize.width * style.anchor.dx) -
+          (style.size.width / 2);
+      final top =
+          (_kMinimiPreviewCanvasSize.height * style.anchor.dy) -
+          (style.size.height / 2);
+      layers.add((
+        zIndex: style.zIndex,
+        child: Positioned(
+          left: left,
+          top: top,
+          width: style.size.width,
+          height: style.size.height,
+          child: Image.asset(
+            assetPath,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.high,
+          ),
+        ),
+      ));
+    }
+
+    addLayer('base_body', _kMinimiBodyStyle);
+    addLayer(topId, _kMinimiTopStyle);
+    addLayer(hairId, _kMinimiHairStyle);
+    if (accessoryId != 'acc_none') {
+      addLayer(
+        accessoryId,
+        _kMinimiAccessoryStyles[accessoryId] ??
+            const _MinimiLayerStyle(
+              size: Size(128, 84),
+              anchor: Offset(0.5, 0.23),
+              zIndex: 4,
+            ),
+      );
+    }
+
+    layers.sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: SizedBox(
+        width: _kMinimiPreviewCanvasSize.width,
+        height: _kMinimiPreviewCanvasSize.height,
+        child: ClipRect(
+          child: Stack(children: layers.map((e) => e.child).toList()),
+        ),
       ),
     );
   }
