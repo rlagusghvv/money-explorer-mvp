@@ -4889,6 +4889,7 @@ class _MyHomeTab extends StatefulWidget {
 
 class _MyHomeTabState extends State<_MyHomeTab> {
   bool _showEquipFx = false;
+  bool _lockMyHomeScroll = false;
   String _equipFxLabel = '장착 완료!';
   late final TextEditingController _themeNameController;
 
@@ -4961,7 +4962,9 @@ class _MyHomeTabState extends State<_MyHomeTab> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
-        physics: const BouncingScrollPhysics(),
+        physics: _lockMyHomeScroll
+            ? const NeverScrollableScrollPhysics()
+            : const BouncingScrollPhysics(),
         children: [
           Card(
             color: const Color(0xFFEFF6FF),
@@ -4979,7 +4982,7 @@ class _MyHomeTabState extends State<_MyHomeTab> {
                   Text('동기화 상태: ${widget.syncMessage ?? '로컬 저장 중'}'),
                   const SizedBox(height: 10),
                   const Text(
-                    '편집 모드로 들어가면 전체화면 캔버스에서 안정적으로 배치할 수 있어요.',
+                    '미리보기 영역에서 바로 터치/핀치로 배치와 크기를 편집할 수 있어요.',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
@@ -4997,18 +5000,11 @@ class _MyHomeTabState extends State<_MyHomeTab> {
             itemById: _itemById,
             showEquipFx: _showEquipFx,
             equipFxLabel: _equipFxLabel,
-            onOpenEditor: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (context) => _MiniRoomEditorScreen(
-                    state: widget.state,
-                    itemById: _itemById,
-                    onDecorationAdjusted: widget.onDecorationAdjusted,
-                    onCharacterAdjusted: widget.onCharacterAdjusted,
-                  ),
-                  fullscreenDialog: true,
-                ),
-              );
+            onDecorationAdjusted: widget.onDecorationAdjusted,
+            onCharacterAdjusted: widget.onCharacterAdjusted,
+            onInteractionLockChanged: (locked) {
+              if (_lockMyHomeScroll == locked) return;
+              setState(() => _lockMyHomeScroll = locked);
             },
           ),
           const SizedBox(height: 10),
@@ -5297,14 +5293,19 @@ class _MyHomeRoomCard extends StatelessWidget {
     required this.itemById,
     required this.showEquipFx,
     required this.equipFxLabel,
-    required this.onOpenEditor,
+    required this.onDecorationAdjusted,
+    required this.onCharacterAdjusted,
+    required this.onInteractionLockChanged,
   });
 
   final AppState state;
   final ShopItem? Function(String? id) itemById;
   final bool showEquipFx;
   final String equipFxLabel;
-  final VoidCallback onOpenEditor;
+  final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
+  onDecorationAdjusted;
+  final ValueChanged<RoomItemAdjustment> onCharacterAdjusted;
+  final ValueChanged<bool> onInteractionLockChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -5314,32 +5315,26 @@ class _MyHomeRoomCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    '마이룸 미리보기',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: onOpenEditor,
-                  icon: const Icon(Icons.open_in_full),
-                  label: const Text('편집 모드'),
-                ),
-              ],
+            const Text(
+              '마이룸 인라인 편집',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '오브젝트 실루엣(불투명 픽셀)만 터치로 선택됩니다.',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
             ),
             const SizedBox(height: 10),
             AspectRatio(
               aspectRatio: 1.32,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: _MiniRoomVisual(
-                  state: state,
-                  itemById: itemById,
-                  showEquipFx: showEquipFx,
-                  equipFxLabel: equipFxLabel,
-                ),
+              child: _MiniRoomInlineEditor(
+                state: state,
+                itemById: itemById,
+                showEquipFx: showEquipFx,
+                equipFxLabel: equipFxLabel,
+                onDecorationAdjusted: onDecorationAdjusted,
+                onCharacterAdjusted: onCharacterAdjusted,
+                onInteractionLockChanged: onInteractionLockChanged,
               ),
             ),
           ],
@@ -5349,25 +5344,31 @@ class _MyHomeRoomCard extends StatelessWidget {
   }
 }
 
-class _MiniRoomEditorScreen extends StatefulWidget {
-  const _MiniRoomEditorScreen({
+class _MiniRoomInlineEditor extends StatefulWidget {
+  const _MiniRoomInlineEditor({
     required this.state,
     required this.itemById,
+    required this.showEquipFx,
+    required this.equipFxLabel,
     required this.onDecorationAdjusted,
     required this.onCharacterAdjusted,
+    required this.onInteractionLockChanged,
   });
 
   final AppState state;
   final ShopItem? Function(String? id) itemById;
+  final bool showEquipFx;
+  final String equipFxLabel;
   final void Function(DecorationZone zone, RoomItemAdjustment adjustment)
   onDecorationAdjusted;
   final ValueChanged<RoomItemAdjustment> onCharacterAdjusted;
+  final ValueChanged<bool> onInteractionLockChanged;
 
   @override
-  State<_MiniRoomEditorScreen> createState() => _MiniRoomEditorScreenState();
+  State<_MiniRoomInlineEditor> createState() => _MiniRoomInlineEditorState();
 }
 
-class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
+class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     with SingleTickerProviderStateMixin {
   static const Map<DecorationZone, _RoomAnchor> _anchors = {
     DecorationZone.wall: _RoomAnchor(Alignment(-0.06, -0.60), Size(72, 46), 1),
@@ -5419,6 +5420,7 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
 
   @override
   void dispose() {
+    widget.onInteractionLockChanged(false);
     _selectionPulseController.dispose();
     super.dispose();
   }
@@ -5649,7 +5651,10 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
       : (_draftDecorationAdjustments[target.zone] ??
             RoomItemAdjustment.defaults);
 
-  void _applyDraftAdjustment(_RoomTarget target, RoomItemAdjustment adjustment) {
+  void _applyDraftAdjustment(
+    _RoomTarget target,
+    RoomItemAdjustment adjustment,
+  ) {
     if (target.isCharacter) {
       _draftCharacterAdjustment = adjustment;
       return;
@@ -5715,6 +5720,7 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
       );
       _pendingCommitAdjustment = null;
     });
+    widget.onInteractionLockChanged(true);
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details, BoxConstraints c) {
@@ -5755,52 +5761,41 @@ class _MiniRoomEditorScreenState extends State<_MiniRoomEditorScreen>
       _baseline = null;
       _pendingCommitAdjustment = null;
     });
+    widget.onInteractionLockChanged(false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        title: const Text('마이룸 편집 모드'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('완료'),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: LayoutBuilder(
-            builder: (context, c) {
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onScaleStart: (d) => _onScaleStart(d, c),
-                onScaleUpdate: (d) => _onScaleUpdate(d, c),
-                onScaleEnd: _onScaleEnd,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: _MiniRoomVisual(
-                    state: widget.state.copyWith(
-                      decorationAdjustments: {
-                        ..._draftDecorationAdjustments,
-                      },
-                      characterAdjustment: _draftCharacterAdjustment,
-                    ),
-                    itemById: widget.itemById,
-                    showEquipFx: false,
-                    equipFxLabel: '',
-                    selectedTarget: _selectedTarget,
-                    selectionPulse: _selectionPulseController,
-                  ),
+    return LayoutBuilder(
+      builder: (context, c) {
+        return Listener(
+          onPointerDown: (_) => widget.onInteractionLockChanged(true),
+          onPointerUp: (_) {
+            if (_baseline == null) widget.onInteractionLockChanged(false);
+          },
+          onPointerCancel: (_) => widget.onInteractionLockChanged(false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onScaleStart: (d) => _onScaleStart(d, c),
+            onScaleUpdate: (d) => _onScaleUpdate(d, c),
+            onScaleEnd: _onScaleEnd,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: _MiniRoomVisual(
+                state: widget.state.copyWith(
+                  decorationAdjustments: {..._draftDecorationAdjustments},
+                  characterAdjustment: _draftCharacterAdjustment,
                 ),
-              );
-            },
+                itemById: widget.itemById,
+                showEquipFx: widget.showEquipFx,
+                equipFxLabel: widget.equipFxLabel,
+                selectedTarget: _selectedTarget,
+                selectionPulse: _selectionPulseController,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
