@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.26-r43';
+const kAppUiVersion = 'ui-2026.02.26-r44';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5767,22 +5767,30 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
     return box?.size ?? Size(c.maxWidth, c.maxHeight);
   }
 
-  // r43: single source of truth for touch calibration (global -> canvas local).
+  // r44: keep single-path calibration, plus a tiny final iOS real-device bias trim.
   Offset _applyTouchCalibration(Offset globalPoint, BoxConstraints c) {
+    const double kFinalIosTouchBiasX = -1.0;
+    const double kFinalIosTouchBiasY = -2.0;
+
     final canvasBox = _miniRoomCanvasRenderBox();
     final canvasSize = _canvasSize(c);
     final local = canvasBox?.globalToLocal(globalPoint) ?? globalPoint;
+
+    final corrected = defaultTargetPlatform == TargetPlatform.iOS
+        ? Offset(local.dx + kFinalIosTouchBiasX, local.dy + kFinalIosTouchBiasY)
+        : local;
 
     if (kDebugMode && canvasBox != null) {
       final origin = canvasBox.localToGlobal(Offset.zero);
       _debugCalibrationSummary =
           'single-layer origin=${origin.dx.toStringAsFixed(1)},${origin.dy.toStringAsFixed(1)} '
-          'size=${canvasSize.width.toStringAsFixed(1)}x${canvasSize.height.toStringAsFixed(1)}';
+          'size=${canvasSize.width.toStringAsFixed(1)}x${canvasSize.height.toStringAsFixed(1)} '
+          'bias=(${kFinalIosTouchBiasX.toStringAsFixed(1)},${kFinalIosTouchBiasY.toStringAsFixed(1)})';
     }
 
     return Offset(
-      local.dx.clamp(0.0, canvasSize.width),
-      local.dy.clamp(0.0, canvasSize.height),
+      corrected.dx.clamp(0.0, canvasSize.width),
+      corrected.dy.clamp(0.0, canvasSize.height),
     );
   }
 
@@ -5807,7 +5815,7 @@ class _MiniRoomInlineEditorState extends State<_MiniRoomInlineEditor>
       _touchTraceLines.removeRange(0, _touchTraceLines.length - 80);
     }
     if (kDebugMode) {
-      debugPrint('[r43-touch-trace] ${_touchTraceLines.last}');
+      debugPrint('[r44-touch-trace] ${_touchTraceLines.last}');
     }
   }
 
