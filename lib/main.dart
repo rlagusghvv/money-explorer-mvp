@@ -5993,14 +5993,55 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             onChanged: (v) => setState(() => _calibrationMode = v),
           ),
           const SizedBox(height: 8),
+          previewCard,
+          const SizedBox(height: 8),
           if (isMobile && _calibrationMode)
             Stack(
+              clipBehavior: Clip.none,
               children: [
-                previewCard,
+                Padding(
+                  padding: const EdgeInsets.only(top: 44),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        children: MinimiCategory.values.map((category) {
+                          return ChoiceChip(
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(category.icon, size: 16),
+                                const SizedBox(width: 4),
+                                Text(category.label),
+                              ],
+                            ),
+                            selected: _category == category,
+                            onSelected: (_) =>
+                                setState(() => _category = category),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: presets.map((preset) {
+                          return ChoiceChip(
+                            label: Text('${preset.emoji} ${preset.label}'),
+                            selected: selectedId == preset.id,
+                            onSelected: (_) =>
+                                widget.onSelectPreset(_category, preset.id),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
                 Positioned(
                   left: 8,
                   right: 8,
-                  bottom: 8,
+                  top: 0,
                   child: AnimatedCrossFade(
                     duration: const Duration(milliseconds: 180),
                     crossFadeState: _mobileCalibrationPanelCollapsed
@@ -6033,7 +6074,7 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
                                   ),
                                 ),
                                 subtitle: const Text(
-                                  '프리뷰는 항상 보이고, 값은 실시간 반영돼요.',
+                                  '프리뷰/아이템은 보이고, 값은 실시간 반영돼요.',
                                   style: TextStyle(fontSize: 11),
                                 ),
                                 trailing: IconButton(
@@ -6056,7 +6097,7 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
                       ),
                     ),
                     secondChild: Align(
-                      alignment: Alignment.bottomRight,
+                      alignment: Alignment.topRight,
                       child: FilledButton.icon(
                         onPressed: () => setState(
                           () => _mobileCalibrationPanelCollapsed = false,
@@ -6074,38 +6115,38 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
                 ),
               ],
             )
-          else
-            previewCard,
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: MinimiCategory.values.map((category) {
-              return ChoiceChip(
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(category.icon, size: 16),
-                    const SizedBox(width: 4),
-                    Text(category.label),
-                  ],
-                ),
-                selected: _category == category,
-                onSelected: (_) => setState(() => _category = category),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: presets.map((preset) {
-              return ChoiceChip(
-                label: Text('${preset.emoji} ${preset.label}'),
-                selected: selectedId == preset.id,
-                onSelected: (_) => widget.onSelectPreset(_category, preset.id),
-              );
-            }).toList(),
-          ),
+          else ...[
+            Wrap(
+              spacing: 8,
+              children: MinimiCategory.values.map((category) {
+                return ChoiceChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(category.icon, size: 16),
+                      const SizedBox(width: 4),
+                      Text(category.label),
+                    ],
+                  ),
+                  selected: _category == category,
+                  onSelected: (_) => setState(() => _category = category),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: presets.map((preset) {
+                return ChoiceChip(
+                  label: Text('${preset.emoji} ${preset.label}'),
+                  selected: selectedId == preset.id,
+                  onSelected: (_) =>
+                      widget.onSelectPreset(_category, preset.id),
+                );
+              }).toList(),
+            ),
+          ],
           if (_calibrationMode && !isMobile) ...[
             const SizedBox(height: 12),
             _buildCalibrationPanel(isMobile: false),
