@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.27-r58';
+const kAppUiVersion = 'ui-2026.02.27-r60';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5587,6 +5587,7 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
   MinimiCategory _category = MinimiCategory.hair;
   MinimiCategory _calibrationSection = MinimiCategory.hair;
   bool _calibrationMode = true;
+  bool _mobileCalibrationPanelCollapsed = false;
   late final TextEditingController _jsonController;
   String? _jsonMessage;
 
@@ -5891,11 +5892,11 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
     }
 
     return Container(
-      constraints: const BoxConstraints(maxHeight: 460),
+      constraints: const BoxConstraints(maxHeight: 180),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFF),
+        color: const Color(0xEAF7FAFF),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDDE8F8)),
+        border: Border.all(color: const Color(0xCCDDE8F8)),
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(10),
@@ -5927,6 +5928,35 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
               (e) =>
                   e.id == widget.cosmetics.selectedId(MinimiCategory.accessory),
             );
+    final previewCard = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F9FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDDE8F8)),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 132,
+            height: 170,
+            child: _MinimiPreviewComposite(
+              hairId: hair.id,
+              topId: top.id,
+              accessoryId: accessory.id,
+              calibration: _calibration,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${hair.label} · ${top.label} · ${accessory.label}',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
 
     return AppCard(
       child: Column(
@@ -5957,38 +5987,79 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             onChanged: (v) => setState(() => _calibrationMode = v),
           ),
           const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F9FF),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFDDE8F8)),
-            ),
-            child: Column(
+          if (isMobile && _calibrationMode)
+            Stack(
               children: [
-                SizedBox(
-                  width: 132,
-                  height: 170,
-                  child: _MinimiPreviewComposite(
-                    hairId: hair.id,
-                    topId: top.id,
-                    accessoryId: accessory.id,
-                    calibration: _calibration,
+                previewCard,
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 8,
+                  child: AnimatedCrossFade(
+                    duration: const Duration(milliseconds: 180),
+                    crossFadeState: _mobileCalibrationPanelCollapsed
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    firstChild: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xCCFFFFFF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0x99DDE8F8)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.tune_rounded, size: 18),
+                            title: const Text(
+                              '정렬 오버레이 패널',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: const Text(
+                              '프리뷰는 항상 보이고, 값은 실시간 반영돼요.',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            trailing: IconButton(
+                              onPressed: () => setState(
+                                () => _mobileCalibrationPanelCollapsed = true,
+                              ),
+                              icon: const Icon(Icons.expand_more_rounded),
+                              tooltip: '패널 접기',
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: _buildCalibrationPanel(isMobile: true),
+                          ),
+                        ],
+                      ),
+                    ),
+                    secondChild: Align(
+                      alignment: Alignment.bottomRight,
+                      child: FilledButton.icon(
+                        onPressed: () => setState(
+                          () => _mobileCalibrationPanelCollapsed = false,
+                        ),
+                        icon: const Icon(Icons.expand_less_rounded, size: 18),
+                        label: const Text('조정 패널 펼치기'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xD91E3A8A),
+                          foregroundColor: Colors.white,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${hair.label} · ${top.label} · ${accessory.label}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
                 ),
               ],
-            ),
-          ),
+            )
+          else
+            previewCard,
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -6019,41 +6090,9 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
               );
             }).toList(),
           ),
-          if (_calibrationMode) ...[
+          if (_calibrationMode && !isMobile) ...[
             const SizedBox(height: 12),
-            if (isMobile)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F9FF),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFDDE8F8)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.push_pin_rounded,
-                      size: 16,
-                      color: AppDesign.secondary,
-                    ),
-                    SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '프리뷰는 상단에 고정되고, 아래 조정 패널만 스크롤돼요.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (isMobile) const SizedBox(height: 8),
-            _buildCalibrationPanel(isMobile: isMobile),
+            _buildCalibrationPanel(isMobile: false),
           ],
         ],
       ),
