@@ -5585,6 +5585,7 @@ class _MinimiMvpCard extends StatefulWidget {
 
 class _MinimiMvpCardState extends State<_MinimiMvpCard> {
   MinimiCategory _category = MinimiCategory.hair;
+  MinimiCategory _calibrationSection = MinimiCategory.hair;
   bool _calibrationMode = true;
   late final TextEditingController _jsonController;
   String? _jsonMessage;
@@ -5690,8 +5691,226 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
     );
   }
 
+  List<Widget> _buildSectionCalibrationControls() {
+    switch (_calibrationSection) {
+      case MinimiCategory.hair:
+        return [
+          _buildCalibrationRow(
+            label: 'hairY',
+            value: _calibration.hairY,
+            min: MinimiCalibration.minOffset,
+            max: MinimiCalibration.maxOffset,
+            step: 1,
+            suffix: 'px',
+            onChanged: (v) =>
+                _changeCalibration(_calibration.copyWith(hairY: v)),
+          ),
+          _buildCalibrationRow(
+            label: 'hairScale',
+            value: _calibration.hairScale,
+            min: MinimiCalibration.minScale,
+            max: MinimiCalibration.maxScale,
+            step: 0.01,
+            suffix: 'x',
+            onChanged: (v) =>
+                _changeCalibration(_calibration.copyWith(hairScale: v)),
+          ),
+        ];
+      case MinimiCategory.top:
+        return [
+          _buildCalibrationRow(
+            label: 'topY',
+            value: _calibration.topY,
+            min: MinimiCalibration.minOffset,
+            max: MinimiCalibration.maxOffset,
+            step: 1,
+            suffix: 'px',
+            onChanged: (v) =>
+                _changeCalibration(_calibration.copyWith(topY: v)),
+          ),
+          _buildCalibrationRow(
+            label: 'topScale',
+            value: _calibration.topScale,
+            min: MinimiCalibration.minScale,
+            max: MinimiCalibration.maxScale,
+            step: 0.01,
+            suffix: 'x',
+            onChanged: (v) =>
+                _changeCalibration(_calibration.copyWith(topScale: v)),
+          ),
+        ];
+      case MinimiCategory.accessory:
+        return [
+          _buildCalibrationRow(
+            label: 'accessoryY',
+            value: _calibration.accessoryY,
+            min: MinimiCalibration.minOffset,
+            max: MinimiCalibration.maxOffset,
+            step: 1,
+            suffix: 'px',
+            onChanged: (v) =>
+                _changeCalibration(_calibration.copyWith(accessoryY: v)),
+          ),
+          _buildCalibrationRow(
+            label: 'accessoryScale',
+            value: _calibration.accessoryScale,
+            min: MinimiCalibration.minScale,
+            max: MinimiCalibration.maxScale,
+            step: 0.01,
+            suffix: 'x',
+            onChanged: (v) =>
+                _changeCalibration(_calibration.copyWith(accessoryScale: v)),
+          ),
+        ];
+    }
+  }
+
+  Widget _buildCalibrationPanel({required bool isMobile}) {
+    final sectionControls = _buildSectionCalibrationControls();
+    final controls = [
+      const Text(
+        '조정 섹션 (Body는 항상 표시)',
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+      ),
+      const SizedBox(height: 6),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: MinimiCategory.values.map((category) {
+          return ChoiceChip(
+            label: Text(category.label),
+            selected: _calibrationSection == category,
+            onSelected: (_) => setState(() => _calibrationSection = category),
+          );
+        }).toList(),
+      ),
+      const SizedBox(height: 8),
+      _buildCalibrationRow(
+        label: 'bodyY',
+        value: _calibration.bodyY,
+        min: MinimiCalibration.minOffset,
+        max: MinimiCalibration.maxOffset,
+        step: 1,
+        suffix: 'px',
+        onChanged: (v) => _changeCalibration(_calibration.copyWith(bodyY: v)),
+      ),
+      _buildCalibrationRow(
+        label: 'bodyScale',
+        value: _calibration.bodyScale,
+        min: MinimiCalibration.minScale,
+        max: MinimiCalibration.maxScale,
+        step: 0.01,
+        suffix: 'x',
+        onChanged: (v) =>
+            _changeCalibration(_calibration.copyWith(bodyScale: v)),
+      ),
+      ...sectionControls,
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: widget.onCalibrationReset,
+              icon: const Icon(Icons.restart_alt_rounded),
+              label: const Text('기본값 복원'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => widget.onCalibrationSave(_calibration),
+              icon: const Icon(Icons.save_rounded),
+              label: const Text('현재값 저장'),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _exportCalibrationJson,
+              icon: const Icon(Icons.ios_share_rounded),
+              label: const Text('내보내기(JSON)'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => widget.onCalibrationSetDefault(_calibration),
+              icon: const Icon(Icons.push_pin_rounded),
+              label: const Text('이 값을 기준값으로 사용'),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      TextField(
+        controller: _jsonController,
+        minLines: 3,
+        maxLines: 6,
+        decoration: const InputDecoration(
+          labelText: '가져오기 JSON',
+          hintText: '{"bodyY":0,"bodyScale":1.0,...}',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 6),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _importCalibrationJson,
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('가져오기 적용'),
+            ),
+          ),
+        ],
+      ),
+      if (_jsonMessage != null) ...[
+        const SizedBox(height: 4),
+        Text(
+          _jsonMessage!,
+          style: TextStyle(
+            fontSize: 12,
+            color:
+                _jsonMessage!.contains('실패') || _jsonMessage!.contains('올바르지')
+                ? Colors.red.shade700
+                : Colors.blueGrey.shade700,
+          ),
+        ),
+      ],
+    ];
+
+    if (!isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: controls,
+      );
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 460),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDE8F8)),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(10),
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: controls,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 640;
     final presets = kMinimiPresetByCategory[_category] ?? const [];
     final selectedId = widget.cosmetics.selectedId(_category);
     final hair = (kMinimiPresetByCategory[MinimiCategory.hair] ?? const [])
@@ -5802,164 +6021,39 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
           ),
           if (_calibrationMode) ...[
             const SizedBox(height: 12),
-            _buildCalibrationRow(
-              label: 'bodyY',
-              value: _calibration.bodyY,
-              min: MinimiCalibration.minOffset,
-              max: MinimiCalibration.maxOffset,
-              step: 1,
-              suffix: 'px',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(bodyY: v)),
-            ),
-            _buildCalibrationRow(
-              label: 'bodyScale',
-              value: _calibration.bodyScale,
-              min: MinimiCalibration.minScale,
-              max: MinimiCalibration.maxScale,
-              step: 0.01,
-              suffix: 'x',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(bodyScale: v)),
-            ),
-            _buildCalibrationRow(
-              label: 'hairY',
-              value: _calibration.hairY,
-              min: MinimiCalibration.minOffset,
-              max: MinimiCalibration.maxOffset,
-              step: 1,
-              suffix: 'px',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(hairY: v)),
-            ),
-            _buildCalibrationRow(
-              label: 'hairScale',
-              value: _calibration.hairScale,
-              min: MinimiCalibration.minScale,
-              max: MinimiCalibration.maxScale,
-              step: 0.01,
-              suffix: 'x',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(hairScale: v)),
-            ),
-            _buildCalibrationRow(
-              label: 'topY',
-              value: _calibration.topY,
-              min: MinimiCalibration.minOffset,
-              max: MinimiCalibration.maxOffset,
-              step: 1,
-              suffix: 'px',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(topY: v)),
-            ),
-            _buildCalibrationRow(
-              label: 'topScale',
-              value: _calibration.topScale,
-              min: MinimiCalibration.minScale,
-              max: MinimiCalibration.maxScale,
-              step: 0.01,
-              suffix: 'x',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(topScale: v)),
-            ),
-            _buildCalibrationRow(
-              label: 'accessoryY',
-              value: _calibration.accessoryY,
-              min: MinimiCalibration.minOffset,
-              max: MinimiCalibration.maxOffset,
-              step: 1,
-              suffix: 'px',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(accessoryY: v)),
-            ),
-            _buildCalibrationRow(
-              label: 'accessoryScale',
-              value: _calibration.accessoryScale,
-              min: MinimiCalibration.minScale,
-              max: MinimiCalibration.maxScale,
-              step: 0.01,
-              suffix: 'x',
-              onChanged: (v) =>
-                  _changeCalibration(_calibration.copyWith(accessoryScale: v)),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: widget.onCalibrationReset,
-                    icon: const Icon(Icons.restart_alt_rounded),
-                    label: const Text('기본값 복원'),
-                  ),
+            if (isMobile)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 10,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => widget.onCalibrationSave(_calibration),
-                    icon: const Icon(Icons.save_rounded),
-                    label: const Text('현재값 저장'),
-                  ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F9FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFDDE8F8)),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _exportCalibrationJson,
-                    icon: const Icon(Icons.ios_share_rounded),
-                    label: const Text('내보내기(JSON)'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () =>
-                        widget.onCalibrationSetDefault(_calibration),
-                    icon: const Icon(Icons.push_pin_rounded),
-                    label: const Text('이 값을 기준값으로 사용'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _jsonController,
-              minLines: 3,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: '가져오기 JSON',
-                hintText: '{"bodyY":0,"bodyScale":1.0,...}',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _importCalibrationJson,
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('가져오기 적용'),
-                  ),
-                ),
-              ],
-            ),
-            if (_jsonMessage != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                _jsonMessage!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color:
-                      _jsonMessage!.contains('실패') ||
-                          _jsonMessage!.contains('올바르지')
-                      ? Colors.red.shade700
-                      : Colors.blueGrey.shade700,
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.push_pin_rounded,
+                      size: 16,
+                      color: AppDesign.secondary,
+                    ),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '프리뷰는 상단에 고정되고, 아래 조정 패널만 스크롤돼요.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            if (isMobile) const SizedBox(height: 8),
+            _buildCalibrationPanel(isMobile: isMobile),
           ],
         ],
       ),
