@@ -695,6 +695,74 @@ class MinimiCosmeticState {
   };
 }
 
+class MinimiCalibration {
+  const MinimiCalibration({
+    required this.hairY,
+    required this.topY,
+    required this.topScale,
+    required this.accessoryY,
+  });
+
+  static const double _minOffset = -40;
+  static const double _maxOffset = 40;
+  static const double _minTopScale = 0.82;
+  static const double _maxTopScale = 1.22;
+
+  static const MinimiCalibration defaults = MinimiCalibration(
+    hairY: 0,
+    topY: 0,
+    topScale: 1,
+    accessoryY: 0,
+  );
+
+  final double hairY;
+  final double topY;
+  final double topScale;
+  final double accessoryY;
+
+  MinimiCalibration copyWith({
+    double? hairY,
+    double? topY,
+    double? topScale,
+    double? accessoryY,
+  }) {
+    return MinimiCalibration(
+      hairY: _clampOffset(hairY ?? this.hairY),
+      topY: _clampOffset(topY ?? this.topY),
+      topScale: _clampTopScale(topScale ?? this.topScale),
+      accessoryY: _clampOffset(accessoryY ?? this.accessoryY),
+    );
+  }
+
+  static double _clampOffset(double value) =>
+      value.clamp(_minOffset, _maxOffset);
+
+  static double _clampTopScale(double value) =>
+      value.clamp(_minTopScale, _maxTopScale);
+
+  Map<String, dynamic> toJson() => {
+    'hairY': hairY,
+    'topY': topY,
+    'topScale': topScale,
+    'accessoryY': accessoryY,
+  };
+
+  factory MinimiCalibration.fromJson(Object? raw) {
+    if (raw is! Map) return defaults;
+    final map = raw.cast<Object?, Object?>();
+    return MinimiCalibration(
+      hairY: _clampOffset((map['hairY'] as num?)?.toDouble() ?? defaults.hairY),
+      topY: _clampOffset((map['topY'] as num?)?.toDouble() ?? defaults.topY),
+      topScale: _clampTopScale(
+        (map['topScale'] as num?)?.toDouble() ?? defaults.topScale,
+      ),
+      accessoryY: _clampOffset(
+        (map['accessoryY'] as num?)?.toDouble() ?? defaults.accessoryY,
+      ),
+    );
+  }
+}
+
 const Map<String, String> kMinimiAssetById = {
   'base_body': 'assets/minimi/normalized/base_body.png',
   'hair_basic_black': 'assets/minimi/normalized/hair_basic_black.png',
@@ -824,14 +892,23 @@ class _MinimiRenderLayer {
   final double scale;
 }
 
-Offset _minimiOffsetFor(MinimiCategory category, String itemId) {
+Offset _minimiOffsetFor(
+  MinimiCategory category,
+  String itemId,
+  MinimiCalibration calibration,
+) {
   final baseTarget =
       _kMinimiBaseTargetMarkerByCategory[category] ?? const Offset(256, 256);
   final itemMarker = _kMinimiAnchorMarkerById[itemId] ?? const Offset(256, 256);
   final tune = _kMinimiFineTuneOffsetById[itemId] ?? Offset.zero;
+  final calibrationY = switch (category) {
+    MinimiCategory.hair => calibration.hairY,
+    MinimiCategory.top => calibration.topY,
+    MinimiCategory.accessory => calibration.accessoryY,
+  };
   return Offset(
     (baseTarget.dx - itemMarker.dx) + tune.dx,
-    (baseTarget.dy - itemMarker.dy) + tune.dy,
+    (baseTarget.dy - itemMarker.dy) + tune.dy + calibrationY,
   );
 }
 
@@ -839,6 +916,7 @@ List<_MinimiRenderLayer> _buildMinimiRenderLayers({
   required String hairId,
   required String topId,
   required String accessoryId,
+  required MinimiCalibration calibration,
 }) {
   final selected = <(MinimiCategory?, String)>[
     (null, 'base_body'),
@@ -851,13 +929,19 @@ List<_MinimiRenderLayer> _buildMinimiRenderLayers({
   for (final (category, id) in selected) {
     final assetPath = kMinimiAssetById[id];
     if (assetPath == null) continue;
+    final baseScale = _kMinimiItemScaleById[id] ?? 1;
+    final scale = category == MinimiCategory.top
+        ? baseScale * calibration.topScale
+        : baseScale;
     layers.add(
       _MinimiRenderLayer(
         id: id,
         assetPath: assetPath,
         z: _kMinimiLayerZByItem[id] ?? 99,
-        offset: category == null ? Offset.zero : _minimiOffsetFor(category, id),
-        scale: _kMinimiItemScaleById[id] ?? 1,
+        offset: category == null
+            ? Offset.zero
+            : _minimiOffsetFor(category, id, calibration),
+        scale: scale,
       ),
     );
   }
@@ -1266,6 +1350,7 @@ class AppState {
     required this.weeklyMissionWeekKey,
     required this.weeklyClaimedMissionIds,
     required this.minimiCosmetics,
+    required this.minimiCalibration,
     required this.mapExpanded,
     required this.scenarioOrder,
   });
@@ -1317,6 +1402,7 @@ class AppState {
     weeklyMissionWeekKey: '',
     weeklyClaimedMissionIds: {},
     minimiCosmetics: MinimiCosmeticState.initial(),
+    minimiCalibration: MinimiCalibration.defaults,
     mapExpanded: true,
     scenarioOrder: [],
   );
@@ -1347,6 +1433,7 @@ class AppState {
   final String weeklyMissionWeekKey;
   final Set<String> weeklyClaimedMissionIds;
   final MinimiCosmeticState minimiCosmetics;
+  final MinimiCalibration minimiCalibration;
   final bool mapExpanded;
   final List<int> scenarioOrder;
 
@@ -1403,6 +1490,9 @@ class AppState {
         .toList();
     final minimiCosmetics = MinimiCosmeticState.fromJson(
       json['minimiCosmetics'],
+    );
+    final minimiCalibration = MinimiCalibration.fromJson(
+      json['minimiCalibration'],
     );
 
     return AppState(
@@ -1471,6 +1561,7 @@ class AppState {
               .whereType<String>()
               .toSet(),
       minimiCosmetics: minimiCosmetics,
+      minimiCalibration: minimiCalibration,
       mapExpanded: json['mapExpanded'] != false,
       scenarioOrder: scenarioOrder,
     );
@@ -1509,6 +1600,7 @@ class AppState {
     'weeklyMissionWeekKey': weeklyMissionWeekKey,
     'weeklyClaimedMissionIds': weeklyClaimedMissionIds.toList(),
     'minimiCosmetics': minimiCosmetics.toJson(),
+    'minimiCalibration': minimiCalibration.toJson(),
     'mapExpanded': mapExpanded,
     'scenarioOrder': scenarioOrder,
   };
@@ -1540,6 +1632,7 @@ class AppState {
     String? weeklyMissionWeekKey,
     Set<String>? weeklyClaimedMissionIds,
     MinimiCosmeticState? minimiCosmetics,
+    MinimiCalibration? minimiCalibration,
     bool? mapExpanded,
     List<int>? scenarioOrder,
   }) {
@@ -1574,6 +1667,7 @@ class AppState {
       weeklyClaimedMissionIds:
           weeklyClaimedMissionIds ?? this.weeklyClaimedMissionIds,
       minimiCosmetics: minimiCosmetics ?? this.minimiCosmetics,
+      minimiCalibration: minimiCalibration ?? this.minimiCalibration,
       mapExpanded: mapExpanded ?? this.mapExpanded,
       scenarioOrder: scenarioOrder ?? this.scenarioOrder,
     );
@@ -1608,6 +1702,7 @@ class AppStateStore {
   static const _kWeeklyMissionWeekKey = 'weeklyMissionWeekKey';
   static const _kWeeklyClaimedMissionIds = 'weeklyClaimedMissionIds';
   static const _kMinimiCosmetics = 'minimiCosmetics';
+  static const _kMinimiCalibration = 'minimiCalibration';
   static const _kMapExpanded = 'mapExpanded';
   static const _kScenarioOrder = 'scenarioOrder';
 
@@ -1728,6 +1823,16 @@ class AppStateStore {
         minimiRaw = const {};
       }
     }
+    Map<String, dynamic> minimiCalibrationRaw = const {};
+    final minimiCalibrationJson = prefs.getString(_kMinimiCalibration);
+    if (minimiCalibrationJson != null && minimiCalibrationJson.isNotEmpty) {
+      try {
+        minimiCalibrationRaw =
+            jsonDecode(minimiCalibrationJson) as Map<String, dynamic>;
+      } catch (_) {
+        minimiCalibrationRaw = const {};
+      }
+    }
 
     if (adjustmentJson != null && adjustmentJson.isNotEmpty) {
       try {
@@ -1785,6 +1890,7 @@ class AppStateStore {
       weeklyClaimedMissionIds:
           (prefs.getStringList(_kWeeklyClaimedMissionIds) ?? const []).toSet(),
       minimiCosmetics: MinimiCosmeticState.fromJson(minimiRaw),
+      minimiCalibration: MinimiCalibration.fromJson(minimiCalibrationRaw),
       mapExpanded: prefs.getBool(_kMapExpanded) ?? true,
       scenarioOrder: (prefs.getStringList(_kScenarioOrder) ?? const [])
           .map((e) => int.tryParse(e))
@@ -1863,6 +1969,10 @@ class AppStateStore {
     await prefs.setString(
       _kMinimiCosmetics,
       jsonEncode(state.minimiCosmetics.toJson()),
+    );
+    await prefs.setString(
+      _kMinimiCalibration,
+      jsonEncode(state.minimiCalibration.toJson()),
     );
     await prefs.setBool(_kMapExpanded, state.mapExpanded);
     await prefs.setStringList(
@@ -2614,14 +2724,40 @@ class _GameHomePageState extends State<GameHomePage> {
     _persist();
   }
 
-  void _resetMinimiToDefault() {
+  void _updateMinimiCalibration(MinimiCalibration calibration) {
     setState(() {
-      _state = _state.copyWith(minimiCosmetics: MinimiCosmeticState.initial());
+      _state = _state.copyWith(minimiCalibration: calibration);
+    });
+  }
+
+  void _saveMinimiCalibration(MinimiCalibration calibration) {
+    setState(() {
+      _state = _state.copyWith(minimiCalibration: calibration);
     });
     _persist();
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('미니미를 기본 스타일로 되돌렸어요.')));
+    ).showSnackBar(const SnackBar(content: Text('정렬 값을 저장했어요.')));
+  }
+
+  void _resetMinimiToDefault() {
+    setState(() {
+      _state = _state.copyWith(
+        minimiCosmetics: MinimiCosmeticState.initial(),
+        minimiCalibration: MinimiCalibration.defaults,
+      );
+    });
+    _persist();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('미니미를 기본값으로 되돌렸어요.')));
+  }
+
+  void _resetMinimiCalibrationToDefault() {
+    _updateMinimiCalibration(MinimiCalibration.defaults);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('캘리브레이션 기본값을 불러왔어요.')));
   }
 
   void _resetProgress() {
@@ -2715,6 +2851,9 @@ class _GameHomePageState extends State<GameHomePage> {
         onEquipHome: _equipItem,
         onSelectMinimiPreset: _selectMinimiPreset,
         onResetMinimi: _resetMinimiToDefault,
+        onMinimiCalibrationChanged: _updateMinimiCalibration,
+        onSaveMinimiCalibration: _saveMinimiCalibration,
+        onResetMinimiCalibration: _resetMinimiCalibrationToDefault,
       ),
       _ShopTab(state: _state, onBuyOrEquip: _buyAndEquipItem),
       _WeeklyReportTab(
@@ -5196,6 +5335,9 @@ class _MyHomeTab extends StatefulWidget {
     required this.onEquipHome,
     required this.onSelectMinimiPreset,
     required this.onResetMinimi,
+    required this.onMinimiCalibrationChanged,
+    required this.onSaveMinimiCalibration,
+    required this.onResetMinimiCalibration,
   });
 
   final AppState state;
@@ -5210,6 +5352,9 @@ class _MyHomeTab extends StatefulWidget {
   final void Function(MinimiCategory category, String itemId)
   onSelectMinimiPreset;
   final VoidCallback onResetMinimi;
+  final ValueChanged<MinimiCalibration> onMinimiCalibrationChanged;
+  final ValueChanged<MinimiCalibration> onSaveMinimiCalibration;
+  final VoidCallback onResetMinimiCalibration;
 
   @override
   State<_MyHomeTab> createState() => _MyHomeTabState();
@@ -5289,8 +5434,12 @@ class _MyHomeTabState extends State<_MyHomeTab> {
         children: [
           _MinimiMvpCard(
             cosmetics: state.minimiCosmetics,
+            calibration: state.minimiCalibration,
             onSelectPreset: widget.onSelectMinimiPreset,
             onReset: widget.onResetMinimi,
+            onCalibrationChanged: widget.onMinimiCalibrationChanged,
+            onCalibrationSave: widget.onSaveMinimiCalibration,
+            onCalibrationReset: widget.onResetMinimiCalibration,
           ),
         ],
       ),
@@ -5301,13 +5450,21 @@ class _MyHomeTabState extends State<_MyHomeTab> {
 class _MinimiMvpCard extends StatefulWidget {
   const _MinimiMvpCard({
     required this.cosmetics,
+    required this.calibration,
     required this.onSelectPreset,
     required this.onReset,
+    required this.onCalibrationChanged,
+    required this.onCalibrationSave,
+    required this.onCalibrationReset,
   });
 
   final MinimiCosmeticState cosmetics;
+  final MinimiCalibration calibration;
   final void Function(MinimiCategory category, String itemId) onSelectPreset;
   final VoidCallback onReset;
+  final ValueChanged<MinimiCalibration> onCalibrationChanged;
+  final ValueChanged<MinimiCalibration> onCalibrationSave;
+  final VoidCallback onCalibrationReset;
 
   @override
   State<_MinimiMvpCard> createState() => _MinimiMvpCardState();
@@ -5315,6 +5472,56 @@ class _MinimiMvpCard extends StatefulWidget {
 
 class _MinimiMvpCardState extends State<_MinimiMvpCard> {
   MinimiCategory _category = MinimiCategory.hair;
+  bool _calibrationMode = false;
+
+  MinimiCalibration get _calibration => widget.calibration;
+
+  void _changeCalibration(MinimiCalibration next) {
+    widget.onCalibrationChanged(next);
+  }
+
+  Widget _buildCalibrationRow({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required double step,
+    required String suffix,
+    required ValueChanged<double> onChanged,
+  }) {
+    final text = suffix == 'x'
+        ? value.toStringAsFixed(2)
+        : value.toStringAsFixed(1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$label ($text$suffix)',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            IconButton(
+              onPressed: () => onChanged((value - step).clamp(min, max)),
+              icon: const Icon(Icons.remove_circle_outline_rounded),
+            ),
+            IconButton(
+              onPressed: () => onChanged((value + step).clamp(min, max)),
+              icon: const Icon(Icons.add_circle_outline_rounded),
+            ),
+          ],
+        ),
+        Slider(
+          value: value.clamp(min, max),
+          min: min,
+          max: max,
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -5352,9 +5559,16 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
               TextButton.icon(
                 onPressed: widget.onReset,
                 icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('기본으로'),
+                label: const Text('기본값'),
               ),
             ],
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('정렬 조정 모드'),
+            subtitle: const Text('hairY / topY / topScale / accessoryY 조정'),
+            value: _calibrationMode,
+            onChanged: (v) => setState(() => _calibrationMode = v),
           ),
           const SizedBox(height: 8),
           Container(
@@ -5374,6 +5588,7 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
                     hairId: hair.id,
                     topId: top.id,
                     accessoryId: accessory.id,
+                    calibration: _calibration,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -5418,6 +5633,69 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
               );
             }).toList(),
           ),
+          if (_calibrationMode) ...[
+            const SizedBox(height: 12),
+            _buildCalibrationRow(
+              label: 'hairY',
+              value: _calibration.hairY,
+              min: -40,
+              max: 40,
+              step: 1,
+              suffix: 'px',
+              onChanged: (v) =>
+                  _changeCalibration(_calibration.copyWith(hairY: v)),
+            ),
+            _buildCalibrationRow(
+              label: 'topY',
+              value: _calibration.topY,
+              min: -40,
+              max: 40,
+              step: 1,
+              suffix: 'px',
+              onChanged: (v) =>
+                  _changeCalibration(_calibration.copyWith(topY: v)),
+            ),
+            _buildCalibrationRow(
+              label: 'topScale',
+              value: _calibration.topScale,
+              min: 0.82,
+              max: 1.22,
+              step: 0.01,
+              suffix: 'x',
+              onChanged: (v) =>
+                  _changeCalibration(_calibration.copyWith(topScale: v)),
+            ),
+            _buildCalibrationRow(
+              label: 'accessoryY',
+              value: _calibration.accessoryY,
+              min: -40,
+              max: 40,
+              step: 1,
+              suffix: 'px',
+              onChanged: (v) =>
+                  _changeCalibration(_calibration.copyWith(accessoryY: v)),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: widget.onCalibrationReset,
+                    icon: const Icon(Icons.restart_alt_rounded),
+                    label: const Text('기본값 복원'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => widget.onCalibrationSave(_calibration),
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('확정 저장'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -5429,11 +5707,13 @@ class _MinimiPreviewComposite extends StatelessWidget {
     required this.hairId,
     required this.topId,
     required this.accessoryId,
+    required this.calibration,
   });
 
   final String hairId;
   final String topId;
   final String accessoryId;
+  final MinimiCalibration calibration;
 
   @override
   Widget build(BuildContext context) {
@@ -5441,6 +5721,7 @@ class _MinimiPreviewComposite extends StatelessWidget {
       hairId: hairId,
       topId: topId,
       accessoryId: accessoryId,
+      calibration: calibration,
     );
 
     return SizedBox(
