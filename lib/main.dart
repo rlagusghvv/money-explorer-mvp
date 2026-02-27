@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.27-r51';
+const kAppUiVersion = 'ui-2026.02.27-r52';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -740,55 +740,55 @@ const Map<MinimiCategory, List<MinimiPresetItem>> kMinimiPresetByCategory = {
 const bool kEnableMyRoomInlineSection = false;
 
 const Size _kMinimiPreviewCanvasSize = Size(184, 184);
+const double _kMinimiTopClipBottomYInNormalized = 442;
 
-// r50: base_body anchor marker 기반 정렬. 머리/목선 기준점을 고정하고
-// 헤어/상의/소품은 해당 marker에 맞춰 배치 + 아이템별 미세 보정(scale/offset) 적용.
+// r52: 사용자 기준 앵커 고정(빨강=hair, 파랑=top, 초록=bottom 경계 준수).
+// - Hair: 머리 상단 캡 영역만 덮도록 고정
+// - Top: 몸통 전체를 덮되, 하의(초록) 영역은 침범하지 않도록 별도 클리핑
+// - Accessory: 얼굴/머리 중심 기준으로 고정
 const Map<String, Offset> _kMinimiAnchorMarkerById = {
   'base_body': Offset(256, 256),
-  'hair_basic_black': Offset(256, 170),
-  'hair_brown_wave': Offset(256, 170),
-  'hair_pink_bob': Offset(256, 170),
-  'hair_blue_short': Offset(256, 170),
-  'hair_blonde': Offset(256, 170),
+  'hair_basic_black': Offset(256, 164),
+  'hair_brown_wave': Offset(256, 164),
+  'hair_pink_bob': Offset(256, 164),
+  'hair_blue_short': Offset(256, 164),
+  'hair_blonde': Offset(256, 164),
   'top_green_hoodie': Offset(256, 258),
   'top_blue_jersey': Offset(256, 258),
   'top_orange_knit': Offset(256, 258),
   'top_purple_zipup': Offset(256, 258),
   'top_white_shirt': Offset(256, 258),
-  'acc_cap': Offset(256, 168),
-  'acc_headphone': Offset(256, 174),
+  'acc_cap': Offset(256, 182),
+  'acc_headphone': Offset(256, 182),
   'acc_glass': Offset(256, 206),
-  'acc_star_pin': Offset(228, 305),
+  'acc_star_pin': Offset(256, 206),
 };
 
 const Map<MinimiCategory, Offset> _kMinimiBaseTargetMarkerByCategory = {
-  MinimiCategory.hair: Offset(256, 170),
+  MinimiCategory.hair: Offset(256, 164),
   MinimiCategory.top: Offset(256, 258),
   MinimiCategory.accessory: Offset(256, 206),
 };
 
 const Map<String, double> _kMinimiItemScaleById = {
   'base_body': 1,
-  'hair_basic_black': 1.04,
-  'hair_brown_wave': 1.05,
-  'hair_pink_bob': 1.04,
-  'hair_blue_short': 1.04,
-  'hair_blonde': 1.05,
-  'top_green_hoodie': 1.03,
-  'top_blue_jersey': 1.03,
-  'top_orange_knit': 1.02,
-  'top_purple_zipup': 1.03,
-  'top_white_shirt': 1.03,
-  'acc_cap': 1.02,
-  'acc_headphone': 1.01,
+  'hair_basic_black': 1.03,
+  'hair_brown_wave': 1.03,
+  'hair_pink_bob': 1.03,
+  'hair_blue_short': 1.03,
+  'hair_blonde': 1.03,
+  'top_green_hoodie': 1.0,
+  'top_blue_jersey': 1.0,
+  'top_orange_knit': 1.0,
+  'top_purple_zipup': 1.0,
+  'top_white_shirt': 1.0,
+  'acc_cap': 1.0,
+  'acc_headphone': 1.0,
   'acc_glass': 1.0,
-  'acc_star_pin': 0.96,
+  'acc_star_pin': 1.0,
 };
 
-const Map<String, Offset> _kMinimiFineTuneOffsetById = {
-  'acc_glass': Offset(0, -1.5),
-  'acc_star_pin': Offset(2, 0.5),
-};
+const Map<String, Offset> _kMinimiFineTuneOffsetById = {};
 
 const Map<String, int> _kMinimiLayerZByItem = {
   'base_body': 1,
@@ -5442,6 +5442,9 @@ class _MinimiPreviewComposite extends StatelessWidget {
       topId: topId,
       accessoryId: accessoryId,
     );
+    final topClipY =
+        (_kMinimiTopClipBottomYInNormalized / 512.0) *
+        _kMinimiPreviewCanvasSize.height;
 
     return SizedBox(
       width: _kMinimiPreviewCanvasSize.width,
@@ -5451,23 +5454,45 @@ class _MinimiPreviewComposite extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           for (final layer in layers)
-            Transform.translate(
-              offset: layer.offset,
-              child: Transform.scale(
-                scale: layer.scale,
-                alignment: Alignment.center,
-                child: Image.asset(
-                  layer.assetPath,
-                  fit: BoxFit.contain,
-                  width: _kMinimiPreviewCanvasSize.width,
-                  height: _kMinimiPreviewCanvasSize.height,
-                  filterQuality: FilterQuality.high,
+            ClipRect(
+              clipper: layer.id.startsWith('top_')
+                  ? _TopLayerTorsoClipper(topClipY)
+                  : null,
+              child: Transform.translate(
+                offset: layer.offset,
+                child: Transform.scale(
+                  scale: layer.scale,
+                  alignment: Alignment.center,
+                  child: Image.asset(
+                    layer.assetPath,
+                    fit: BoxFit.contain,
+                    width: _kMinimiPreviewCanvasSize.width,
+                    height: _kMinimiPreviewCanvasSize.height,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
               ),
             ),
         ],
       ),
     );
+  }
+}
+
+class _TopLayerTorsoClipper extends CustomClipper<Rect> {
+  const _TopLayerTorsoClipper(this.bottomY);
+
+  final double bottomY;
+
+  @override
+  Rect getClip(Size size) {
+    final y = bottomY.clamp(0.0, size.height);
+    return Rect.fromLTWH(0, 0, size.width, y);
+  }
+
+  @override
+  bool shouldReclip(covariant _TopLayerTorsoClipper oldClipper) {
+    return oldClipper.bottomY != bottomY;
   }
 }
 
