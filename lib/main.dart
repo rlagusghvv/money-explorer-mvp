@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.27-r53';
+const kAppUiVersion = 'ui-2026.02.27-r54';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5472,7 +5472,7 @@ class _MinimiMvpCard extends StatefulWidget {
 
 class _MinimiMvpCardState extends State<_MinimiMvpCard> {
   MinimiCategory _category = MinimiCategory.hair;
-  bool _calibrationMode = false;
+  bool _calibrationMode = true;
 
   MinimiCalibration get _calibration => widget.calibration;
 
