@@ -713,14 +713,14 @@ class MinimiCalibration {
   static const double maxScale = 1.40;
 
   static const MinimiCalibration defaults = MinimiCalibration(
-    bodyY: 0,
-    bodyScale: 1,
-    hairY: -80,
-    hairScale: 1,
-    topY: -66,
-    topScale: 1.15,
-    accessoryY: -80,
-    accessoryScale: 1,
+    bodyY: 0.0,
+    bodyScale: 1.0378003789301686,
+    hairY: -22.088140739927155,
+    hairScale: 0.8588994944170347,
+    topY: -19.802826531157606,
+    topScale: 1.17,
+    accessoryY: -80.0,
+    accessoryScale: 1.0,
   );
 
   final double bodyY;
