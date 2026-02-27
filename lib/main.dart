@@ -703,16 +703,16 @@ class MinimiCalibration {
     required this.accessoryY,
   });
 
-  static const double _minOffset = -40;
-  static const double _maxOffset = 40;
-  static const double _minTopScale = 0.82;
-  static const double _maxTopScale = 1.22;
+  static const double _minOffset = -120;
+  static const double _maxOffset = 120;
+  static const double _minTopScale = 0.70;
+  static const double _maxTopScale = 1.40;
 
   static const MinimiCalibration defaults = MinimiCalibration(
-    hairY: 0,
-    topY: 0,
-    topScale: 1,
-    accessoryY: 0,
+    hairY: -80,
+    topY: -66,
+    topScale: 1.15,
+    accessoryY: -80,
   );
 
   final double hairY;
@@ -5638,8 +5638,8 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             _buildCalibrationRow(
               label: 'hairY',
               value: _calibration.hairY,
-              min: -40,
-              max: 40,
+              min: -120,
+              max: 120,
               step: 1,
               suffix: 'px',
               onChanged: (v) =>
@@ -5648,8 +5648,8 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             _buildCalibrationRow(
               label: 'topY',
               value: _calibration.topY,
-              min: -40,
-              max: 40,
+              min: -120,
+              max: 120,
               step: 1,
               suffix: 'px',
               onChanged: (v) =>
@@ -5658,8 +5658,8 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             _buildCalibrationRow(
               label: 'topScale',
               value: _calibration.topScale,
-              min: 0.82,
-              max: 1.22,
+              min: 0.70,
+              max: 1.40,
               step: 0.01,
               suffix: 'x',
               onChanged: (v) =>
@@ -5668,8 +5668,8 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
             _buildCalibrationRow(
               label: 'accessoryY',
               value: _calibration.accessoryY,
-              min: -40,
-              max: 40,
+              min: -120,
+              max: 120,
               step: 1,
               suffix: 'px',
               onChanged: (v) =>
