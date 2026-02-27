@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.27-r60';
+const kAppUiVersion = 'ui-2026.02.27-r61';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -5891,19 +5891,25 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
       );
     }
 
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 180),
-      decoration: BoxDecoration(
-        color: const Color(0xEAF7FAFF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xCCDDE8F8)),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(10),
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: controls,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 180),
+          decoration: BoxDecoration(
+            color: const Color(0x66F7FAFF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0x66DDE8F8)),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(10),
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: controls,
+            ),
+          ),
         ),
       ),
     );
@@ -6000,43 +6006,53 @@ class _MinimiMvpCardState extends State<_MinimiMvpCard> {
                     crossFadeState: _mobileCalibrationPanelCollapsed
                         ? CrossFadeState.showSecond
                         : CrossFadeState.showFirst,
-                    firstChild: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xCCFFFFFF),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0x99DDE8F8)),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.tune_rounded, size: 18),
-                            title: const Text(
-                              '정렬 오버레이 패널',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                              ),
-                            ),
-                            subtitle: const Text(
-                              '프리뷰는 항상 보이고, 값은 실시간 반영돼요.',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            trailing: IconButton(
-                              onPressed: () => setState(
-                                () => _mobileCalibrationPanelCollapsed = true,
-                              ),
-                              icon: const Icon(Icons.expand_more_rounded),
-                              tooltip: '패널 접기',
-                            ),
+                    firstChild: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0x59FFFFFF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0x66DDE8F8)),
                           ),
-                          const Divider(height: 1),
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: _buildCalibrationPanel(isMobile: true),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                dense: true,
+                                leading: const Icon(
+                                  Icons.tune_rounded,
+                                  size: 18,
+                                ),
+                                title: const Text(
+                                  '정렬 오버레이 패널',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                subtitle: const Text(
+                                  '프리뷰는 항상 보이고, 값은 실시간 반영돼요.',
+                                  style: TextStyle(fontSize: 11),
+                                ),
+                                trailing: IconButton(
+                                  onPressed: () => setState(
+                                    () =>
+                                        _mobileCalibrationPanelCollapsed = true,
+                                  ),
+                                  icon: const Icon(Icons.expand_more_rounded),
+                                  tooltip: '패널 접기',
+                                ),
+                              ),
+                              const Divider(height: 1),
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: _buildCalibrationPanel(isMobile: true),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     secondChild: Align(
