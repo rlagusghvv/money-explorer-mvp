@@ -14,7 +14,7 @@ import 'data/scenario_repository.dart';
 import 'models/scenario.dart';
 import 'miniroom_coordinate_mapper.dart';
 
-const kAppUiVersion = 'ui-2026.02.26-r48';
+const kAppUiVersion = 'ui-2026.02.27-r50';
 
 const _kSeoulOffset = Duration(hours: 9);
 const _kReviewRoundRewardCoins = 45;
@@ -739,21 +739,55 @@ const Map<MinimiCategory, List<MinimiPresetItem>> kMinimiPresetByCategory = {
 
 const bool kEnableMyRoomInlineSection = false;
 
-const Size _kMinimiPreviewCanvasSize = Size(160, 242);
+const Size _kMinimiPreviewCanvasSize = Size(184, 184);
 
-// r49: adopt metadata-driven layer composition inspired by avatar compositing
-// patterns from Flame's Component tree and Spine's slot/timeline approach.
-// Base anchor remains standardized to base_body, and per-item overrides are
-// centralized here (no scattered hard-coded offsets in widgets).
-const Map<MinimiCategory, Offset> _kMinimiCategoryAnchorOffset = {
-  MinimiCategory.hair: Offset(0, -1.0),
-  MinimiCategory.top: Offset(0, 0.5),
-  MinimiCategory.accessory: Offset(0, 0),
+// r50: base_body anchor marker 기반 정렬. 머리/목선 기준점을 고정하고
+// 헤어/상의/소품은 해당 marker에 맞춰 배치 + 아이템별 미세 보정(scale/offset) 적용.
+const Map<String, Offset> _kMinimiAnchorMarkerById = {
+  'base_body': Offset(256, 256),
+  'hair_basic_black': Offset(256, 170),
+  'hair_brown_wave': Offset(256, 170),
+  'hair_pink_bob': Offset(256, 170),
+  'hair_blue_short': Offset(256, 170),
+  'hair_blonde': Offset(256, 170),
+  'top_green_hoodie': Offset(256, 258),
+  'top_blue_jersey': Offset(256, 258),
+  'top_orange_knit': Offset(256, 258),
+  'top_purple_zipup': Offset(256, 258),
+  'top_white_shirt': Offset(256, 258),
+  'acc_cap': Offset(256, 168),
+  'acc_headphone': Offset(256, 174),
+  'acc_glass': Offset(256, 206),
+  'acc_star_pin': Offset(228, 305),
 };
 
-const Map<String, Offset> _kMinimiItemAnchorOffset = {
-  'acc_glass': Offset(0, -0.5),
-  'acc_star_pin': Offset(0.2, 0),
+const Map<MinimiCategory, Offset> _kMinimiBaseTargetMarkerByCategory = {
+  MinimiCategory.hair: Offset(256, 170),
+  MinimiCategory.top: Offset(256, 258),
+  MinimiCategory.accessory: Offset(256, 206),
+};
+
+const Map<String, double> _kMinimiItemScaleById = {
+  'base_body': 1,
+  'hair_basic_black': 1.04,
+  'hair_brown_wave': 1.05,
+  'hair_pink_bob': 1.04,
+  'hair_blue_short': 1.04,
+  'hair_blonde': 1.05,
+  'top_green_hoodie': 1.03,
+  'top_blue_jersey': 1.03,
+  'top_orange_knit': 1.02,
+  'top_purple_zipup': 1.03,
+  'top_white_shirt': 1.03,
+  'acc_cap': 1.02,
+  'acc_headphone': 1.01,
+  'acc_glass': 1.0,
+  'acc_star_pin': 0.96,
+};
+
+const Map<String, Offset> _kMinimiFineTuneOffsetById = {
+  'acc_glass': Offset(0, -1.5),
+  'acc_star_pin': Offset(2, 0.5),
 };
 
 const Map<String, int> _kMinimiLayerZByItem = {
@@ -780,18 +814,25 @@ class _MinimiRenderLayer {
     required this.assetPath,
     required this.z,
     this.offset = Offset.zero,
+    this.scale = 1,
   });
 
   final String id;
   final String assetPath;
   final int z;
   final Offset offset;
+  final double scale;
 }
 
 Offset _minimiOffsetFor(MinimiCategory category, String itemId) {
-  final base = _kMinimiCategoryAnchorOffset[category] ?? Offset.zero;
-  final item = _kMinimiItemAnchorOffset[itemId] ?? Offset.zero;
-  return Offset(base.dx + item.dx, base.dy + item.dy);
+  final baseTarget =
+      _kMinimiBaseTargetMarkerByCategory[category] ?? const Offset(256, 256);
+  final itemMarker = _kMinimiAnchorMarkerById[itemId] ?? const Offset(256, 256);
+  final tune = _kMinimiFineTuneOffsetById[itemId] ?? Offset.zero;
+  return Offset(
+    (baseTarget.dx - itemMarker.dx) + tune.dx,
+    (baseTarget.dy - itemMarker.dy) + tune.dy,
+  );
 }
 
 List<_MinimiRenderLayer> _buildMinimiRenderLayers({
@@ -816,6 +857,7 @@ List<_MinimiRenderLayer> _buildMinimiRenderLayers({
         assetPath: assetPath,
         z: _kMinimiLayerZByItem[id] ?? 99,
         offset: category == null ? Offset.zero : _minimiOffsetFor(category, id),
+        scale: _kMinimiItemScaleById[id] ?? 1,
       ),
     );
   }
@@ -5239,236 +5281,16 @@ class _MyHomeTabState extends State<_MyHomeTab> {
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    final solved = state.solvedCount;
-    final level = 1 + (state.rewardPoints + state.totalPointsSpent) ~/ 250;
-    final chapterProgress = ((state.currentScenario / 10) * 100)
-        .clamp(0, 100)
-        .round();
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ListView(
-        physics: _lockMyHomeScroll
-            ? const NeverScrollableScrollPhysics()
-            : const BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         children: [
-          Card(
-            color: const Color(0xFFEFF6FF),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '마이홈 스튜디오',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('계정: ${widget.session?.email ?? '게스트'}'),
-                  Text('동기화 상태: ${widget.syncMessage ?? '로컬 저장 중'}'),
-                  const SizedBox(height: 10),
-                  Text(
-                    '현재 장착 베이스: ${state.equippedHome.name}',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
           _MinimiMvpCard(
             cosmetics: state.minimiCosmetics,
             onSelectPreset: widget.onSelectMinimiPreset,
             onReset: widget.onResetMinimi,
-          ),
-          if (kEnableMyRoomInlineSection) ...[
-            const SizedBox(height: 10),
-            _MyHomeRoomCard(
-              state: state,
-              itemById: _itemById,
-              showEquipFx: _showEquipFx,
-              equipFxLabel: _equipFxLabel,
-              onDecorationAdjusted: widget.onDecorationAdjusted,
-              onCharacterAdjusted: widget.onCharacterAdjusted,
-              onInteractionLockChanged: (locked) {
-                if (_lockMyHomeScroll == locked) return;
-                setState(() => _lockMyHomeScroll = locked);
-              },
-            ),
-          ],
-          const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '베이스 빠른 장착',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: kShopItems
-                        .where(
-                          (item) =>
-                              item.type == CosmeticType.home &&
-                              state.ownedItemIds.contains(item.id),
-                        )
-                        .map((item) {
-                          final selected = state.equippedHomeId == item.id;
-                          return ChoiceChip(
-                            label: Text('${item.emoji} ${item.name}'),
-                            selected: selected,
-                            onSelected: (_) {
-                              if (!selected) widget.onEquipHome(item);
-                            },
-                          );
-                        })
-                        .toList(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '테마 이름',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _themeNameController,
-                    maxLength: 16,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      hintText: '예: 경제탐험 아지트',
-                      border: OutlineInputBorder(),
-                      counterText: '',
-                    ),
-                    onSubmitted: widget.onThemeNameChanged,
-                    onEditingComplete: () {
-                      widget.onThemeNameChanged(_themeNameController.text);
-                      FocusScope.of(context).unfocus();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '🪄 슬롯 꾸미기',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 8),
-                  ...DecorationZone.values.map((zone) {
-                    final ownedItems = kShopItems
-                        .where(
-                          (item) =>
-                              item.type == CosmeticType.decoration &&
-                              item.zone == zone &&
-                              state.ownedItemIds.contains(item.id),
-                        )
-                        .toList();
-                    final selected = state.equippedDecorations[zone];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7F8FC),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            zone.label,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _SlotPreviewChip(
-                                title: '비우기',
-                                selected: selected == null,
-                                onTap: () =>
-                                    widget.onPlaceDecoration(zone, null),
-                              ),
-                              ...ownedItems.map(
-                                (item) => _SlotPreviewChip(
-                                  title: item.name,
-                                  selected: selected == item.id,
-                                  onTap: () =>
-                                      widget.onPlaceDecoration(zone, item.id),
-                                  child: _ItemThumbnail(
-                                    item: item,
-                                    compact: true,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (selected != null) const SizedBox(height: 2),
-                          if (ownedItems.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 6),
-                              child: Text(
-                                '아직 이 슬롯 아이템이 없어요. 상점에서 구매해보세요!',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '핵심 프로필 진행',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('레벨: Lv.$level'),
-                  Text(
-                    '챕터 진행: ${state.currentScenario} / 10 ($chapterProgress%)',
-                  ),
-                  Text('탐험 포인트: ${state.rewardPoints}P · 완료 시나리오: $solved개'),
-                  Text('연속 기록 최고: ${state.bestStreak}회'),
-                  Text(
-                    '보유 자산: ${state.cash}코인 · 누적 손익 ${state.totalProfit >= 0 ? '+' : ''}${state.totalProfit}코인',
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),
@@ -5631,12 +5453,16 @@ class _MinimiPreviewComposite extends StatelessWidget {
           for (final layer in layers)
             Transform.translate(
               offset: layer.offset,
-              child: Image.asset(
-                layer.assetPath,
-                fit: BoxFit.contain,
-                width: _kMinimiPreviewCanvasSize.width,
-                height: _kMinimiPreviewCanvasSize.height,
-                filterQuality: FilterQuality.high,
+              child: Transform.scale(
+                scale: layer.scale,
+                alignment: Alignment.center,
+                child: Image.asset(
+                  layer.assetPath,
+                  fit: BoxFit.contain,
+                  width: _kMinimiPreviewCanvasSize.width,
+                  height: _kMinimiPreviewCanvasSize.height,
+                  filterQuality: FilterQuality.high,
+                ),
               ),
             ),
         ],
