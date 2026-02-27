@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Minimi Web Calibrator</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2430;
+      --muted: #5d6573;
+      --line: #d9deea;
+      --accent: #4a67ff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #11131a;
+        --card: #1a1f2b;
+        --text: #ecf0fb;
+        --muted: #b4bed6;
+        --line: #323a4d;
+        --accent: #7e94ff;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 380px 1fr;
+    }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+    .row { display: grid; gap: 8px; margin-bottom: 10px; }
+    label { font-size: 13px; font-weight: 600; }
+    select, button, input[type="range"] {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      padding: 8px 10px;
+      font: inherit;
+    }
+    input[type="range"] { padding: 0; }
+    .rangeLine {
+      display: grid;
+      grid-template-columns: 80px 1fr 70px;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      border: none;
+      font-weight: 600;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    .preview {
+      min-height: 560px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .stage {
+      width: 512px;
+      max-width: 100%;
+      aspect-ratio: 1;
+      margin: 0 auto;
+      border-radius: 16px;
+      border: 1px dashed var(--line);
+      position: relative;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      background: linear-gradient(180deg, rgba(74,103,255,.07), transparent);
+    }
+    .layer {
+      position: absolute;
+      width: 512px;
+      height: 512px;
+      top: 0;
+      left: 0;
+      object-fit: contain;
+      pointer-events: auto;
+      -webkit-user-drag: none;
+      transform-origin: center center;
+    }
+    .layer[data-kind="base"] { pointer-events: none; }
+    .layer[data-kind="hair"] { z-index: 30; }
+    .layer[data-kind="top"] { z-index: 20; }
+    .layer[data-kind="acc"] { z-index: 40; }
+    pre {
+      margin: 0;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,0.08);
+      font-size: 13px;
+      overflow: auto;
+    }
+    .hint { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>Minimi Web Calibrator</h1>
+      <p>Select parts, drag layers (hair/top/accessory), then copy or download calibration JSON.</p>
+
+      <div class="row">
+        <label for="hairSelect">Hair preset</label>
+        <select id="hairSelect"></select>
+      </div>
+      <div class="row">
+        <label for="topSelect">Top preset</label>
+        <select id="topSelect"></select>
+      </div>
+      <div class="row">
+        <label for="accSelect">Accessory preset</label>
+        <select id="accSelect"></select>
+      </div>
+
+      <div class="rangeLine">
+        <label for="hairY">hairY</label>
+        <input id="hairY" type="range" min="-80" max="80" step="0.5" />
+        <div class="num" id="hairYVal"></div>
+      </div>
+      <div class="rangeLine">
+        <label for="topY">topY</label>
+        <input id="topY" type="range" min="-80" max="80" step="0.5" />
+        <div class="num" id="topYVal"></div>
+      </div>
+      <div class="rangeLine">
+        <label for="topScale">topScale</label>
+        <input id="topScale" type="range" min="0.7" max="1.3" step="0.01" />
+        <div class="num" id="topScaleVal"></div>
+      </div>
+      <div class="rangeLine">
+        <label for="accessoryY">accessoryY</label>
+        <input id="accessoryY" type="range" min="-80" max="80" step="0.5" />
+        <div class="num" id="accessoryYVal"></div>
+      </div>
+
+      <div class="btns">
+        <button id="resetBtn" class="secondary">Reset</button>
+        <button id="copyBtn">Copy JSON</button>
+        <button id="downloadBtn">Download JSON</button>
+      </div>
+    </section>
+
+    <section class="card preview">
+      <div class="stage" id="stage">
+        <img id="baseLayer" class="layer" data-kind="base" alt="base body" />
+        <img id="topLayer" class="layer" data-kind="top" alt="top" />
+        <img id="hairLayer" class="layer" data-kind="hair" alt="hair" />
+        <img id="accLayer" class="layer" data-kind="acc" alt="accessory" />
+      </div>
+      <div class="hint">Tip: drag hair/top/accessory directly on preview (mouse or touch) to adjust Y quickly.</div>
+      <pre id="jsonOut"></pre>
+    </section>
+  </div>
+
+  <script>
+    const ASSET_ROOT = '../../assets/minimi/normalized/';
+    const PRESETS = {
+      hair: ['hair_basic_black', 'hair_brown_wave', 'hair_pink_bob', 'hair_blue_short', 'hair_blonde'],
+      top: ['top_green_hoodie', 'top_blue_jersey', 'top_orange_knit', 'top_purple_zipup', 'top_white_shirt'],
+      accessory: ['acc_none', 'acc_cap', 'acc_glass', 'acc_headphone', 'acc_star_pin']
+    };
+
+    const defaults = { hairY: 0, topY: 0, topScale: 1, accessoryY: 0 };
+    const state = {
+      selected: {
+        hair: PRESETS.hair[0],
+        top: PRESETS.top[0],
+        accessory: PRESETS.accessory[0]
+      },
+      values: { ...defaults }
+    };
+
+    const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+    const round = (n, d = 2) => Math.round(n * (10 ** d)) / (10 ** d);
+
+    const els = {
+      hairSelect: document.getElementById('hairSelect'),
+      topSelect: document.getElementById('topSelect'),
+      accSelect: document.getElementById('accSelect'),
+      hairY: document.getElementById('hairY'),
+      topY: document.getElementById('topY'),
+      topScale: document.getElementById('topScale'),
+      accessoryY: document.getElementById('accessoryY'),
+      hairYVal: document.getElementById('hairYVal'),
+      topYVal: document.getElementById('topYVal'),
+      topScaleVal: document.getElementById('topScaleVal'),
+      accessoryYVal: document.getElementById('accessoryYVal'),
+      jsonOut: document.getElementById('jsonOut'),
+      baseLayer: document.getElementById('baseLayer'),
+      hairLayer: document.getElementById('hairLayer'),
+      topLayer: document.getElementById('topLayer'),
+      accLayer: document.getElementById('accLayer'),
+      resetBtn: document.getElementById('resetBtn'),
+      copyBtn: document.getElementById('copyBtn'),
+      downloadBtn: document.getElementById('downloadBtn')
+    };
+
+    function optionLabel(id) {
+      return id === 'acc_none' ? 'acc_none (none)' : id;
+    }
+
+    function fillSelect(select, list, current) {
+      select.innerHTML = '';
+      for (const id of list) {
+        const op = document.createElement('option');
+        op.value = id;
+        op.textContent = optionLabel(id);
+        op.selected = id === current;
+        select.appendChild(op);
+      }
+    }
+
+    function calibrationJson() {
+      return {
+        hairY: round(state.values.hairY, 2),
+        topY: round(state.values.topY, 2),
+        topScale: round(state.values.topScale, 3),
+        accessoryY: round(state.values.accessoryY, 2)
+      };
+    }
+
+    function toAsset(id) {
+      if (!id || id === 'acc_none') return null;
+      return `${ASSET_ROOT}${id}.png`;
+    }
+
+    function updatePreview() {
+      els.baseLayer.src = `${ASSET_ROOT}base_body.png`;
+      els.hairLayer.src = toAsset(state.selected.hair);
+      els.topLayer.src = toAsset(state.selected.top);
+
+      if (state.selected.accessory === 'acc_none') {
+        els.accLayer.style.display = 'none';
+      } else {
+        els.accLayer.style.display = 'block';
+        els.accLayer.src = toAsset(state.selected.accessory);
+      }
+
+      els.hairLayer.style.transform = `translateY(${state.values.hairY}px)`;
+      els.topLayer.style.transform = `translateY(${state.values.topY}px) scale(${state.values.topScale})`;
+      els.accLayer.style.transform = `translateY(${state.values.accessoryY}px)`;
+    }
+
+    function syncUI() {
+      els.hairY.value = state.values.hairY;
+      els.topY.value = state.values.topY;
+      els.topScale.value = state.values.topScale;
+      els.accessoryY.value = state.values.accessoryY;
+
+      els.hairYVal.textContent = Number(state.values.hairY).toFixed(1);
+      els.topYVal.textContent = Number(state.values.topY).toFixed(1);
+      els.topScaleVal.textContent = Number(state.values.topScale).toFixed(2);
+      els.accessoryYVal.textContent = Number(state.values.accessoryY).toFixed(1);
+
+      els.jsonOut.textContent = JSON.stringify(calibrationJson(), null, 2);
+      updatePreview();
+    }
+
+    function bindSlider(key, el, min, max) {
+      el.addEventListener('input', () => {
+        state.values[key] = clamp(Number(el.value), min, max);
+        syncUI();
+      });
+    }
+
+    function bindDrag(layerEl, key, min, max) {
+      let drag = null;
+
+      function start(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        drag = {
+          pointerId: e.pointerId,
+          startY: e.clientY,
+          startValue: state.values[key]
+        };
+        layerEl.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      }
+
+      function move(e) {
+        if (!drag || e.pointerId !== drag.pointerId) return;
+        const dy = e.clientY - drag.startY;
+        state.values[key] = clamp(round(drag.startValue + dy, 2), min, max);
+        syncUI();
+      }
+
+      function end(e) {
+        if (!drag || e.pointerId !== drag.pointerId) return;
+        try { layerEl.releasePointerCapture(e.pointerId); } catch (_) {}
+        drag = null;
+      }
+
+      layerEl.addEventListener('pointerdown', start);
+      layerEl.addEventListener('pointermove', move);
+      layerEl.addEventListener('pointerup', end);
+      layerEl.addEventListener('pointercancel', end);
+    }
+
+    fillSelect(els.hairSelect, PRESETS.hair, state.selected.hair);
+    fillSelect(els.topSelect, PRESETS.top, state.selected.top);
+    fillSelect(els.accSelect, PRESETS.accessory, state.selected.accessory);
+
+    els.hairSelect.addEventListener('change', () => { state.selected.hair = els.hairSelect.value; syncUI(); });
+    els.topSelect.addEventListener('change', () => { state.selected.top = els.topSelect.value; syncUI(); });
+    els.accSelect.addEventListener('change', () => { state.selected.accessory = els.accSelect.value; syncUI(); });
+
+    bindSlider('hairY', els.hairY, -80, 80);
+    bindSlider('topY', els.topY, -80, 80);
+    bindSlider('topScale', els.topScale, 0.7, 1.3);
+    bindSlider('accessoryY', els.accessoryY, -80, 80);
+
+    bindDrag(els.hairLayer, 'hairY', -80, 80);
+    bindDrag(els.topLayer, 'topY', -80, 80);
+    bindDrag(els.accLayer, 'accessoryY', -80, 80);
+
+    els.resetBtn.addEventListener('click', () => {
+      state.values = { ...defaults };
+      syncUI();
+    });
+
+    els.copyBtn.addEventListener('click', async () => {
+      const text = JSON.stringify(calibrationJson(), null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        els.copyBtn.textContent = 'Copied!';
+      } catch (_) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        els.copyBtn.textContent = 'Copied!';
+      }
+      setTimeout(() => { els.copyBtn.textContent = 'Copy JSON'; }, 1000);
+    });
+
+    els.downloadBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(calibrationJson(), null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'minimi_calibration.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    syncUI();
+  </script>
+</body>
+</html>

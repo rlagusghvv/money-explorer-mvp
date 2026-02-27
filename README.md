@@ -57,3 +57,9 @@ flutter test
 cd kid_econ_mvp/backend
 npm test
 ```
+
+---
+
+## Minimi 보정 도구 문서
+- 로컬 웹 보정 툴 사용법: `docs/minimi_web_calibrator.md`
+- 도구 위치: `tools/minimi-calibrator/index.html`
