@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'data/auth_sync_service.dart';
 import 'data/scenario_repository.dart';
@@ -8884,8 +8885,11 @@ class _AuthCardState extends State<_AuthCard> {
         setState(() => _message = '계정이 삭제되었어요.');
       }
     } catch (e) {
+      final fallback = Uri.parse('https://app2.splui.com/econadventure/delete-account.html');
+      await widget.onSessionChanged(null);
+      await launchUrl(fallback, mode: LaunchMode.externalApplication);
       if (mounted) {
-        setState(() => _message = '계정 삭제에 실패했어. 잠시 후 다시 시도해줘.');
+        setState(() => _message = '앱 내 삭제 처리 실패로 웹 삭제 페이지를 열었어.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
