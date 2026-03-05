@@ -106,4 +106,19 @@ class AuthSyncService {
       throw Exception(decoded['error'] ?? 'SAVE_FAILED');
     }
   }
+
+  Future<void> deleteAccount({required String token}) async {
+    final response = await _client.delete(
+      _uri('/auth/account'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      Map<String, dynamic> decoded = const {};
+      try {
+        decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {}
+      throw Exception(decoded['error'] ?? 'DELETE_ACCOUNT_FAILED');
+    }
+  }
 }

@@ -8848,6 +8848,50 @@ class _AuthCardState extends State<_AuthCard> {
   bool _loading = false;
   String? _message;
 
+  Future<void> _deleteAccount() async {
+    final session = widget.session;
+    if (session == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('계정을 삭제할까요?'),
+        content: const Text('계정과 저장된 학습 기록이 영구 삭제돼요.\n이 작업은 되돌릴 수 없어요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('영구 삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+
+    try {
+      await widget.authService.deleteAccount(token: session.token);
+      await widget.onSessionChanged(null);
+      if (mounted) {
+        setState(() => _message = '계정이 삭제되었어요.');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _message = '계정 삭제에 실패했어. 잠시 후 다시 시도해줘.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   String _friendlyAuthError(Object error) {
     final raw = error.toString().toLowerCase();
     if (raw.contains('invalid_credentials')) {
@@ -8923,9 +8967,33 @@ class _AuthCardState extends State<_AuthCard> {
             if (session != null) ...[
               Text('로그인 계정: ${session.email}'),
               const SizedBox(height: 6),
-              FilledButton.tonal(
-                onPressed: () => widget.onSessionChanged(null),
-                child: const Text('로그아웃 (로컬 모드)'),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonal(
+                      onPressed: _loading
+                          ? null
+                          : () => widget.onSessionChanged(null),
+                      child: const Text('로그아웃 (로컬 모드)'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.tonal(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFFFEBEE),
+                        foregroundColor: const Color(0xFFB71C1C),
+                      ),
+                      onPressed: _loading ? null : _deleteAccount,
+                      child: const Text('계정 삭제'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '설정 > 계정/동기화에서 계정을 영구 삭제할 수 있어요.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
             ] else ...[
               TextField(
