@@ -3003,21 +3003,26 @@ class _GameHomePageState extends State<GameHomePage> {
         centerTitle: false,
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFDDE3F2)),
-            ),
-            child: const Text(
-              kAppUiVersion,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
+        actions: kDebugMode
+            ? [
+                Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFDDE3F2)),
+                  ),
+                  child: const Text(
+                    kAppUiVersion,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ]
+            : null,
       ),
       body: SafeArea(child: pages[_tabIndex]),
       bottomNavigationBar: Container(
@@ -4798,15 +4803,99 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
     );
   }
 
+  static const Map<String, String> _glossary = {
+    '금리': '돈을 빌리거나 맡길 때 붙는 비율(이자율)이야.',
+    '이자': '돈을 빌린 대가 또는 예금 보상으로 붙는 돈이야.',
+    '원금': '처음에 넣거나 빌린 기본 돈이야.',
+    '복리': '이자에도 다시 이자가 붙는 방식이야.',
+    '신용': '돈 약속을 잘 지키는 정도를 나타내는 믿음 점수야.',
+    '연체': '정해진 날짜에 돈을 못 갚는 일이야.',
+    '부채': '앞으로 갚아야 하는 돈(빚)이야.',
+    '분산투자': '돈을 여러 곳에 나눠 넣어 위험을 줄이는 방법이야.',
+    '변동성': '가격이 오르내리는 흔들림의 크기야.',
+    '리스크': '손해가 날 수 있는 가능성이야.',
+    '유동성': '원할 때 돈으로 바꾸기 쉬운 정도야.',
+    '수수료': '서비스를 이용할 때 내는 비용이야.',
+    '상환': '빌린 돈을 갚는 일이야.',
+    '예산': '쓸 돈을 미리 나눠 계획한 표야.',
+    '현금흐름': '돈이 들어오고 나가는 흐름이야.',
+  };
+
+  List<MapEntry<String, String>> _matchedGlossary(String text) {
+    return _glossary.entries.where((e) => text.contains(e.key)).toList();
+  }
+
+  void _showGlossary(BuildContext context, String text) {
+    final matched = _matchedGlossary(text);
+    if (matched.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('설명할 용어가 없어요.')));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '용어 설명',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              ...matched.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 13,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: '• ${e.key}: ',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        TextSpan(text: e.value),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '팁: 문제 문장을 꾹 누르면 용어 설명이 떠요.',
+                style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _quizInteractionWidget(Scenario s) {
     final title = '3) ${_quizType.label}';
     if (_quizType == QuizInteractionType.multipleChoice) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _bandPrompt('$title · ${s.quizQuestion}'),
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          GestureDetector(
+            onLongPress: () => _showGlossary(
+              context,
+              _bandPrompt('$title · ${s.quizQuestion}'),
+            ),
+            child: Text(
+              _bandPrompt('$title · ${s.quizQuestion}'),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
           ),
           ...List.generate(
             _quizChoices.length,
@@ -4834,9 +4923,12 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
           ),
           const SizedBox(height: 6),
-          Text(
-            _oxStatement,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+          GestureDetector(
+            onLongPress: () => _showGlossary(context, _oxStatement),
+            child: Text(
+              _oxStatement,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -8535,14 +8627,15 @@ class _WeeklyReportTab extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text('기준일: $seoulDateKey (Asia/Seoul)'),
                   const SizedBox(height: 8),
-                  Text(
-                    'debug · 스킵된 malformed 시나리오: $skippedMalformedScenarioCount',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF6B7280),
-                      fontWeight: FontWeight.w600,
+                  if (kDebugMode)
+                    Text(
+                      'debug · 스킵된 malformed 시나리오: $skippedMalformedScenarioCount',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 8),
                   ...DailyMissionType.values.map((type) {
                     final completed = _isComplete(type, progress);
@@ -8885,7 +8978,9 @@ class _AuthCardState extends State<_AuthCard> {
         setState(() => _message = '계정이 삭제되었어요.');
       }
     } catch (e) {
-      final fallback = Uri.parse('https://app2.splui.com/econadventure/delete-account.html');
+      final fallback = Uri.parse(
+        'https://app2.splui.com/econadventure/delete-account.html',
+      );
       await widget.onSessionChanged(null);
       await launchUrl(fallback, mode: LaunchMode.externalApplication);
       if (mounted) {
