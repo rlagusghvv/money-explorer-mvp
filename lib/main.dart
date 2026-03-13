@@ -4136,6 +4136,7 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   late List<ScenarioOption> _quizChoices;
   bool _submitted = false;
   bool _hintUnlocked = false;
+  bool _showEasyWords = false;
   bool _hintUsed = false;
   int _wrongAttempts = 0;
   _PerformanceSnapshot? _resultSnapshot;
@@ -4804,25 +4805,150 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
   }
 
   static const Map<String, String> _glossary = {
-    '금리': '돈을 빌리거나 맡길 때 붙는 비율(이자율)이야.',
-    '이자': '돈을 빌린 대가 또는 예금 보상으로 붙는 돈이야.',
-    '원금': '처음에 넣거나 빌린 기본 돈이야.',
-    '복리': '이자에도 다시 이자가 붙는 방식이야.',
-    '신용': '돈 약속을 잘 지키는 정도를 나타내는 믿음 점수야.',
-    '연체': '정해진 날짜에 돈을 못 갚는 일이야.',
-    '부채': '앞으로 갚아야 하는 돈(빚)이야.',
-    '분산투자': '돈을 여러 곳에 나눠 넣어 위험을 줄이는 방법이야.',
-    '변동성': '가격이 오르내리는 흔들림의 크기야.',
-    '리스크': '손해가 날 수 있는 가능성이야.',
-    '유동성': '원할 때 돈으로 바꾸기 쉬운 정도야.',
-    '수수료': '서비스를 이용할 때 내는 비용이야.',
-    '상환': '빌린 돈을 갚는 일이야.',
     '예산': '쓸 돈을 미리 나눠 계획한 표야.',
+    '수입': '들어오는 돈이야.',
+    '지출': '나가는 돈이야.',
+    '고정지출': '매달 비슷하게 꼭 나가는 돈이야.',
+    '변동지출': '달마다 달라지는 지출이야.',
+    '저축': '나중을 위해 돈을 모으는 거야.',
+    '소비': '필요한 물건이나 서비스를 사는 거야.',
     '현금흐름': '돈이 들어오고 나가는 흐름이야.',
+    '비상금': '갑자기 필요한 상황에 쓰는 준비금이야.',
+    '목표금액': '모으거나 써야 할 목표 돈이야.',
+    '원금': '처음에 넣거나 빌린 기본 돈이야.',
+    '이자': '돈을 빌린 대가 또는 예금 보상으로 붙는 돈이야.',
+    '금리': '돈을 빌리거나 맡길 때 붙는 비율이야.',
+    '복리': '이자에도 다시 이자가 붙는 방식이야.',
+    '단리': '원금에만 이자가 붙는 방식이야.',
+    '수수료': '서비스를 이용할 때 내는 비용이야.',
+    '세금': '나라 운영을 위해 내는 돈이야.',
+    '대출': '필요한 돈을 먼저 빌리는 거야.',
+    '상환': '빌린 돈을 갚는 일이야.',
+    '만기': '약속한 기간이 끝나는 시점이야.',
+    '할부': '값을 여러 번 나눠 내는 방식이야.',
+    '연체': '정해진 날짜에 돈을 못 갚는 일이야.',
+    '채무': '앞으로 갚아야 하는 돈이야.',
+    '부채': '앞으로 갚아야 하는 돈(빚)이야.',
+    '신용': '돈 약속을 잘 지키는 정도를 나타내는 믿음이야.',
+    '신용점수': '신용을 숫자로 나타낸 점수야.',
+    '담보': '돈을 못 갚을 때 대신 맡기는 보증 자산이야.',
+    '보증': '대신 책임져 주겠다는 약속이야.',
+    '투자': '앞으로 더 늘어나길 기대하며 돈을 넣는 거야.',
+    '분산투자': '돈을 여러 곳에 나눠 넣어 위험을 줄이는 방법이야.',
+    '리스크': '손해가 날 수 있는 가능성이야.',
+    '변동성': '가격이 오르내리는 흔들림의 크기야.',
+    '수익률': '투자한 돈 대비 얼마나 벌었는지 비율이야.',
+    '손실': '돈을 잃은 상태야.',
+    '원가': '물건을 만들거나 사오는 데 든 기본 비용이야.',
+    '매출': '판매로 들어온 돈의 합계야.',
+    '순이익': '매출에서 비용을 뺀 실제 남는 돈이야.',
+    '자산': '내가 가진 가치 있는 것(돈, 물건, 투자 등)이야.',
+    '유동성': '원할 때 돈으로 바꾸기 쉬운 정도야.',
+    '주식': '회사의 작은 조각을 사는 거야.',
+    '채권': '돈을 빌려주고 약속된 이자를 받는 종이야.',
+    '펀드': '여러 사람 돈을 모아 전문가가 굴리는 투자 바구니야.',
+    'ETF': '주식처럼 쉽게 사고파는 펀드야.',
+    '배당': '회사가 번 이익 일부를 주주에게 나눠주는 돈이야.',
+    '시장가': '지금 시장에서 바로 체결되는 가격이야.',
+    '지정가': '원하는 가격을 정해 두는 주문 방식이야.',
+    '매수': '사는 것.',
+    '매도': '파는 것.',
+    '평균단가': '여러 번 산 가격의 평균이야.',
+    '손절': '손실이 커지기 전에 정해둔 기준에서 파는 거야.',
+    '익절': '목표 수익에 도달하면 파는 거야.',
+    '인플레이션': '시간이 지나며 물가가 오르는 현상이야.',
+    '디플레이션': '물가가 전반적으로 내려가는 현상이야.',
+    '환율': '나라 돈끼리 바꾸는 비율이야.',
+    '원화': '우리나라 돈(원)이야.',
+    '달러': '미국 돈 단위야.',
+    '약관': '서비스 이용 규칙을 적은 문서야.',
+    '개인정보': '나를 알아볼 수 있는 정보(이름, 연락처 등)야.',
+    '피싱': '가짜 메시지로 정보를 훔치는 사기야.',
+    '스미싱': '문자메시지 링크로 속이는 사기야.',
+    '사기': '거짓말로 남의 돈이나 정보를 뺏는 나쁜 행동이야.',
+    '광고': '물건/서비스를 알리는 안내야.',
+    '과장광고': '실제보다 좋게 부풀린 광고야.',
+    '구독': '정기적으로 돈을 내고 계속 이용하는 방식이야.',
+    '해지': '이용을 그만두는 거야.',
+    '캐시백': '쓴 돈 일부를 다시 돌려받는 혜택이야.',
+    '쿠폰': '정해진 조건에서 할인받는 표야.',
+    '포인트': '다음 결제에 쓸 수 있는 적립 혜택이야.',
+    '한도': '쓸 수 있는 최대 범위야.',
+    '자동이체': '정해진 날 자동으로 돈이 옮겨지는 기능이야.',
+    '결제일': '돈이 실제로 빠져나가는 날짜야.',
+    '체크카드': '내 통장 잔액 안에서 쓰는 카드야.',
+    '신용카드': '먼저 쓰고 나중에 갚는 카드야.',
+    '총상환액': '원금+이자+수수료를 합쳐 최종 갚는 총액이야.',
+    '월부담액': '매달 실제로 내야 하는 돈이야.',
+    '기회비용': '하나를 선택해서 포기한 다른 선택의 가치야.',
   };
 
+  static const Map<String, String> _easyReplacements = {
+    '분산투자': '나눠 투자',
+    '변동성': '가격 흔들림',
+    '리스크': '손해 가능성',
+    '현금흐름': '돈 흐름',
+    '상환': '갚기',
+    '연체': '늦게 갚기',
+    '신용점수': '약속점수',
+    '수수료': '이용비용',
+    '총상환액': '최종 갚는 돈',
+    '약관': '이용규칙',
+  };
+
+  String _toEasySentence(String source) {
+    var text = source;
+    _easyReplacements.forEach((k, v) => text = text.replaceAll(k, v));
+    return text;
+  }
+
+  String _escapeRegExp(String input) => RegExp.escape(input);
+
   List<MapEntry<String, String>> _matchedGlossary(String text) {
-    return _glossary.entries.where((e) => text.contains(e.key)).toList();
+    return _glossary.entries.where((e) => text.contains(e.key)).toList()
+      ..sort((a, b) => b.key.length.compareTo(a.key.length));
+  }
+
+  Widget _buildHighlightedGlossaryText(
+    BuildContext context,
+    String text, {
+    TextStyle? style,
+  }) {
+    final matched = _matchedGlossary(text);
+    if (matched.isEmpty) {
+      return Text(text, style: style);
+    }
+
+    final pattern = matched.map((e) => _escapeRegExp(e.key)).join('|');
+    final regex = RegExp('($pattern)');
+    final parts = text.splitMapJoin(
+      regex,
+      onMatch: (m) => '§${m.group(0)}§',
+      onNonMatch: (n) => n,
+    );
+
+    final spans = <TextSpan>[];
+    for (final token in parts.split('§')) {
+      if (token.isEmpty) continue;
+      final isWord = matched.any((e) => e.key == token);
+      spans.add(
+        TextSpan(
+          text: token,
+          style: (style ?? const TextStyle()).copyWith(
+            color: isWord ? const Color(0xFF2563EB) : (style?.color),
+            fontWeight: isWord ? FontWeight.w800 : style?.fontWeight,
+            decoration: isWord ? TextDecoration.underline : TextDecoration.none,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onLongPress: () => _showGlossary(context, text),
+      child: RichText(
+        text: TextSpan(style: style, children: spans),
+      ),
+    );
   }
 
   void _showGlossary(BuildContext context, String text) {
@@ -4849,29 +4975,33 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
               ),
               const SizedBox(height: 8),
-              ...matched.map(
-                (e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: RichText(
-                    text: TextSpan(
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 13,
-                      ),
-                      children: [
-                        TextSpan(
-                          text: '• ${e.key}: ',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
+              ...matched
+                  .take(8)
+                  .map(
+                    (e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: 13,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: '• ${e.key}: ',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            TextSpan(text: e.value),
+                          ],
                         ),
-                        TextSpan(text: e.value),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
               const SizedBox(height: 6),
               const Text(
-                '팁: 문제 문장을 꾹 누르면 용어 설명이 떠요.',
+                '팁: 파란 밑줄 단어가 설명 가능한 용어예요. 문장을 꾹 누르면 뜻이 나와요.',
                 style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
               ),
             ],
@@ -4887,16 +5017,41 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onLongPress: () => _showGlossary(
-              context,
-              _bandPrompt('$title · ${s.quizQuestion}'),
-            ),
-            child: Text(
-              _bandPrompt('$title · ${s.quizQuestion}'),
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: () =>
+                    setState(() => _showEasyWords = !_showEasyWords),
+                icon: const Icon(Icons.translate, size: 16),
+                label: Text(_showEasyWords ? '원문 보기' : '쉬운말 보기'),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                '문장을 꾹 눌러 용어 뜻 보기',
+                style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+              ),
+            ],
+          ),
+          _buildHighlightedGlossaryText(
+            context,
+            _bandPrompt('$title · ${s.quizQuestion}'),
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              color: Colors.black87,
             ),
           ),
+          if (_showEasyWords) ...[
+            const SizedBox(height: 6),
+            Text(
+              '쉬운말: ${_toEasySentence(s.quizQuestion)}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF334155),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           ...List.generate(
             _quizChoices.length,
             (i) => _choiceTile(
@@ -4918,18 +5073,43 @@ class _ScenarioPlayCardState extends State<ScenarioPlayCard> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _bandPrompt('$title · 문장이 맞으면 O, 아니면 X!'),
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          Row(
+            children: [
+              Text(
+                _bandPrompt('$title · 문장이 맞으면 O, 아니면 X!'),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () =>
+                    setState(() => _showEasyWords = !_showEasyWords),
+                child: Text(_showEasyWords ? '원문' : '쉬운말'),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
-          GestureDetector(
-            onLongPress: () => _showGlossary(context, _oxStatement),
-            child: Text(
-              _oxStatement,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+          _buildHighlightedGlossaryText(
+            context,
+            _oxStatement,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
             ),
           ),
+          if (_showEasyWords) ...[
+            const SizedBox(height: 6),
+            Text(
+              '쉬운말: ${_toEasySentence(_oxStatement)}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF334155),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
